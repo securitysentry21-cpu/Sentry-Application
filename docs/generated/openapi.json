@@ -2735,7 +2735,8 @@
                             "lat",
                             "lng"
                           ],
-                          "additionalProperties": false
+                          "additionalProperties": false,
+                          "siteGeometry": true
                         },
                         {
                           "type": "null"
@@ -3032,7 +3033,8 @@
                             "lat",
                             "lng"
                           ],
-                          "additionalProperties": false
+                          "additionalProperties": false,
+                          "siteGeometry": true
                         },
                         {
                           "type": "null"
@@ -3194,7 +3196,8 @@
           },
           "ownership": "organization",
           "rateLimit": "default",
-          "audit": null
+          "audit": null,
+          "locationScope": "live"
         },
         "responses": {
           "200": {
@@ -3329,7 +3332,8 @@
                                   "accuracyM",
                                   "capturedAt"
                                 ],
-                                "additionalProperties": false
+                                "additionalProperties": false,
+                                "guardLocation": true
                               },
                               {
                                 "type": "null"
@@ -6478,7 +6482,8 @@
                                           "lat",
                                           "lng"
                                         ],
-                                        "additionalProperties": false
+                                        "additionalProperties": false,
+                                        "siteGeometry": true
                                       },
                                       "radiusM": {
                                         "type": "integer",
@@ -6522,7 +6527,8 @@
                                             "lat",
                                             "lng"
                                           ],
-                                          "additionalProperties": false
+                                          "additionalProperties": false,
+                                          "siteGeometry": true
                                         }
                                       }
                                     },
@@ -7251,6 +7257,21 @@
                         "incidents"
                       ],
                       "additionalProperties": false
+                    },
+                    "support": {
+                      "type": "object",
+                      "properties": {
+                        "emergencyCallNumber": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "emergencyCallNumber"
+                      ],
+                      "additionalProperties": false
                     }
                   },
                   "required": [
@@ -7308,6 +7329,594 @@
             }
           },
           "503": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "VALIDATION_FAILED",
+                            "UNAUTHENTICATED",
+                            "FORBIDDEN",
+                            "NOT_FOUND",
+                            "ORG_CONTEXT_REQUIRED",
+                            "ORG_SUSPENDED",
+                            "VERSION_CONFLICT",
+                            "SHIFT_INVALID_TRANSITION",
+                            "ALERT_INVALID_TRANSITION",
+                            "SHIFT_OVERLAP",
+                            "SHIFT_NOT_ACTIVE",
+                            "SHIFT_OUTSIDE_START_WINDOW",
+                            "TRACKING_PERMISSION_REQUIRED",
+                            "LOCATION_FIX_REQUIRED",
+                            "STARTED_OFF_SITE_BLOCKED",
+                            "OUTSIDE_SHIFT_WINDOW",
+                            "TIMESTAMP_TOO_OLD",
+                            "DEVICE_NOT_REGISTERED",
+                            "DEVICE_REVOKED",
+                            "INVALID_QR",
+                            "LAST_OWNER",
+                            "SELF_ROLE_CHANGE",
+                            "INVITATION_EXPIRED",
+                            "ENROLLMENT_CODE_INVALID",
+                            "ATTACHMENT_TOO_LARGE",
+                            "ATTACHMENT_TYPE_NOT_ALLOWED",
+                            "EXPORT_RANGE_TOO_LARGE",
+                            "APP_VERSION_UNSUPPORTED",
+                            "RATE_LIMITED",
+                            "INTERNAL_ERROR",
+                            "NOT_READY"
+                          ]
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "requestId": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "path": {
+                                "type": "string"
+                              },
+                              "issue": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "path",
+                              "issue"
+                            ],
+                            "additionalProperties": false
+                          }
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message",
+                        "requestId"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/reports/attendance": {
+      "get": {
+        "summary": "Attendance per shift (PROD §6.8) for inclusive local dates, at most 92 days.",
+        "x-policy": {
+          "access": {
+            "kind": "permission",
+            "permission": "reports.read"
+          },
+          "ownership": "organization",
+          "rateLimit": "default",
+          "audit": null
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "type": "object",
+                  "properties": {
+                    "timezone": {
+                      "type": "string"
+                    },
+                    "from": {
+                      "type": "string",
+                      "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                    },
+                    "to": {
+                      "type": "string",
+                      "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                    },
+                    "rows": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "shiftId": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                          },
+                          "guard": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string",
+                                "format": "uuid",
+                                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                              },
+                              "displayName": {
+                                "type": "string"
+                              },
+                              "employeeNumber": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "displayName",
+                              "employeeNumber"
+                            ],
+                            "additionalProperties": false
+                          },
+                          "site": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string",
+                                "format": "uuid",
+                                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                              },
+                              "name": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "name"
+                            ],
+                            "additionalProperties": false
+                          },
+                          "scheduledStart": {
+                            "type": "string",
+                            "format": "date-time",
+                            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                          },
+                          "scheduledEnd": {
+                            "type": "string",
+                            "format": "date-time",
+                            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                          },
+                          "actualStart": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "format": "date-time",
+                                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "actualEnd": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "format": "date-time",
+                                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "status": {
+                            "type": "string",
+                            "enum": [
+                              "SCHEDULED",
+                              "ACTIVE",
+                              "COMPLETED",
+                              "MISSED",
+                              "CANCELLED"
+                            ]
+                          },
+                          "lateMinutes": {
+                            "anyOf": [
+                              {
+                                "type": "integer",
+                                "minimum": -9007199254740991,
+                                "maximum": 9007199254740991
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "earlyLeaveMinutes": {
+                            "anyOf": [
+                              {
+                                "type": "integer",
+                                "minimum": -9007199254740991,
+                                "maximum": 9007199254740991
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "workedMinutes": {
+                            "anyOf": [
+                              {
+                                "type": "integer",
+                                "minimum": -9007199254740991,
+                                "maximum": 9007199254740991
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "flags": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        "required": [
+                          "shiftId",
+                          "guard",
+                          "site",
+                          "scheduledStart",
+                          "scheduledEnd",
+                          "actualStart",
+                          "actualEnd",
+                          "status",
+                          "lateMinutes",
+                          "earlyLeaveMinutes",
+                          "workedMinutes",
+                          "flags"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "truncated": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "timezone",
+                    "from",
+                    "to",
+                    "rows",
+                    "truncated"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "VALIDATION_FAILED",
+                            "UNAUTHENTICATED",
+                            "FORBIDDEN",
+                            "NOT_FOUND",
+                            "ORG_CONTEXT_REQUIRED",
+                            "ORG_SUSPENDED",
+                            "VERSION_CONFLICT",
+                            "SHIFT_INVALID_TRANSITION",
+                            "ALERT_INVALID_TRANSITION",
+                            "SHIFT_OVERLAP",
+                            "SHIFT_NOT_ACTIVE",
+                            "SHIFT_OUTSIDE_START_WINDOW",
+                            "TRACKING_PERMISSION_REQUIRED",
+                            "LOCATION_FIX_REQUIRED",
+                            "STARTED_OFF_SITE_BLOCKED",
+                            "OUTSIDE_SHIFT_WINDOW",
+                            "TIMESTAMP_TOO_OLD",
+                            "DEVICE_NOT_REGISTERED",
+                            "DEVICE_REVOKED",
+                            "INVALID_QR",
+                            "LAST_OWNER",
+                            "SELF_ROLE_CHANGE",
+                            "INVITATION_EXPIRED",
+                            "ENROLLMENT_CODE_INVALID",
+                            "ATTACHMENT_TOO_LARGE",
+                            "ATTACHMENT_TYPE_NOT_ALLOWED",
+                            "EXPORT_RANGE_TOO_LARGE",
+                            "APP_VERSION_UNSUPPORTED",
+                            "RATE_LIMITED",
+                            "INTERNAL_ERROR",
+                            "NOT_READY"
+                          ]
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "requestId": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "path": {
+                                "type": "string"
+                              },
+                              "issue": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "path",
+                              "issue"
+                            ],
+                            "additionalProperties": false
+                          }
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message",
+                        "requestId"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "VALIDATION_FAILED",
+                            "UNAUTHENTICATED",
+                            "FORBIDDEN",
+                            "NOT_FOUND",
+                            "ORG_CONTEXT_REQUIRED",
+                            "ORG_SUSPENDED",
+                            "VERSION_CONFLICT",
+                            "SHIFT_INVALID_TRANSITION",
+                            "ALERT_INVALID_TRANSITION",
+                            "SHIFT_OVERLAP",
+                            "SHIFT_NOT_ACTIVE",
+                            "SHIFT_OUTSIDE_START_WINDOW",
+                            "TRACKING_PERMISSION_REQUIRED",
+                            "LOCATION_FIX_REQUIRED",
+                            "STARTED_OFF_SITE_BLOCKED",
+                            "OUTSIDE_SHIFT_WINDOW",
+                            "TIMESTAMP_TOO_OLD",
+                            "DEVICE_NOT_REGISTERED",
+                            "DEVICE_REVOKED",
+                            "INVALID_QR",
+                            "LAST_OWNER",
+                            "SELF_ROLE_CHANGE",
+                            "INVITATION_EXPIRED",
+                            "ENROLLMENT_CODE_INVALID",
+                            "ATTACHMENT_TOO_LARGE",
+                            "ATTACHMENT_TYPE_NOT_ALLOWED",
+                            "EXPORT_RANGE_TOO_LARGE",
+                            "APP_VERSION_UNSUPPORTED",
+                            "RATE_LIMITED",
+                            "INTERNAL_ERROR",
+                            "NOT_READY"
+                          ]
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "requestId": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "path": {
+                                "type": "string"
+                              },
+                              "issue": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "path",
+                              "issue"
+                            ],
+                            "additionalProperties": false
+                          }
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message",
+                        "requestId"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/reports/attendance/export": {
+      "get": {
+        "summary": "The attendance report as CSV (UTF-8 with BOM, formula-safe). Audited.",
+        "x-policy": {
+          "access": {
+            "kind": "permission",
+            "permission": "exports.create"
+          },
+          "ownership": "organization",
+          "rateLimit": "default",
+          "audit": "EXPORT_REQUESTED"
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "VALIDATION_FAILED",
+                            "UNAUTHENTICATED",
+                            "FORBIDDEN",
+                            "NOT_FOUND",
+                            "ORG_CONTEXT_REQUIRED",
+                            "ORG_SUSPENDED",
+                            "VERSION_CONFLICT",
+                            "SHIFT_INVALID_TRANSITION",
+                            "ALERT_INVALID_TRANSITION",
+                            "SHIFT_OVERLAP",
+                            "SHIFT_NOT_ACTIVE",
+                            "SHIFT_OUTSIDE_START_WINDOW",
+                            "TRACKING_PERMISSION_REQUIRED",
+                            "LOCATION_FIX_REQUIRED",
+                            "STARTED_OFF_SITE_BLOCKED",
+                            "OUTSIDE_SHIFT_WINDOW",
+                            "TIMESTAMP_TOO_OLD",
+                            "DEVICE_NOT_REGISTERED",
+                            "DEVICE_REVOKED",
+                            "INVALID_QR",
+                            "LAST_OWNER",
+                            "SELF_ROLE_CHANGE",
+                            "INVITATION_EXPIRED",
+                            "ENROLLMENT_CODE_INVALID",
+                            "ATTACHMENT_TOO_LARGE",
+                            "ATTACHMENT_TYPE_NOT_ALLOWED",
+                            "EXPORT_RANGE_TOO_LARGE",
+                            "APP_VERSION_UNSUPPORTED",
+                            "RATE_LIMITED",
+                            "INTERNAL_ERROR",
+                            "NOT_READY"
+                          ]
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "requestId": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "path": {
+                                "type": "string"
+                              },
+                              "issue": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "path",
+                              "issue"
+                            ],
+                            "additionalProperties": false
+                          }
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message",
+                        "requestId"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "422": {
             "description": "Error",
             "content": {
               "application/json": {
@@ -9608,7 +10217,8 @@
                                     "lat",
                                     "lng"
                                   ],
-                                  "additionalProperties": false
+                                  "additionalProperties": false,
+                                  "siteGeometry": true
                                 },
                                 "radiusM": {
                                   "type": "integer",
@@ -9652,7 +10262,8 @@
                                       "lat",
                                       "lng"
                                     ],
-                                    "additionalProperties": false
+                                    "additionalProperties": false,
+                                    "siteGeometry": true
                                   }
                                 }
                               },
@@ -11244,7 +11855,8 @@
                                     "lat",
                                     "lng"
                                   ],
-                                  "additionalProperties": false
+                                  "additionalProperties": false,
+                                  "siteGeometry": true
                                 },
                                 "radiusM": {
                                   "type": "integer",
@@ -11288,7 +11900,8 @@
                                       "lat",
                                       "lng"
                                     ],
-                                    "additionalProperties": false
+                                    "additionalProperties": false,
+                                    "siteGeometry": true
                                   }
                                 }
                               },
@@ -11848,7 +12461,8 @@
                                       "lat",
                                       "lng"
                                     ],
-                                    "additionalProperties": false
+                                    "additionalProperties": false,
+                                    "siteGeometry": true
                                   },
                                   "radiusM": {
                                     "type": "integer",
@@ -11892,7 +12506,8 @@
                                         "lat",
                                         "lng"
                                       ],
-                                      "additionalProperties": false
+                                      "additionalProperties": false,
+                                      "siteGeometry": true
                                     }
                                   }
                                 },
@@ -11918,7 +12533,8 @@
                               "lat",
                               "lng"
                             ],
-                            "additionalProperties": false
+                            "additionalProperties": false,
+                            "siteGeometry": true
                           },
                           "status": {
                             "type": "string",
@@ -12065,7 +12681,8 @@
                                 "lat",
                                 "lng"
                               ],
-                              "additionalProperties": false
+                              "additionalProperties": false,
+                              "siteGeometry": true
                             },
                             "radiusM": {
                               "type": "integer",
@@ -12109,7 +12726,8 @@
                                   "lat",
                                   "lng"
                                 ],
-                                "additionalProperties": false
+                                "additionalProperties": false,
+                                "siteGeometry": true
                               }
                             }
                           },
@@ -12135,7 +12753,8 @@
                         "lat",
                         "lng"
                       ],
-                      "additionalProperties": false
+                      "additionalProperties": false,
+                      "siteGeometry": true
                     },
                     "status": {
                       "type": "string",
@@ -12366,7 +12985,8 @@
                                 "lat",
                                 "lng"
                               ],
-                              "additionalProperties": false
+                              "additionalProperties": false,
+                              "siteGeometry": true
                             },
                             "radiusM": {
                               "type": "integer",
@@ -12410,7 +13030,8 @@
                                   "lat",
                                   "lng"
                                 ],
-                                "additionalProperties": false
+                                "additionalProperties": false,
+                                "siteGeometry": true
                               }
                             }
                           },
@@ -12436,7 +13057,8 @@
                         "lat",
                         "lng"
                       ],
-                      "additionalProperties": false
+                      "additionalProperties": false,
+                      "siteGeometry": true
                     },
                     "status": {
                       "type": "string",
@@ -12665,7 +13287,8 @@
                                 "lat",
                                 "lng"
                               ],
-                              "additionalProperties": false
+                              "additionalProperties": false,
+                              "siteGeometry": true
                             },
                             "radiusM": {
                               "type": "integer",
@@ -12709,7 +13332,8 @@
                                   "lat",
                                   "lng"
                                 ],
-                                "additionalProperties": false
+                                "additionalProperties": false,
+                                "siteGeometry": true
                               }
                             }
                           },
@@ -12735,7 +13359,8 @@
                         "lat",
                         "lng"
                       ],
-                      "additionalProperties": false
+                      "additionalProperties": false,
+                      "siteGeometry": true
                     },
                     "status": {
                       "type": "string",
@@ -13036,7 +13661,8 @@
                                   "lat",
                                   "lng"
                                 ],
-                                "additionalProperties": false
+                                "additionalProperties": false,
+                                "siteGeometry": true
                               },
                               {
                                 "type": "null"
@@ -13249,7 +13875,8 @@
                             "lat",
                             "lng"
                           ],
-                          "additionalProperties": false
+                          "additionalProperties": false,
+                          "siteGeometry": true
                         },
                         {
                           "type": "null"
@@ -13583,7 +14210,8 @@
           },
           "ownership": "guard-self",
           "rateLimit": "sync",
-          "audit": null
+          "audit": null,
+          "replacedDeviceDrain": true
         },
         "responses": {
           "200": {
@@ -13820,7 +14448,9 @@
                   "type": "object",
                   "properties": {
                     "recordedAt": {
-                      "type": "string"
+                      "type": "string",
+                      "format": "date-time",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
                     }
                   },
                   "required": [

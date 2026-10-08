@@ -20,6 +20,7 @@ const OPERATIONS: NavItem[] = [
   { href: '/shifts', label: 'Shifts', permission: 'shifts.read' },
   { href: '/guards', label: 'Guards', permission: 'guards.read' },
   { href: '/sites', label: 'Sites', permission: 'sites.read' },
+  { href: '/reports', label: 'Reports', permission: 'reports.read' },
 ];
 
 const ADMINISTRATION: NavItem[] = [
@@ -39,6 +40,7 @@ const BUILT = new Set([
   '/shifts',
   '/live',
   '/alerts',
+  '/reports',
 ]);
 
 export function AppShell({ children }: { children: ReactNode }) {

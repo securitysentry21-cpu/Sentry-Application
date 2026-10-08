@@ -1,4 +1,5 @@
 export * from './alerts.ts';
+export * from './attendance.ts';
 export * from './clock.ts';
 export * from './geo.ts';
 export * from './geofence.ts';

@@ -1,7 +1,7 @@
 // Sites (D-38) and checkpoints with QR labels (ARCH §11.1) — dashboard ↔ API contract.
 import { z } from 'zod';
 
-import { latitudeSchema, longitudeSchema, siteBoundarySchema } from './geo.ts';
+import { latitudeSchema, longitudeSchema, SITE_GEOMETRY, siteBoundarySchema } from './geo.ts';
 
 const uuid = z.uuid();
 const instant = z.iso.datetime({ offset: true });
@@ -19,7 +19,7 @@ export const siteSchema = z.object({
   timezone: z.string(),
   boundary: siteBoundarySchema,
   /** The map pin: the circle's centre or the polygon's centroid. */
-  center: z.object({ lat: z.number(), lng: z.number() }),
+  center: z.object({ lat: z.number(), lng: z.number() }).meta(SITE_GEOMETRY),
   status: z.enum(SITE_STATUSES),
   notes: z.string().nullable(),
   checkpointCount: z.int(),
@@ -64,7 +64,7 @@ export const checkpointSchema = z.object({
   siteId: uuid,
   name: z.string(),
   description: z.string().nullable(),
-  location: z.object({ lat: z.number(), lng: z.number() }).nullable(),
+  location: z.object({ lat: z.number(), lng: z.number() }).meta(SITE_GEOMETRY).nullable(),
   verificationRadiusM: z.int(),
   qrVersion: z.int(),
   qrRotatedAt: instant.nullable(),
@@ -75,7 +75,7 @@ export type Checkpoint = z.infer<typeof checkpointSchema>;
 
 export const checkpointListResponseSchema = z.object({ checkpoints: z.array(checkpointSchema) });
 
-const location = z.strictObject({ lat: latitudeSchema, lng: longitudeSchema }).nullable();
+const location = z.strictObject({ lat: latitudeSchema, lng: longitudeSchema }).meta(SITE_GEOMETRY).nullable();
 
 export const checkpointCreateRequestSchema = z.strictObject({
   name: z.string().trim().min(1).max(120),

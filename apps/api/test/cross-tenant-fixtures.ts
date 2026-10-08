@@ -131,4 +131,12 @@ export const CROSS_TENANT_FIXTURES: Readonly<Record<string, Coverage>> = {
   'POST /api/v1/alerts/:id/acknowledge': T01,
   'POST /api/v1/alerts/:id/resolve': T01,
   'POST /api/v1/alerts/:id/dismiss': T01,
+  'GET /api/v1/reports/attendance': {
+    covered: 'test',
+    test: "reports.test.ts: another organization's shifts never appear; its site is not found",
+  },
+  'GET /api/v1/reports/attendance/export': {
+    covered: 'test',
+    test: "reports.test.ts: another organization's shifts never appear; its site is not found",
+  },
 };

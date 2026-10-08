@@ -132,6 +132,22 @@ Gaps in the spec that Phase 5 had to fill. Each is the simplest option that keep
 - **Mock locations and implausible jumps** open SUSPICIOUS_LOCATION (MEDIUM, never auto-resolves). One alert per shift; repeats count on it.
 - **Not built in Phase 5:** web push, push to guards, the escalation ladder and notification deliveries (Phase 8, with SOS); CHECKPOINT_MISSED (Phase 7); INCIDENT_* (Phase 8); DEVICE_CHANGED.
 
+## Phase 4 completion · agent-decided 2026-10-08 (round 6 delegation)
+
+- **A replaced phone drains, it doesn't stay signed in (ARCH §5.4).** When a different phone is enrolled, the old phone's sessions are kept, but:
+  - for 72 hours it may call only `POST /sync/batch`;
+  - only items captured before the replacement are accepted;
+  - it may refresh while it drains.
+
+  A re-enrollment on the same phone still revokes its old sessions, and LOST, COMPROMISED and ADMIN still end everything at once.
+- **Attendance report:**
+  - a shift counts on the local date it was scheduled to start (the site's time zone for a one-site report, the organization's otherwise);
+  - figures are empty, not zero, until a shift has started or ended;
+  - the CSV is built in the request, because it holds no coordinates and is small. Only exports with location run in the background (PROD §15.2);
+  - it needs `exports.create`, and is audited as `EXPORT_REQUESTED`.
+- **Coordinates in responses are tagged** (`GUARD_LOCATION` or `SITE_GEOMETRY` in the contract), so the ADV-X05 meta-test can tell a guard's position, which is personal data, from a site's boundary, which is configuration. An untagged coordinate fails CI.
+- **Phase status.** `status.json` stays at Phase 3. Phase 4's exit includes human device tests on the pilot's phones, ADV-O05 among them, and claiming the phase complete before they run would be false. Counting Phases 4 and 5 as due, the traceability check passes except for ADV-O05.
+
 ## Index
 
 | ID | Decision | Status |

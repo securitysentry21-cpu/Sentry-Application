@@ -41,7 +41,11 @@ const IMPLAUSIBLE_SPEED_MPS = 70;
 /** A start or end received within this of its capture counts as online (server time decides). */
 const ONLINE_WINDOW_MS = 30_000;
 
-export type SyncGuard = GuardRef & { readonly appVersion: string | null };
+export type SyncGuard = GuardRef & {
+  readonly appVersion: string | null;
+  /** A replaced phone draining its queue: only items captured before this are accepted (ADV-A08). */
+  readonly replacedAt?: Date | null;
+};
 
 export async function processBatch(
   deps: AppDeps,
@@ -164,6 +168,9 @@ async function processItem(
   });
   if (limits.receivedAt.getTime() - estimate.capturedAt.getTime() > limits.maxAgeMs) {
     return { status: 'REJECTED', code: 'TIMESTAMP_TOO_OLD' };
+  }
+  if (guard.replacedAt && estimate.capturedAt.getTime() >= guard.replacedAt.getTime()) {
+    return { status: 'REJECTED', code: 'DEVICE_REVOKED' };
   }
   const online =
     estimate.clockStatus === 'VERIFIED_MONOTONIC' &&

@@ -1,5 +1,10 @@
 // POST /sync/batch (ARCH §9.1) and the live snapshot (ARCH §14, D-36).
-import { errorEnvelopeSchema, syncBatchRequestSchema, syncBatchResponseSchema } from '@sentryops/contracts';
+import {
+  errorEnvelopeSchema,
+  GUARD_LOCATION,
+  syncBatchRequestSchema,
+  syncBatchResponseSchema,
+} from '@sentryops/contracts';
 import { withTenantTransaction } from '@sentryops/db';
 import { locationAge, trackingHealth } from '@sentryops/domain';
 import { z } from 'zod';
@@ -23,6 +28,7 @@ export const liveGuardSchema = z.object({
   /** A live coordinate: the snapshot is live-only, never history (ADV-X05, INV-14). */
   lastFix: z
     .object({ lat: z.number(), lng: z.number(), accuracyM: z.number().nullable(), capturedAt: z.string() })
+    .meta(GUARD_LOCATION)
     .nullable(),
   lastContactAt: z.string().nullable(),
   trackingHealth: z.enum(['LIVE', 'DELAYED', 'OFFLINE']),
@@ -43,6 +49,7 @@ export const syncRoutes = [
       ownership: 'guard-self',
       rateLimit: 'sync',
       audit: null,
+      replacedDeviceDrain: true,
     },
     body: syncBatchRequestSchema,
     responses: { 200: syncBatchResponseSchema, 429: errorEnvelopeSchema },
@@ -62,6 +69,7 @@ export const syncRoutes = [
           deviceId: guard.deviceId,
           userId: guard.userId,
           appVersion,
+          replacedAt: guard.replacedAt,
         },
         body,
       );
@@ -77,6 +85,8 @@ export const syncRoutes = [
       ownership: 'organization',
       rateLimit: 'default',
       audit: null,
+      // Current positions of guards on active shifts only; never history.
+      locationScope: 'live',
     },
     responses: { 200: z.object({ serverTime: z.string(), freshness, guards: z.array(liveGuardSchema) }) },
     handler: async ({ deps, ctx }) => {

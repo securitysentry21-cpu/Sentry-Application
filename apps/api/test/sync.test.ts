@@ -2,6 +2,8 @@
 // quarantine. Items are built the way the guard app builds them.
 import { randomUUID } from 'node:crypto';
 
+import { syncItemSchema } from '@sentryops/contracts';
+import { tenantTables, TABLES } from '@sentryops/db';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import {
@@ -10,6 +12,7 @@ import {
   call,
   createGuard,
   enrollPhone,
+  errorCode,
   refreshPhone,
   seedOrganization,
   signIn,
@@ -304,6 +307,128 @@ describe('sync batch (ARCH §9)', () => {
     );
     expect(rows).toHaveLength(1);
     await asOwner(t.db, (c) => c.query('drop trigger fail_one on location_points; drop function fail_one()'));
+  });
+});
+
+describe('a replaced phone (ARCH §5.4)', () => {
+  it('ADV-A08 a phone REPLACED by a new one uploads what it captured before, for 72 hours, and nothing else', async () => {
+    const { phone, shiftId, guardId } = await onShift();
+    const before = item('LOCATION', { shiftId, fix: AT_SITE });
+    const number = (
+      await asOwner(t.db, (c) =>
+        c.query<{ phone: string }>('select phone from guards where id = $1', [guardId]),
+      )
+    ).rows[0]!.phone;
+    await enrollPhone(t.app, admin, org.id, guardId, number); // the new phone
+    t.clock.advance(60_000);
+    mono += 60_000;
+    const after = item('LOCATION', { shiftId, fix: AT_SITE });
+    const res = await send(phone, [before, after]);
+    expect(res.results.map((r) => [r.status, r.code])).toEqual([
+      ['ACCEPTED', undefined],
+      ['REJECTED', 'DEVICE_REVOKED'],
+    ]);
+    // Only the upload: every other route refuses the old phone.
+    const config = await asPhone(t.app, phone, { method: 'GET', url: '/api/v1/mobile/config' });
+    expect(errorCode(config)).toBe('DEVICE_REVOKED');
+    // It may refresh while it drains; after 72 hours the upload is refused too.
+    t.clock.advance(71 * H + 50 * 60_000);
+    await refreshPhone(t.app, phone);
+    t.clock.advance(10 * 60_000);
+    const late = await asPhone(t.app, phone, {
+      method: 'POST',
+      url: '/api/v1/sync/batch',
+      body: {
+        batchId: randomUUID(),
+        sentAt: t.clock.now().toISOString(),
+        sentMonoMs: mono,
+        bootId: BOOT,
+        items: [before],
+      },
+    });
+    expect(errorCode(late)).toBe('DEVICE_REVOKED');
+    // Three days on, the admin's dashboard session has expired too (12 hours idle).
+    admin = await signIn(t.app, 'admin@sync.test');
+  });
+});
+
+describe('no coordinates outside a shift (INV-08)', () => {
+  // Generated over the contract: every sync item type that can carry a fix needs a case here, so a
+  // new coordinate-carrying item can't skip the check. Each is sent where no shift window is open.
+  const SECRET = { lat: 33.123457, lon: 73.654321, accuracyM: 6 };
+  const cases: Record<string, (shiftId: string) => Item> = {
+    SHIFT_START: (shiftId) =>
+      item('SHIFT_START', {
+        shiftId,
+        fix: { ...SECRET, fixAgeS: 1 },
+        permission: { location: 'ALWAYS', precise: true },
+      }),
+    SHIFT_END: (shiftId) => item('SHIFT_END', { shiftId, fix: { ...SECRET, fixAgeS: 1 } }),
+    LOCATION: (shiftId) => item('LOCATION', { shiftId, fix: SECRET }),
+    CHECKPOINT_SCAN: () =>
+      item('CHECKPOINT_SCAN', { shiftId: null, token: 'SG1:unknown', fix: { ...SECRET, fixAgeS: 1 } }),
+    INCIDENT: () =>
+      item('INCIDENT', {
+        shiftId: null,
+        incident: {
+          type: 'OTHER',
+          severity: 'LOW',
+          title: 'Test',
+          description: '',
+          occurredAt: t.clock.now().toISOString(),
+        },
+        fix: { ...SECRET, fixAgeS: 1 },
+      }),
+  };
+
+  it('ADV-P05 items with coordinates sent outside any shift window store no coordinates anywhere', async () => {
+    const withFix = syncItemSchema.options
+      .filter((o) => 'fix' in o.shape)
+      .map((o) => o.shape.type.value)
+      .sort();
+    expect(Object.keys(cases).sort()).toEqual(withFix);
+
+    const number = `+9230022${String(20_000 + seq++).padStart(5, '0')}`;
+    const guardId = await createGuard(t.app, admin, org.id, {
+      employeeNumber: 'P05',
+      displayName: 'Privacy',
+      phone: number,
+    });
+    const phone = await enrollPhone(t.app, admin, org.id, guardId, number);
+    // Scheduled three hours ahead: too early to start, so no window is open.
+    const startsAt = new Date(t.clock.now().getTime() + 3 * H);
+    const created = await call(t.app, {
+      method: 'POST',
+      url: '/api/v1/shifts',
+      cookie: admin,
+      org: org.id,
+      body: {
+        guardId,
+        siteId,
+        startsAt: startsAt.toISOString(),
+        endsAt: new Date(startsAt.getTime() + 8 * H).toISOString(),
+      },
+    });
+    const shiftId = created.json<{ id: string }>().id;
+    const res = await send(
+      phone,
+      withFix.map((type) => cases[type]!(shiftId)),
+    );
+    expect(res.results.map((r) => r.status)).toEqual(withFix.map(() => 'REJECTED'));
+
+    // Every tenant table, every column, as text: the coordinates appear nowhere.
+    for (const table of tenantTables(TABLES)) {
+      const column = table === 'organizations' ? 'id' : 'organization_id';
+      const rows = await asOwner(t.db, (c) =>
+        c.query<{ row: string }>(`select row_to_json(x)::text as row from ${table} x where ${column} = $1`, [
+          org.id,
+        ]),
+      );
+      for (const r of rows.rows) {
+        expect(r.row, table).not.toContain('33.1234');
+        expect(r.row, table).not.toContain('73.6543');
+      }
+    }
   });
 });
 

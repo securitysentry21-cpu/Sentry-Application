@@ -6,9 +6,9 @@ import {
   MAX_BATCH_ITEMS,
   mobileConfigSchema,
   trackingConsentRequestSchema,
+  trackingConsentResponseSchema,
 } from '@sentryops/contracts';
 import { withTenantTransaction } from '@sentryops/db';
-import { z } from 'zod';
 
 import { auditActor, guardOf, orgOf } from '../context.ts';
 import { uuidv7 } from '../ids.ts';
@@ -69,6 +69,12 @@ export const mobileRoutes = [
         },
         // Patrol scans arrive with Phase 7 and incidents with Phase 8; until then the app hides them.
         features: { sos: deps.config.FEATURE_SOS, patrols: false, incidents: false },
+        support: {
+          emergencyCallNumber:
+            typeof settings['sos.emergency_call_number'] === 'string'
+              ? settings['sos.emergency_call_number']
+              : null,
+        },
       };
     },
   }),
@@ -84,7 +90,7 @@ export const mobileRoutes = [
       audit: 'TRACKING_CONSENT_RECORDED',
     },
     body: trackingConsentRequestSchema,
-    responses: { 201: z.object({ recordedAt: z.string() }), 422: errorEnvelopeSchema },
+    responses: { 201: trackingConsentResponseSchema, 422: errorEnvelopeSchema },
     handler: async ({ reply, deps, ctx, body }) => {
       const org = orgOf(ctx);
       const guard = guardOf(ctx);

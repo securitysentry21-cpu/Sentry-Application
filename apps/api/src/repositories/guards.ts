@@ -282,6 +282,11 @@ export async function revokeDevice(
     reason: NonNullable<DeviceRow['revokedReason']>;
     userId: string | null;
     now: Date;
+    /**
+     * REPLACED by a new phone: the old phone's sessions stay, so it can still upload what it
+     * captured before the replacement, for 72 hours and nothing else (ARCH §5.4, ADV-A08).
+     */
+    drain?: boolean;
   },
 ): Promise<void> {
   await trx
@@ -297,6 +302,7 @@ export async function revokeDevice(
     .where('id', '=', input.deviceId)
     .where('status', '=', 'ACTIVE')
     .execute();
+  if (input.drain) return;
   await trx
     .updateTable('mobile_sessions')
     .set({ revoked_at: input.now, revoked_reason: 'DEVICE_REVOKED' })
@@ -418,6 +424,8 @@ export async function loadSession(trx: Database, organizationId: string, id: str
       'g.status as guard_status',
       'g.preferred_locale',
       'd.status as device_status',
+      'd.revoked_reason as device_revoked_reason',
+      'd.revoked_at as device_revoked_at',
       'd.public_key',
       'o.name as organization_name',
       'o.status as organization_status',

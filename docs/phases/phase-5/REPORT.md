@@ -74,4 +74,4 @@
 - CHECKPOINT_MISSED (Phase 7), INCIDENT_CRITICAL and INCIDENT_HIGH (Phase 8), DEVICE_CHANGED.
 - Alerts on the Live map and the Overview page; the realtime stream (Phase 6) replaces polling.
 - A test for the RETRY-after-quarantine path (needs an injected server error).
-- Phase 4 server items still open: ADV-A08 (72 h grace for REPLACED devices), P05, X05, and the attendance report. `status.json` stays at Phase 3 until they are done.
+- Phase 4's server items (ADV-A08, P05, X05, the attendance report) were finished after this phase's core; see `phase-4/REPORT.md`.

@@ -110,14 +110,20 @@ function toShift(r: RawShift): ShiftRow {
 export async function listShifts(
   trx: Database,
   organizationId: string,
-  filter: { from: Date; to: Date; siteId?: string; guardId?: string },
+  filter: { from: Date; to: Date; siteId?: string; guardId?: string; limit?: number; startsWithin?: boolean },
 ): Promise<ShiftRow[]> {
-  let query = shiftQuery(trx, organizationId)
-    .where('sh.starts_at', '<', filter.to)
-    .where('sh.ends_at', '>', filter.from);
+  let query = shiftQuery(trx, organizationId).where('sh.starts_at', '<', filter.to);
+  // Overlapping the period by default; a report counts a shift on the day it was scheduled to start.
+  query = filter.startsWithin
+    ? query.where('sh.starts_at', '>=', filter.from)
+    : query.where('sh.ends_at', '>', filter.from);
   if (filter.siteId) query = query.where('sh.site_id', '=', filter.siteId);
   if (filter.guardId) query = query.where('sh.guard_id', '=', filter.guardId);
-  const rows = await query.orderBy('sh.starts_at').orderBy('sh.id').limit(2000).execute();
+  const rows = await query
+    .orderBy('sh.starts_at')
+    .orderBy('sh.id')
+    .limit(filter.limit ?? 2000)
+    .execute();
   return rows.map(toShift);
 }
 

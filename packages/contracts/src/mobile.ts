@@ -85,6 +85,8 @@ export const mobileConfigSchema = z.object({
     requireBackgroundPermission: z.enum(['BLOCK', 'WARN']),
   }),
   features: z.object({ sos: z.boolean(), patrols: z.boolean(), incidents: z.boolean() }),
+  /** The number "Call supervisor" dials (`sos.emergency_call_number`); null until set. Optional for older servers. */
+  support: z.object({ emergencyCallNumber: z.string().nullable() }).optional(),
 });
 export type MobileConfig = z.infer<typeof mobileConfigSchema>;
 
@@ -92,6 +94,7 @@ export const trackingConsentRequestSchema = z.strictObject({
   disclosureVersion: z.string().max(40),
   locale: z.enum(GUARD_LOCALES),
 });
+export const trackingConsentResponseSchema = z.object({ recordedAt: instant });
 
 // ── Shifts for the guard (GET /me/shifts) ────────────────────────────────────────────────────
 

@@ -5,7 +5,14 @@ import { z } from 'zod';
 export const latitudeSchema = z.number().min(-90).max(90);
 export const longitudeSchema = z.number().min(-180).max(180);
 
-export const latLngSchema = z.strictObject({ lat: latitudeSchema, lng: longitudeSchema });
+/**
+ * Coordinates in responses are tagged, and a meta-test (ADV-X05) fails on any that are not: a site's
+ * geometry is configuration; a guard's position is personal data (INV-14).
+ */
+export const SITE_GEOMETRY = { siteGeometry: true } as const;
+export const GUARD_LOCATION = { guardLocation: true } as const;
+
+export const latLngSchema = z.strictObject({ lat: latitudeSchema, lng: longitudeSchema }).meta(SITE_GEOMETRY);
 export type LatLng = z.infer<typeof latLngSchema>;
 
 export const CIRCLE_RADIUS_M = { min: 50, max: 5000 } as const;

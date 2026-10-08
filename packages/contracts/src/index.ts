@@ -6,6 +6,7 @@ export * from './geo.ts';
 export * from './guards.ts';
 export * from './mobile.ts';
 export * from './permissions.ts';
+export * from './reports.ts';
 export * from './routes.ts';
 export * from './settings.ts';
 export * from './shifts.ts';

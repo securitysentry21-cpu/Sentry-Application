@@ -7,6 +7,7 @@
 import type { SessionTokens } from '@sentryops/contracts';
 import { withTenantTransaction, type Database } from '@sentryops/db';
 
+import { REPLACED_DRAIN_MS } from '../context.ts';
 import type { AppDeps } from '../deps.ts';
 import { AppError } from '../errors.ts';
 import { randomToken, uuidv7 } from '../ids.ts';
@@ -68,7 +69,14 @@ export async function refreshSession(deps: AppDeps, refreshToken: string): Promi
       }
       await revokeUnrotatedInFamily(trx, found.organization_id, session.family_id, now);
     }
-    if (session.device_status !== 'ACTIVE' || session.guard_status !== 'ACTIVE')
+    // A replaced phone may keep refreshing while it drains (ARCH §5.4); the API still limits it to
+    // uploads captured before the replacement.
+    const draining =
+      session.device_status === 'REVOKED' &&
+      session.device_revoked_reason === 'REPLACED' &&
+      session.device_revoked_at !== null &&
+      now.getTime() - session.device_revoked_at.getTime() <= REPLACED_DRAIN_MS;
+    if ((session.device_status !== 'ACTIVE' && !draining) || session.guard_status !== 'ACTIVE')
       return { ok: false as const };
     await markRotated(trx, found.organization_id, session.id, now);
     const tokens = await issueSession(trx, deps, {

@@ -34,7 +34,12 @@ export type GuardActor = {
   readonly sessionId: string;
   readonly name: string;
   readonly preferredLocale: 'en' | 'ur';
+  /** Set while a phone REPLACED by a new one drains its queue: only data captured before this. */
+  readonly replacedAt: Date | null;
 };
+
+/** ARCH §5.4: a replaced phone's pre-replacement uploads are accepted for 72 hours. */
+export const REPLACED_DRAIN_MS = 72 * 3_600_000;
 
 export type OrgContext = {
   readonly id: string;
@@ -82,7 +87,13 @@ async function resolveGuard(
   if (request.headers['x-device-id'] !== session.device_id) {
     throw new AppError('DEVICE_NOT_REGISTERED', 'This phone is not registered for this session.');
   }
-  if (session.device_status !== 'ACTIVE') {
+  const draining =
+    session.device_status === 'REVOKED' &&
+    session.device_revoked_reason === 'REPLACED' &&
+    session.device_revoked_at !== null &&
+    now.getTime() - session.device_revoked_at.getTime() <= REPLACED_DRAIN_MS &&
+    policy.replacedDeviceDrain === true;
+  if (session.device_status !== 'ACTIVE' && !draining) {
     throw new AppError('DEVICE_REVOKED', 'This phone was signed out by your organization.');
   }
   if (session.revoked_at || session.access_expires_at <= now) throw unauthenticated();
@@ -103,6 +114,7 @@ async function resolveGuard(
       sessionId: session.id,
       name: session.display_name,
       preferredLocale: session.preferred_locale === 'ur' ? 'ur' : 'en',
+      replacedAt: draining ? session.device_revoked_at : null,
     },
     org: {
       id: found.organization_id,

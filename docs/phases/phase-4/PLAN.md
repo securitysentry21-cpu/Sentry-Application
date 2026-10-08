@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Status | **In progress.** The server core is built and tested. `status.json` stays at Phase 3 until every Phase 4 exit ID has a test. |
+| Status | **Software built; device tests pending** (see REPORT.md). `status.json` stays at Phase 3 until the human device tests are run. |
 | Read | PROD §6.5–6.6, §7.4–7.6, §8; ARCH §8–9 |
 
 ## Built so far (2026-10-08)

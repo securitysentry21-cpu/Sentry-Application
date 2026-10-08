@@ -34,4 +34,15 @@ export type RoutePolicy = {
   readonly rateLimit: RateLimitClass;
   /** Audit action written in the same transaction (INV-14), or null if the route changes nothing auditable. */
   readonly audit: AuditAction | null;
+  /**
+   * A route whose response carries guard coordinates (tagged `guardLocation` in its schema) either
+   * returns current positions of guards on duty only (`live`), or names an audit action, because
+   * every read of location history is audited (INV-14, ADV-X05).
+   */
+  readonly locationScope?: 'live';
+  /**
+   * The one route a phone REPLACED by a new one may still call, for 72 hours, to upload what it
+   * captured before the replacement (ARCH §5.4, ADV-A08). Every other route refuses it.
+   */
+  readonly replacedDeviceDrain?: true;
 };

@@ -1,8 +1,10 @@
 import { createPool } from '@sentryops/db';
 import { FakeClock } from '@sentryops/domain';
 import { afterAll, describe, expect, it } from 'vitest';
+import { z } from 'zod';
 
 import { buildApp } from '../src/app.ts';
+import { ROUTES } from '../src/routes/index.ts';
 import { defineRoute, type RouteDefinition } from '../src/routes/registry.ts';
 import { createDeps } from '../src/server.ts';
 import { CROSS_TENANT_FIXTURES } from './cross-tenant-fixtures.ts';
@@ -37,6 +39,45 @@ describe('route registry (ARCH §4.6)', () => {
     } finally {
       await app.close();
     }
+  });
+
+  it('ADV-X05 every route returning guard coordinates is live-only or audited; no coordinate is untagged', () => {
+    const COORDINATE_KEYS = [
+      ['lat', 'latitude'],
+      ['lng', 'lon', 'longitude'],
+    ];
+    type Node = { [key: string]: unknown };
+    const found = { guardLocation: [] as string[], untagged: [] as string[] };
+    const walk = (node: unknown, key: string, tags: { guard: boolean }) => {
+      if (!node || typeof node !== 'object') return;
+      const n = node as Node;
+      const props = n.properties && typeof n.properties === 'object' ? Object.keys(n.properties) : [];
+      const hasCoordinates = COORDINATE_KEYS.every((names) => names.some((k) => props.includes(k)));
+      if (hasCoordinates) {
+        if (n.guardLocation === true) tags.guard = true;
+        else if (n.siteGeometry !== true) found.untagged.push(key);
+      }
+      for (const value of Object.values(n)) walk(value, key, tags);
+    };
+    for (const route of ROUTES) {
+      const key = `${route.method} ${route.url}`;
+      const tags = { guard: false };
+      for (const schema of Object.values(route.responses)) {
+        walk(z.toJSONSchema(schema, { unrepresentable: 'any' }), key, tags);
+      }
+      if (tags.guard) {
+        found.guardLocation.push(key);
+        expect(
+          route.policy.locationScope === 'live' || route.policy.audit !== null,
+          `${key} returns guard coordinates: declare locationScope 'live' or an audit action`,
+        ).toBe(true);
+      }
+    }
+    expect(found.untagged, 'coordinates in responses must be tagged GUARD_LOCATION or SITE_GEOMETRY').toEqual(
+      [],
+    );
+    // The live snapshot carries guard positions, so the check can't pass by finding nothing.
+    expect(found.guardLocation).toContain('GET /api/v1/dashboard/snapshot');
   });
 
   it('INV-12 the API refuses to mount a route that has no policy', async () => {

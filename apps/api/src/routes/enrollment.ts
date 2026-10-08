@@ -238,6 +238,7 @@ export const enrollmentRoutes = [
             reason: 'REPLACED',
             userId: null,
             now,
+            drain: true,
           });
         }
         const deviceInput = {
