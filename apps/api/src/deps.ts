@@ -3,6 +3,7 @@ import type { Clock } from '@sentryops/domain';
 
 import type { OidcClient } from './auth/oidc.ts';
 import type { Config } from './config.ts';
+import type { Metrics } from './metrics.ts';
 import type { RateLimiter } from './rate-limit.ts';
 
 /** Everything a handler may use. Handlers get time from `clock`, never the wall clock (ARCH §3). */
@@ -13,6 +14,7 @@ export type AppDeps = {
   readonly clock: Clock;
   readonly config: Config;
   readonly rateLimiter: RateLimiter;
+  readonly metrics: Metrics;
   /** Null when no identity provider is configured (development and tests use DEV_AUTH). */
   readonly oidc: OidcClient | null;
 };

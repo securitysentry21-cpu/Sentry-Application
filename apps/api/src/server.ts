@@ -6,6 +6,7 @@ import { buildApp, type BuildOptions } from './app.ts';
 import { OidcClient } from './auth/oidc.ts';
 import type { Config } from './config.ts';
 import type { AppDeps } from './deps.ts';
+import { Metrics } from './metrics.ts';
 import { RateLimiter } from './rate-limit.ts';
 
 /** The dependencies the API runs with; tests build the same thing around a test database. */
@@ -26,7 +27,15 @@ export function createDeps(
             redirectUri: `${new URL(config.PUBLIC_ORIGIN).origin}/api/v1/auth/callback`,
           })
         : null;
-  return { pool, db: createKysely(pool), clock, config, rateLimiter: new RateLimiter(clock), oidc };
+  return {
+    pool,
+    db: createKysely(pool),
+    clock,
+    config,
+    rateLimiter: new RateLimiter(clock),
+    metrics: new Metrics(),
+    oidc,
+  };
 }
 
 /**

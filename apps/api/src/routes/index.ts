@@ -11,6 +11,7 @@ import type { RouteDefinition } from './registry.ts';
 import { settingsRoutes } from './settings.ts';
 import { shiftRoutes } from './shifts.ts';
 import { siteRoutes } from './sites.ts';
+import { syncRoutes } from './sync.ts';
 
 /** Every route the API serves. A route that is not listed here cannot be mounted. */
 export const ROUTES: readonly RouteDefinition[] = [
@@ -26,4 +27,5 @@ export const ROUTES: readonly RouteDefinition[] = [
   ...mobileRoutes,
   ...siteRoutes,
   ...shiftRoutes,
+  ...syncRoutes,
 ];

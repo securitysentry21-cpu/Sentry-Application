@@ -66,4 +66,10 @@ export const TABLES: TableRegistry = {
   // Phase 3: shifts.
   shifts: { kind: 'tenant' },
   shift_events: { kind: 'tenant-append-only' },
+
+  // Phase 4: tracking.
+  location_points: { kind: 'tenant-append-only' },
+  device_status_events: { kind: 'tenant-append-only' },
+  shift_live_state: { kind: 'tenant' },
+  quarantined_items: { kind: 'tenant-append-only' },
 };

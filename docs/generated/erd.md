@@ -62,6 +62,32 @@ erDiagram
     inet ip_address
     text user_agent
   }
+  device_status_events {
+    uuid id PK
+    uuid organization_id
+    uuid guard_id
+    uuid device_id
+    uuid shift_id
+    uuid client_event_id
+    timestamp_with_time_zone recorded_at
+    timestamp_with_time_zone received_at
+    text location_permission
+    boolean precise_location
+    boolean location_services_enabled
+    boolean notifications_enabled
+    double_precision battery_pct
+    boolean is_charging
+    boolean power_save_mode
+    boolean battery_optimization_exempt
+    boolean auto_time_enabled
+    text tracking_service_state
+    text app_version
+    text os_version
+    integer pending_queue_count
+    timestamp_with_time_zone oldest_pending_at
+    timestamp_with_time_zone last_successful_sync_at
+    timestamp_with_time_zone created_at
+  }
   guard_devices {
     uuid id PK
     uuid organization_id
@@ -116,6 +142,31 @@ erDiagram
     uuid created_by_user_id
     timestamp_with_time_zone created_at
   }
+  location_points {
+    uuid id PK
+    uuid organization_id
+    uuid guard_id
+    uuid shift_id
+    uuid device_id
+    uuid client_event_id
+    double_precision latitude
+    double_precision longitude
+    double_precision accuracy_m
+    double_precision altitude_m
+    double_precision speed_mps
+    double_precision heading_deg
+    timestamp_with_time_zone recorded_at
+    timestamp_with_time_zone captured_at
+    timestamp_with_time_zone received_at
+    text clock_status
+    text source
+    text provider
+    boolean is_mock
+    text__ flags
+    text app_version
+    uuid sync_batch_id
+    timestamp_with_time_zone created_at
+  }
   mobile_sessions {
     uuid id PK
     uuid organization_id
@@ -163,6 +214,17 @@ erDiagram
     timestamp_with_time_zone created_at
     timestamp_with_time_zone updated_at
   }
+  quarantined_items {
+    uuid id PK
+    uuid organization_id
+    uuid device_id
+    uuid batch_id
+    text client_event_id
+    jsonb item
+    text error_code
+    timestamp_with_time_zone created_at
+    timestamp_with_time_zone replayed_at
+  }
   schema_migrations {
     text version PK
     text checksum
@@ -181,6 +243,28 @@ erDiagram
     timestamp_with_time_zone client_recorded_at
     jsonb payload
     timestamp_with_time_zone created_at
+  }
+  shift_live_state {
+    uuid id PK
+    uuid organization_id
+    uuid guard_id
+    uuid site_id
+    double_precision last_fix_latitude
+    double_precision last_fix_longitude
+    double_precision last_fix_accuracy_m
+    timestamp_with_time_zone last_fix_captured_at
+    uuid last_fix_point_id
+    timestamp_with_time_zone last_contact_at
+    text geofence_state
+    text tracking_service_state
+    text location_permission
+    double_precision battery_pct
+    boolean is_charging
+    text app_version
+    integer pending_queue_count
+    timestamp_with_time_zone oldest_pending_at
+    timestamp_with_time_zone device_report_at
+    timestamp_with_time_zone updated_at
   }
   shifts {
     uuid id PK
@@ -265,6 +349,10 @@ erDiagram
   sites ||--o{ checkpoints : "checkpoints_organization_id_site_id_fkey"
   users ||--o{ checkpoints : "checkpoints_updated_by_user_id_fkey"
   users ||--o{ dashboard_sessions : "dashboard_sessions_user_id_fkey"
+  guard_devices ||--o{ device_status_events : "device_status_events_organization_id_device_id_fkey"
+  organizations ||--o{ device_status_events : "device_status_events_organization_id_fkey"
+  guards ||--o{ device_status_events : "device_status_events_organization_id_guard_id_fkey"
+  shifts ||--o{ device_status_events : "device_status_events_organization_id_shift_id_fkey"
   organizations ||--o{ guard_devices : "guard_devices_organization_id_fkey"
   guards ||--o{ guard_devices : "guard_devices_organization_id_guard_id_fkey"
   users ||--o{ guard_devices : "guard_devices_revoked_by_user_id_fkey"
@@ -277,6 +365,10 @@ erDiagram
   guards ||--o{ invitations : "invitations_guard_fk"
   organizations ||--o{ invitations : "invitations_organization_id_fkey"
   users ||--o{ invitations : "invitations_revoked_by_user_id_fkey"
+  guard_devices ||--o{ location_points : "location_points_organization_id_device_id_fkey"
+  organizations ||--o{ location_points : "location_points_organization_id_fkey"
+  guards ||--o{ location_points : "location_points_organization_id_guard_id_fkey"
+  shifts ||--o{ location_points : "location_points_organization_id_shift_id_fkey"
   guard_devices ||--o{ mobile_sessions : "mobile_sessions_organization_id_device_id_fkey"
   organizations ||--o{ mobile_sessions : "mobile_sessions_organization_id_fkey"
   guards ||--o{ mobile_sessions : "mobile_sessions_organization_id_guard_id_fkey"
@@ -284,10 +376,16 @@ erDiagram
   users ||--o{ organization_members : "organization_members_user_id_fkey"
   organizations ||--o{ organization_settings : "organization_settings_organization_id_fkey"
   users ||--o{ organization_settings : "organization_settings_updated_by_user_id_fkey"
+  guard_devices ||--o{ quarantined_items : "quarantined_items_organization_id_device_id_fkey"
+  organizations ||--o{ quarantined_items : "quarantined_items_organization_id_fkey"
   users ||--o{ shift_events : "shift_events_actor_user_id_fkey"
   guard_devices ||--o{ shift_events : "shift_events_organization_id_device_id_fkey"
   organizations ||--o{ shift_events : "shift_events_organization_id_fkey"
   shifts ||--o{ shift_events : "shift_events_organization_id_shift_id_fkey"
+  organizations ||--o{ shift_live_state : "shift_live_state_organization_id_fkey"
+  guards ||--o{ shift_live_state : "shift_live_state_organization_id_guard_id_fkey"
+  shifts ||--o{ shift_live_state : "shift_live_state_organization_id_id_fkey"
+  sites ||--o{ shift_live_state : "shift_live_state_organization_id_site_id_fkey"
   users ||--o{ shifts : "shifts_created_by_user_id_fkey"
   organizations ||--o{ shifts : "shifts_organization_id_fkey"
   guards ||--o{ shifts : "shifts_organization_id_guard_id_fkey"

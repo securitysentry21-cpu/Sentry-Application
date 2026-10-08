@@ -132,6 +132,28 @@ beforeAll(async () => {
          values ($1, $2, $3, 'CREATED', 'SYSTEM', now())`,
         [randomUUID(), org, shift],
       );
+      // Phase 4 tables.
+      await m.query(
+        `insert into location_points (id, organization_id, guard_id, shift_id, device_id, client_event_id, latitude,
+           longitude, accuracy_m, recorded_at, captured_at, received_at, clock_status, source)
+         values ($1, $2, $3, $4, $5, $6, 31.5, 74.3, 10, now(), now(), now(), 'VERIFIED_MONOTONIC', 'TRACKING')`,
+        [randomUUID(), org, guard, shift, device, randomUUID()],
+      );
+      await m.query(
+        `insert into device_status_events (id, organization_id, guard_id, device_id, client_event_id, recorded_at,
+           received_at, location_permission, precise_location, location_services_enabled, tracking_service_state)
+         values ($1, $2, $3, $4, $5, now(), now(), 'ALWAYS', true, true, 'RUNNING')`,
+        [randomUUID(), org, guard, device, randomUUID()],
+      );
+      await m.query(
+        `insert into shift_live_state (id, organization_id, guard_id, site_id) values ($1, $2, $3, $4)`,
+        [shift, org, guard, siteRow],
+      );
+      await m.query(
+        `insert into quarantined_items (id, organization_id, device_id, batch_id, client_event_id, item, error_code)
+         values ($1, $2, $3, $4, 'x', '{}', 'INTERNAL_ERROR')`,
+        [randomUUID(), org, device, randomUUID()],
+      );
     }
   });
   runtime = new pg.Pool({ connectionString: db.urls.app_runtime, max: 2 });

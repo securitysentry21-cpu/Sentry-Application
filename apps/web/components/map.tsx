@@ -20,6 +20,27 @@ type LatLng = { lat: number; lng: number };
 
 export type MapShape = { id: string; name: string; boundary: SiteBoundary; highlight?: boolean };
 
+/** A guard on the map: coloured by tracking health; a last-known location is drawn hollow (INV-09). */
+export type MapPoint = {
+  id: string;
+  label: string;
+  lat: number;
+  lng: number;
+  health: 'LIVE' | 'DELAYED' | 'OFFLINE';
+  current: boolean;
+};
+
+function pointsGeoJson(points: MapPoint[]): FeatureCollection {
+  return {
+    type: 'FeatureCollection',
+    features: points.map((p) => ({
+      type: 'Feature',
+      properties: { id: p.id, label: p.label, health: p.health, current: p.current ? 1 : 0 },
+      geometry: { type: 'Point', coordinates: [p.lng, p.lat] },
+    })),
+  };
+}
+
 function ring(boundary: SiteBoundary): [number, number][] {
   const points =
     boundary.kind === 'CIRCLE' ? circlePolygon(boundary.center, boundary.radiusM) : boundary.points;
@@ -57,10 +78,11 @@ export function BoundaryMap(props: {
   /** Editing: clicks report a point; the parent decides what it means. */
   onPick?: (point: LatLng) => void;
   draft?: LatLng[];
+  points?: MapPoint[];
   center?: LatLng;
   height?: number;
 }) {
-  const { shapes, onPick, draft, center, height = 420 } = props;
+  const { shapes, onPick, draft, points, center, height = 420 } = props;
   const container = useRef<HTMLDivElement | null>(null);
   const map = useRef<MapLibreMap | null>(null);
   const [ready, setReady] = useState(false);
@@ -129,6 +151,48 @@ export function BoundaryMap(props: {
               'circle-stroke-width': 1,
             },
           });
+          instance.addSource('points', { type: 'geojson', data: pointsGeoJson([]) });
+          instance.addLayer({
+            id: 'points',
+            type: 'circle',
+            source: 'points',
+            paint: {
+              'circle-radius': 7,
+              'circle-color': [
+                'match',
+                ['get', 'health'],
+                'LIVE',
+                '#2fbf71',
+                'DELAYED',
+                '#f0a33a',
+                '#ef5350',
+              ],
+              // Hollow when the position is only last-known: never styled as live (INV-09).
+              'circle-opacity': ['case', ['==', ['get', 'current'], 1], 1, 0],
+              'circle-stroke-color': [
+                'match',
+                ['get', 'health'],
+                'LIVE',
+                '#2fbf71',
+                'DELAYED',
+                '#f0a33a',
+                '#ef5350',
+              ],
+              'circle-stroke-width': 2.5,
+            },
+          });
+          instance.addLayer({
+            id: 'points-label',
+            type: 'symbol',
+            source: 'points',
+            layout: {
+              'text-field': ['get', 'label'],
+              'text-size': 11,
+              'text-offset': [0, 1.3],
+              'text-anchor': 'top',
+            },
+            paint: { 'text-color': '#12161b', 'text-halo-color': '#ffffff', 'text-halo-width': 1.5 },
+          });
           setReady(true);
         });
         instance.on('click', (event: MapMouseEvent) =>
@@ -157,6 +221,11 @@ export function BoundaryMap(props: {
     if (!ready || !map.current) return;
     void map.current.getSource<GeoJSONSource>('draft')?.setData(draftGeoJson(draft ?? []));
   }, [ready, draft]);
+
+  useEffect(() => {
+    if (!ready || !map.current) return;
+    void map.current.getSource<GeoJSONSource>('points')?.setData(pointsGeoJson(points ?? []));
+  }, [ready, points]);
 
   useEffect(() => {
     if (ready && center && map.current)

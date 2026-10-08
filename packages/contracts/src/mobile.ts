@@ -169,6 +169,11 @@ const itemBase = {
   recordedAt: instant,
   /** Monotonic clock at capture, counting through deep sleep (ARCH §8.7). */
   monoMs: z.int().min(0),
+  /**
+   * The boot (or app run) `monoMs` was taken in. Only an item whose bootId equals the batch's gets
+   * the monotonic capture estimate; without it the server falls back to the phone clock (safe).
+   */
+  bootId: z.string().min(1).max(64).optional(),
 };
 
 export const SYNC_ITEM_TYPES = [

@@ -85,6 +85,33 @@ export interface DashboardSessions {
   user_id: string;
 }
 
+export interface DeviceStatusEvents {
+  app_version: string | null;
+  auto_time_enabled: boolean | null;
+  battery_optimization_exempt: boolean | null;
+  battery_pct: number | null;
+  client_event_id: string;
+  created_at: Generated<Timestamp>;
+  device_id: string;
+  guard_id: string;
+  id: string;
+  is_charging: boolean | null;
+  last_successful_sync_at: Timestamp | null;
+  location_permission: string;
+  location_services_enabled: boolean;
+  notifications_enabled: boolean | null;
+  oldest_pending_at: Timestamp | null;
+  organization_id: string;
+  os_version: string | null;
+  pending_queue_count: number | null;
+  power_save_mode: boolean | null;
+  precise_location: boolean;
+  received_at: Timestamp;
+  recorded_at: Timestamp;
+  shift_id: string | null;
+  tracking_service_state: string;
+}
+
 export interface GuardDevices {
   app_version: string | null;
   created_at: Generated<Timestamp>;
@@ -142,6 +169,32 @@ export interface Invitations {
   token_hash: Buffer;
 }
 
+export interface LocationPoints {
+  accuracy_m: number | null;
+  altitude_m: number | null;
+  app_version: string | null;
+  captured_at: Timestamp;
+  client_event_id: string;
+  clock_status: string;
+  created_at: Generated<Timestamp>;
+  device_id: string;
+  flags: Generated<string[]>;
+  guard_id: string;
+  heading_deg: number | null;
+  id: string;
+  is_mock: boolean | null;
+  latitude: number;
+  longitude: number;
+  organization_id: string;
+  provider: string | null;
+  received_at: Timestamp;
+  recorded_at: Timestamp;
+  shift_id: string | null;
+  source: string;
+  speed_mps: number | null;
+  sync_batch_id: string | null;
+}
+
 export interface MobileSessions {
   access_expires_at: Timestamp;
   access_token_hash: Buffer;
@@ -193,6 +246,18 @@ export interface OrganizationSettings {
   version: Generated<number>;
 }
 
+export interface QuarantinedItems {
+  batch_id: string;
+  client_event_id: string;
+  created_at: Generated<Timestamp>;
+  device_id: string;
+  error_code: string;
+  id: string;
+  item: Json;
+  organization_id: string;
+  replayed_at: Timestamp | null;
+}
+
 export interface SchemaMigrations {
   applied_at: Generated<Timestamp>;
   checksum: string;
@@ -212,6 +277,29 @@ export interface ShiftEvents {
   payload: Generated<Json>;
   shift_id: string;
   type: string;
+}
+
+export interface ShiftLiveState {
+  app_version: string | null;
+  battery_pct: number | null;
+  device_report_at: Timestamp | null;
+  geofence_state: Generated<string>;
+  guard_id: string;
+  id: string;
+  is_charging: boolean | null;
+  last_contact_at: Timestamp | null;
+  last_fix_accuracy_m: number | null;
+  last_fix_captured_at: Timestamp | null;
+  last_fix_latitude: number | null;
+  last_fix_longitude: number | null;
+  last_fix_point_id: string | null;
+  location_permission: string | null;
+  oldest_pending_at: Timestamp | null;
+  organization_id: string;
+  pending_queue_count: number | null;
+  site_id: string;
+  tracking_service_state: Generated<string>;
+  updated_at: Generated<Timestamp>;
 }
 
 export interface Shifts {
@@ -299,15 +387,19 @@ export interface DB {
   auth_states: AuthStates;
   checkpoints: Checkpoints;
   dashboard_sessions: DashboardSessions;
+  device_status_events: DeviceStatusEvents;
   guard_devices: GuardDevices;
   guards: Guards;
   invitations: Invitations;
+  location_points: LocationPoints;
   mobile_sessions: MobileSessions;
   organization_members: OrganizationMembers;
   organization_settings: OrganizationSettings;
   organizations: Organizations;
+  quarantined_items: QuarantinedItems;
   schema_migrations: SchemaMigrations;
   shift_events: ShiftEvents;
+  shift_live_state: ShiftLiveState;
   shifts: Shifts;
   sites: Sites;
   tracking_consents: TrackingConsents;

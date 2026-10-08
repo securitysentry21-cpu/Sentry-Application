@@ -108,6 +108,11 @@ export const CROSS_TENANT_FIXTURES: Readonly<Record<string, Coverage>> = {
     covered: 'test',
     test: "shifts.test.ts › ADV-A03 (another guard's shift is not found)",
   },
+  'POST /api/v1/sync/batch': {
+    covered: 'test',
+    test: "sync.test.ts › ADV-L02 (another guard's shift is rejected, nothing stored)",
+  },
+  'GET /api/v1/dashboard/snapshot': T09,
   'GET /api/v1/me/shifts': {
     covered: 'test',
     test: "shifts.test.ts › ADV-A03 (only the guard's own shifts)",
