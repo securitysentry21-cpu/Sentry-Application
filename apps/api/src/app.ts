@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 
-import Fastify, { type FastifyInstance, type FastifyServerOptions } from 'fastify';
+import Fastify, { LogController, type FastifyInstance, type FastifyServerOptions } from 'fastify';
 
 import type { AppDeps } from './deps.ts';
 import { envelope, errorHandler } from './errors.ts';
@@ -43,7 +43,7 @@ export function buildApp(deps: AppDeps, options: BuildOptions = {}): FastifyInst
   const app = Fastify({
     logger: options.logger ?? loggerOptions(deps.config.LOG_LEVEL),
     // SEC §15: every log line carries `request_id` (Fastify's default name is reqId).
-    requestIdLogLabel: 'request_id',
+    logController: new LogController({ requestIdLogLabel: 'request_id' }),
     exposeHeadRoutes: false,
     // Behind the AWS load balancer the client address comes from X-Forwarded-For; only then.
     trustProxy: deps.config.TRUST_PROXY,

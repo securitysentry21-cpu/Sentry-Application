@@ -8,6 +8,8 @@
     "dev": "node --watch --env-file-if-exists=.env src/main.ts",
     "start": "node src/main.ts",
     "operator": "node --env-file-if-exists=.env src/cli/operator.ts",
+    "worker": "node --env-file-if-exists=.env src/worker.ts",
+    "demo": "node --env-file-if-exists=.env scripts/demo.ts",
     "typecheck": "tsc -p tsconfig.json"
   },
   "dependencies": {

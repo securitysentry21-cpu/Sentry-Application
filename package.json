@@ -23,7 +23,9 @@
     "db:up": "pnpm --filter @sentryops/db run db:up",
     "db:codegen": "pnpm --filter @sentryops/db run codegen",
     "api:dev": "pnpm --filter @sentryops/api run dev",
-    "web:dev": "pnpm --filter @sentryops/web run dev"
+    "web:dev": "pnpm --filter @sentryops/web run dev",
+    "worker:dev": "pnpm --filter @sentryops/api run worker",
+    "demo": "pnpm --filter @sentryops/api run demo"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
