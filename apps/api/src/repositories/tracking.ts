@@ -419,3 +419,24 @@ export async function lastGoodReportAt(
   const row = await q.executeTakeFirst();
   return row?.at ? new Date(row.at) : null;
 }
+
+/**
+ * True while this phone's SHIFT_START for the shift sits in quarantine, not yet replayed. Its later
+ * items wait (RETRY) instead of being judged against a shift that hasn't started (ARCH §9.3).
+ */
+export async function hasQuarantinedStart(
+  trx: Database,
+  organizationId: string,
+  deviceId: string,
+  shiftId: string,
+): Promise<boolean> {
+  const row = await trx
+    .selectFrom('quarantined_items')
+    .select('id')
+    .where('organization_id', '=', organizationId)
+    .where('device_id', '=', deviceId)
+    .where('replayed_at', 'is', null)
+    .where(sql<boolean>`item->>'type' = 'SHIFT_START' and item->>'shiftId' = ${shiftId}`)
+    .executeTakeFirst();
+  return row !== undefined;
+}

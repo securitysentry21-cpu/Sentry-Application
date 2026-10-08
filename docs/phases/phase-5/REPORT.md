@@ -34,10 +34,10 @@
   - device reports → TRACKING_DISABLED and LOW_BATTERY;
   - mock or implausible points → SUSPICIOUS_LOCATION.
 - **Sync fixes found by the guard-app build:**
-  - a quarantined SHIFT_START makes the rest of that shift's items RETRY instead of being rejected and lost;
+  - a quarantined SHIFT_START makes that shift's later points and end RETRY, across batches, until the start is replayed, instead of being rejected and lost;
   - the reply lists every shift the batch mentions.
 
-  Neither has a dedicated test yet: a quarantine needs an injected server error.
+  `sync.test.ts` covers the hold, seeding a quarantined start directly. A quarantine itself still needs an injected server error to test end to end.
 - **API:** `GET /alerts` (active, closed, all; optionally by shift), `GET /alerts/:id` with its history, and `POST /alerts/:id/acknowledge`, `/resolve` and `/dismiss`, each audited. New error code `ALERT_INVALID_TRANSITION` (409).
 - **Dashboard:** the Alerts page.
   - Counts by severity; active alerts by severity, then age.
@@ -73,7 +73,7 @@
 - Web push to dashboard users and push to guards (the D-26 provider), the escalation ladder, notification deliveries, and `POST /alerts/:id/seen` and `/delivered`. These go with SOS in Phase 8, because the pilot keeps SOS off.
 - CHECKPOINT_MISSED (Phase 7), INCIDENT_CRITICAL and INCIDENT_HIGH (Phase 8), DEVICE_CHANGED.
 - Alerts on the Live map and the Overview page; the realtime stream (Phase 6) replaces polling.
-- A test for the RETRY-after-quarantine path (needs an injected server error).
+- An end-to-end test of a quarantine (needs an injected server error); the hold that follows one is tested.
 - Phase 4's server items (ADV-A08, P05, X05, the attendance report) were finished after this phase's core; see `phase-4/REPORT.md`.
 
 ## Checked by running it

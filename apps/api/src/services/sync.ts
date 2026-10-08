@@ -21,6 +21,7 @@ import { getShift } from '../repositories/shifts.ts';
 import {
   advanceLiveContact,
   advanceLiveFix,
+  hasQuarantinedStart,
   insertDeviceStatus,
   insertPoint,
   liveFix,
@@ -208,6 +209,14 @@ async function processItem(
         offline: !online,
         fix: item.fix,
       });
+      // Its start is in quarantine: wait for the replay rather than lose the end.
+      if (
+        outcome.status === 'REJECTED' &&
+        outcome.shift?.status === 'SCHEDULED' &&
+        (await hasQuarantinedStart(trx, guard.organizationId, guard.deviceId, outcome.shift.id))
+      ) {
+        return { status: 'RETRY' };
+      }
       return fromOutcome(outcome);
     }
     case 'LOCATION': {
@@ -218,6 +227,13 @@ async function processItem(
       if (
         !inShiftWindow(estimate.capturedAt, shift.actualStartedAt, shift.actualEndedAt, limits.receivedAt)
       ) {
+        // Not started because its start is in quarantine: wait for the replay rather than lose it.
+        if (
+          shift.status === 'SCHEDULED' &&
+          (await hasQuarantinedStart(trx, guard.organizationId, guard.deviceId, shift.id))
+        ) {
+          return { status: 'RETRY' };
+        }
         return { status: 'REJECTED', code: 'OUTSIDE_SHIFT_WINDOW' };
       }
       const fix = item.fix;

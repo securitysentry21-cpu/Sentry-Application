@@ -310,6 +310,59 @@ describe('sync batch (ARCH §9)', () => {
   });
 });
 
+describe('a quarantined start (ARCH §9.3)', () => {
+  it("holds the shift's later points for retry, in the same batch and in later ones, instead of losing them", async () => {
+    const number = `+9230022${String(30_000 + seq++).padStart(5, '0')}`;
+    const guardId = await createGuard(t.app, admin, org.id, {
+      employeeNumber: 'Q-1',
+      displayName: 'Held',
+      phone: number,
+    });
+    const phone = await enrollPhone(t.app, admin, org.id, guardId, number);
+    const startsAt = new Date(t.clock.now().getTime() + 5 * 60_000);
+    const created = await call(t.app, {
+      method: 'POST',
+      url: '/api/v1/shifts',
+      cookie: admin,
+      org: org.id,
+      body: {
+        guardId,
+        siteId,
+        startsAt: startsAt.toISOString(),
+        endsAt: new Date(startsAt.getTime() + 8 * H).toISOString(),
+      },
+    });
+    const shiftId = created.json<{ id: string }>().id;
+    // The start hit an unexpected error and was kept for replay (as processBatch does).
+    await asOwner(t.db, (c) =>
+      c.query(
+        `insert into quarantined_items (id, organization_id, device_id, batch_id, client_event_id, item, error_code)
+         values ($1, $2, $3, $4, $5, $6, 'INTERNAL_ERROR')`,
+        [
+          randomUUID(),
+          org.id,
+          phone.deviceId,
+          randomUUID(),
+          randomUUID(),
+          JSON.stringify({ type: 'SHIFT_START', shiftId }),
+        ],
+      ),
+    );
+    const later = await send(phone, [
+      item('LOCATION', { shiftId, fix: AT_SITE }),
+      item('SHIFT_END', { shiftId, fix: { ...AT_SITE, fixAgeS: 1 } }),
+    ]);
+    expect(later.results.map((r) => r.status)).toEqual(['RETRY', 'RETRY']);
+    expect(await points(shiftId)).toHaveLength(0);
+    // Without a quarantined start, a point for a shift that never started is rejected as before.
+    await asOwner(t.db, (c) =>
+      c.query('update quarantined_items set replayed_at = now() where device_id = $1', [phone.deviceId]),
+    );
+    const after = await send(phone, [item('LOCATION', { shiftId, fix: AT_SITE })]);
+    expect(after.results.map((r) => [r.status, r.code])).toEqual([['REJECTED', 'OUTSIDE_SHIFT_WINDOW']]);
+  });
+});
+
 describe('a replaced phone (ARCH §5.4)', () => {
   it('ADV-A08 a phone REPLACED by a new one uploads what it captured before, for 72 hours, and nothing else', async () => {
     const { phone, shiftId, guardId } = await onShift();

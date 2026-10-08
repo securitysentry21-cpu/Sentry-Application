@@ -128,7 +128,7 @@ Gaps in the spec that Phase 5 had to fill. Each is the simplest option that keep
 - **New error code `ALERT_INVALID_TRANSITION` (409),** added to ARCH Appendix B. It covers resolving or dismissing an alert that is already closed, and dismissing an SOS or critical incident.
 - **Alert actors reference `users`,** as `audit_logs` and `shift_events` do. A manual resolve also records the acknowledgement if nobody had acknowledged.
 - **Sync, from the guard-app build's findings:**
-  - When a batch's SHIFT_START is quarantined, the rest of that shift's items in the batch get RETRY, instead of being judged against a shift that hasn't started (and lost).
+  - When a SHIFT_START is quarantined, that shift's later points and end get RETRY, in the same batch and in later ones, until the start is replayed. Otherwise they would be judged against a shift that hasn't started, and lost. The phone treats QUARANTINED as final, so the hold has to persist on the server.
   - The sync reply lists every shift the batch mentions, heartbeats and device reports included, so the phone always learns the server's state (ARCH §8.8).
 - **Mock locations and implausible jumps** open SUSPICIOUS_LOCATION (MEDIUM, never auto-resolves). One alert per shift; repeats count on it.
 - **Not built in Phase 5:** web push, push to guards, the escalation ladder and notification deliveries (Phase 8, with SOS); CHECKPOINT_MISSED (Phase 7); INCIDENT_* (Phase 8); DEVICE_CHANGED.
