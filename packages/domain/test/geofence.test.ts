@@ -136,7 +136,12 @@ describe('geofence (PROD §8.4)', () => {
 });
 
 describe('alert conditions (PROD §12.1)', () => {
-  const settings = { deviceOfflineAfterS: 600, locationStaleAfterS: 420, detectorIntervalS: 60 };
+  const settings = {
+    deviceOfflineAfterS: 600,
+    locationStaleAfterS: 420,
+    inContactMaxS: 300,
+    detectorIntervalS: 60,
+  };
 
   it('a silent phone is offline; a connected phone without fixes is stale; never both', () => {
     const now = new Date(T0.getTime() + 3_600_000);
@@ -153,6 +158,20 @@ describe('alert conditions (PROD §12.1)', () => {
         settings,
       ),
     ).toEqual({ deviceOffline: false, locationStale: true });
+  });
+
+  it('a phone that went silent is never "stale": it goes offline instead', () => {
+    // Silent since the same moment: no contact and no fix. Found by running the demo.
+    const now = new Date(T0.getTime() + 3_600_000);
+    const silentSince = (s: number) => new Date(now.getTime() - s * 1000);
+    expect(freshnessConditions(now, T0, silentSince(503), silentSince(503), settings)).toEqual({
+      deviceOffline: false,
+      locationStale: false,
+    });
+    expect(freshnessConditions(now, T0, silentSince(601), silentSince(601), settings)).toEqual({
+      deviceOffline: true,
+      locationStale: false,
+    });
   });
 
   it('stale needs the condition on two consecutive detector runs', () => {

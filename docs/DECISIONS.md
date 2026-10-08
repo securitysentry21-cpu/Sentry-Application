@@ -124,6 +124,7 @@ Gaps in the spec that Phase 5 had to fill. Each is the simplest option that keep
 - **Reopening within the suppression window** (PROD §12.3) restores ACKNOWLEDGED if the alert had been acknowledged, so a flapping condition doesn't keep re-alarming a dispatcher who is already on it.
 - **"Two consecutive detector runs" for LOCATION_STALE** means the fix was already older than the threshold one run interval ago (age > threshold + 60 s). It is stateless, and the same as two runs when the worker runs every minute.
 - **Freshness alerts resolve on the next detector run** (within 60 s), not in the sync request that restores contact.
+- **"In contact" for LOCATION_STALE** means heard from within `freshness.offline_after_s` (5 min), the point where the dashboard already shows the phone OFFLINE. Running the demo showed that a phone that simply went silent got "Location stale" at 8 minutes, before "Device offline" at 10. A silent phone is an offline matter; stale is for a phone that keeps reporting but has no fresh fix.
 - **New error code `ALERT_INVALID_TRANSITION` (409),** added to ARCH Appendix B. It covers resolving or dismissing an alert that is already closed, and dismissing an SOS or critical incident.
 - **Alert actors reference `users`,** as `audit_logs` and `shift_events` do. A manual resolve also records the acknowledgement if nobody had acknowledged.
 - **Sync, from the guard-app build's findings:**

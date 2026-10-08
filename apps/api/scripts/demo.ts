@@ -174,17 +174,23 @@ for (const g of GUARDS) {
   // A rerun: a shift still running from an earlier demo run is picked up by the new phone, as when
   // a guard switches phones mid-shift (the old phone is retired as REPLACED). A leftover shift that
   // never started is cancelled.
-  const leftover = await call<{ shifts: { id: string; status: string }[] }>({
+  const leftover = await call<{ shifts: { id: string; status: string; endsAt: string }[] }>({
     method: 'GET',
     url: `/api/v1/shifts?from=${encodeURIComponent(new Date(now.getTime() - 86_400_000).toISOString())}&to=${encodeURIComponent(new Date(now.getTime() + 9 * 3_600_000).toISOString())}&guardId=${guardId}`,
     cookie,
     org,
   });
-  const running = leftover.shifts.find((x) => x.status === 'ACTIVE');
-  for (const old of leftover.shifts.filter((x) => x.status === 'SCHEDULED')) {
+  // Still within its scheduled time: picked up. Already past its end (an earlier day's run):
+  // ended, so a fresh shift can start.
+  const running = leftover.shifts.find(
+    (x) => x.status === 'ACTIVE' && new Date(x.endsAt).getTime() > now.getTime() + 60_000,
+  );
+  for (const old of leftover.shifts) {
+    const overdue = old.status === 'ACTIVE' && old !== running;
+    if (old.status !== 'SCHEDULED' && !overdue) continue;
     await call({
       method: 'POST',
-      url: `/api/v1/shifts/${old.id}/cancel`,
+      url: `/api/v1/shifts/${old.id}/${overdue ? 'force-end' : 'cancel'}`,
       cookie,
       org,
       payload: { reason: 'Demo restarted' },

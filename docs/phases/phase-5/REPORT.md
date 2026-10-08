@@ -63,7 +63,7 @@
 | ADV-AL03 | API: two concurrent acknowledgements both 200, same first person, one audit record |
 | ADV-AL04 | API: a guard ends the shift → DEVICE_OFFLINE resolves as "shift ended"; SOS and SHIFT_MISSED stay open |
 | ADV-AL05 | API: every valid combination of heartbeat, upload, moving and stationary intervals on a grid, filtered by the real settings validator and with every threshold at its minimum: a healthy phone at its worst moment trips neither freshness alert |
-| — | DEVICE_OFFLINE opens after 10 min and once only; contact clears it; contact without a new fix → LOCATION_STALE, cleared by a fix |
+| — | DEVICE_OFFLINE opens after 10 min and once only; contact clears it; contact without a new fix → LOCATION_STALE, cleared by a fix; a phone that goes silent gets DEVICE_OFFLINE, never LOCATION_STALE (found by running the demo) |
 | — | TRACKING_DISABLED follows device reports; SHIFT_NOT_STARTED, then SHIFT_MISSED supersedes it |
 | — | `GET /alerts` never lists another organization's alerts; ADV-T01 covers the four `:id` routes |
 | — | RLS (ADV-T06) covers `alerts` and `alert_events` automatically through the registry |
@@ -75,3 +75,14 @@
 - Alerts on the Live map and the Overview page; the realtime stream (Phase 6) replaces polling.
 - A test for the RETRY-after-quarantine path (needs an injected server error).
 - Phase 4's server items (ADV-A08, P05, X05, the attendance report) were finished after this phase's core; see `phase-4/REPORT.md`.
+
+## Checked by running it
+
+`pnpm demo` was run on a fresh local database (2026-10-08, 16:10–16:24Z). Simulated phones went through the real API, and the demo ran the alert detectors:
+
+- LOW_BATTERY opened at once.
+- TRACKING_DISABLED opened at 30 s and resolved when the permission came back.
+- GUARD_LEFT_SITE opened 5 min 9 s after the first outside fix, and resolved on the return with 514 s outside.
+- DEVICE_OFFLINE opened at 10 min of silence.
+
+The run exposed the LOCATION_STALE-before-offline bug described above. It is fixed, and a test now covers it.

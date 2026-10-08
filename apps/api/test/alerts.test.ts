@@ -237,6 +237,7 @@ describe('alert engine (PROD §12.3)', () => {
             const settings = {
               deviceOfflineAfterS: n('alerts.device_offline_after_s'),
               locationStaleAfterS: n('freshness.location_stale_after_s'),
+              inContactMaxS: n('freshness.offline_after_s'),
               detectorIntervalS: 60,
             };
             for (const moving of [true, false]) {

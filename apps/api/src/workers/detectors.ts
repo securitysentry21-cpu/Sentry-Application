@@ -74,6 +74,7 @@ export async function alertsForOrganization(
     const freshness = {
       deviceOfflineAfterS: numberSetting(settings, 'alerts.device_offline_after_s', 600),
       locationStaleAfterS: numberSetting(settings, 'freshness.location_stale_after_s', 420),
+      inContactMaxS: numberSetting(settings, 'freshness.offline_after_s', 300),
       detectorIntervalS: intervalS,
     };
     const overrunMs = numberSetting(settings, 'shift.overrun_alert_after_minutes', 15) * 60_000;

@@ -45,15 +45,20 @@ export const alertKey = {
 export type FreshnessAlertSettings = {
   readonly deviceOfflineAfterS: number; // alerts.device_offline_after_s (600)
   readonly locationStaleAfterS: number; // freshness.location_stale_after_s (420)
+  /**
+   * "In contact" for LOCATION_STALE: heard from within freshness.offline_after_s (300), the point
+   * where the dashboard already shows the phone OFFLINE. A silent phone is an offline matter.
+   */
+  readonly inContactMaxS: number;
   /** LOCATION_STALE needs the condition on two consecutive detector runs (PROD §12.1). */
   readonly detectorIntervalS: number;
 };
 
 /**
  * Which freshness alerts hold now. DEVICE_OFFLINE: no contact for the offline threshold.
- * LOCATION_STALE: in contact, but the newest usable fix was already older than the threshold at the
- * previous detector run; never while DEVICE_OFFLINE holds. A shift is judged from its start, so one
- * that only just started is not "stale since forever".
+ * LOCATION_STALE: the phone is in contact (it would not show OFFLINE), but the newest usable fix was
+ * already older than the threshold at the previous detector run; never while DEVICE_OFFLINE holds.
+ * A shift is judged from its start, so one that only just started is not "stale since forever".
  */
 export function freshnessConditions(
   now: Date,
@@ -65,7 +70,8 @@ export function freshnessConditions(
   const contactAgeS = (now.getTime() - (lastContactAt ?? startedAt).getTime()) / 1000;
   const fixAgeS = (now.getTime() - (lastFixAt ?? startedAt).getTime()) / 1000;
   const deviceOffline = contactAgeS > s.deviceOfflineAfterS;
-  const locationStale = !deviceOffline && fixAgeS > s.locationStaleAfterS + s.detectorIntervalS;
+  const inContact = contactAgeS <= s.inContactMaxS;
+  const locationStale = inContact && !deviceOffline && fixAgeS > s.locationStaleAfterS + s.detectorIntervalS;
   return { deviceOffline, locationStale };
 }
 
