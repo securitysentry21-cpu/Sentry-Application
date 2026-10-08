@@ -1,0 +1,7 @@
+{
+  "name": "@sentryops/simulator",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Fake-device CLI that drives the real sync API (ARCH §3). Placeholder until Phase 4."
+}

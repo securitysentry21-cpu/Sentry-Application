@@ -1,0 +1,5 @@
+{
+  "//": "Root-level TypeScript: the verification scripts and root config files. Each package has its own tsconfig.",
+  "extends": "./packages/config/tsconfig.node.json",
+  "include": ["scripts", "vitest.config.ts"]
+}

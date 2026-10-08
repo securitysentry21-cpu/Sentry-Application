@@ -1,0 +1,19 @@
+{
+  "//": "Reviewed exceptions to the dependency audit (SEC §14). Each entry needs the advisory ID, the package, why it does not apply here, the review date, and an expiry date at most 90 days after the review, after which it must be reviewed again.",
+  "advisories": [
+    {
+      "id": "GHSA-86w9-cpqp-85rv",
+      "package": "node-forge@1.4.0",
+      "reason": "Signature-verification flaw. node-forge is only pulled in by the Expo CLI (expo > @expo/cli, and @expo/code-signing-certificates), which runs on developer and CI machines for the dev server and bundling. It is not in the API, the dashboard, or the shipped guard-app bundle (Hermes bytecode scanned 2026-10-08: no node-forge code). The fixed version (>=1.4.1) is not published on npm yet; when it is, add a pnpm override and remove this entry.",
+      "reviewed": "2026-10-08",
+      "expires": "2026-11-07"
+    },
+    {
+      "id": "GHSA-vfj7-8cjw-p6xm",
+      "package": "braces@3.0.3",
+      "reason": "Denial of service from deeply nested glob patterns. braces is only pulled in by the Metro bundler (micromatch in metro-file-map) when building the guard app, and the patterns it expands come from our own build configuration, never from users. It is not in the API, the dashboard, or the shipped guard-app bundle. The fixed version (>=3.0.4) is not published on npm yet; when it is, add a pnpm override and remove this entry.",
+      "reviewed": "2026-10-08",
+      "expires": "2026-11-07"
+    }
+  ]
+}

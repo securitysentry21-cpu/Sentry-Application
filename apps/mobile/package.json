@@ -1,0 +1,22 @@
+{
+  "name": "@sentryops/mobile",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Guard app (Expo, guards only). Phase 0 skeleton: compiles and lints; tracking arrives with Phase 0B and Phase 4.",
+  "main": "index.ts",
+  "scripts": {
+    "start": "expo start",
+    "android": "expo start --android",
+    "ios": "expo start --ios",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "expo": "57.0.27",
+    "expo-status-bar": "57.0.1",
+    "react": "19.2.3",
+    "react-native": "0.86.3"
+  },
+  "devDependencies": {
+    "@types/react": "~19.2.2"
+  }
+}

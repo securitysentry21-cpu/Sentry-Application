@@ -1,0 +1,23 @@
+packages:
+  - apps/*
+  - packages/*
+  - tools/*
+
+# pnpm blocks dependency install scripts unless listed here (supply-chain control, SEC §14).
+# Each entry was read before allowing it.
+allowBuilds:
+  # postinstall only re-creates symlinks inside its own native/ folder from a bundled JSON list.
+  '@embedded-postgres/windows-x64': true
+  '@embedded-postgres/linux-x64': true
+
+# React Native tooling expects a flat node_modules; see docs/DECISIONS.md (Phase 0 agent decisions).
+nodeLinker: hoisted
+
+# One React for the whole tree: the version React Native 0.86 ships with. Without this, Expo's
+# web-rendering packages pull a newer react-dom that doesn't match react.
+overrides:
+  react: 19.2.3
+  react-dom: 19.2.3
+
+# Never wait for an interactive 'purge node_modules?' prompt (installs run unattended).
+confirmModulesPurge: false

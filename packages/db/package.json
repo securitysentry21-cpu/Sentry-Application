@@ -1,0 +1,27 @@
+{
+  "name": "@sentryops/db",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Schema, migrations, RLS policies, grants, the table registry and the database test harness (ARCH §3, §4.3).",
+  "exports": {
+    ".": "./src/index.ts",
+    "./test-support": "./test-support/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "db:up": "node scripts/local-db.ts",
+    "codegen": "node scripts/codegen.ts",
+    "codegen:check": "node scripts/codegen.ts --check"
+  },
+  "dependencies": {
+    "kysely": "0.29.6",
+    "pg": "8.23.1"
+  },
+  "devDependencies": {
+    "@types/pg": "^8.23.1",
+    "embedded-postgres": "17.10.0-beta.17",
+    "kysely-codegen": "^0.20.0",
+    "vitest": "^5.0.3"
+  }
+}

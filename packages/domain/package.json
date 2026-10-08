@@ -1,0 +1,13 @@
+{
+  "name": "@sentryops/domain",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Pure logic shared by the API, dashboard and app; no IO, no wall clock (ARCH §3).",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json"
+  }
+}

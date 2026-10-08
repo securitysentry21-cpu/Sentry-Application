@@ -1,0 +1,20 @@
+{
+  "name": "@sentryops/api",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Fastify API, the only gateway to the database (ARCH §1.1). Runs on Node 24's built-in TypeScript support; no build step.",
+  "scripts": {
+    "dev": "node --watch --env-file-if-exists=.env src/main.ts",
+    "start": "node src/main.ts",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@sentryops/contracts": "workspace:*",
+    "@sentryops/db": "workspace:*",
+    "@sentryops/domain": "workspace:*",
+    "fastify": "5.12.5",
+    "pino": "10.4.0",
+    "zod": "4.6.5"
+  }
+}

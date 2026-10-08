@@ -1,0 +1,20 @@
+node_modules
+pnpm-lock.yaml
+.next
+dist
+build
+coverage
+.expo
+.local
+.tmp
+apps/mobile/android
+apps/mobile/ios
+packages/db/src/generated
+docs/generated
+next-env.d.ts
+
+# The specs and decision records are prose maintained by hand.
+docs/*.md
+docs/phases/**
+design/**
+CLAUDE.md

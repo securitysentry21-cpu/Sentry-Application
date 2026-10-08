@@ -1,0 +1,23 @@
+{
+  "name": "@sentryops/web",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Operations dashboard (Next.js). UI only: it talks to the API, never to the database (ARCH §1.1).",
+  "scripts": {
+    "dev": "next dev --hostname 127.0.0.1 --port 3000",
+    "build": "next build",
+    "start": "next start --port 3000",
+    "typecheck": "next typegen && tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@sentryops/contracts": "workspace:*",
+    "next": "16.4.0",
+    "react": "19.2.3",
+    "react-dom": "19.2.3"
+  },
+  "devDependencies": {
+    "@types/react": "~19.2.2",
+    "@types/react-dom": "~19.2.2"
+  }
+}

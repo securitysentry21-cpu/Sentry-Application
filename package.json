@@ -1,0 +1,41 @@
+{
+  "name": "sentryops",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@11.9.0",
+  "engines": {
+    "node": ">=24.11 <25"
+  },
+  "scripts": {
+    "verify": "node scripts/verify.ts",
+    "lint": "eslint . --max-warnings=0",
+    "format": "prettier . --write",
+    "format:check": "prettier . --check",
+    "typecheck": "tsc -p tsconfig.json && pnpm -r --if-present run typecheck",
+    "test": "vitest run",
+    "docs:generate": "node scripts/generate-docs.ts",
+    "docs:check": "node scripts/generate-docs.ts --check",
+    "traceability": "node scripts/traceability.ts",
+    "negative-controls": "node scripts/negative-controls.ts",
+    "check:scope": "node scripts/check-workspace-scope.ts",
+    "audit:deps": "node scripts/audit-deps.ts",
+    "check:licences": "node scripts/check-licences.ts",
+    "db:up": "pnpm --filter @sentryops/db run db:up",
+    "db:codegen": "pnpm --filter @sentryops/db run codegen",
+    "api:dev": "pnpm --filter @sentryops/api run dev",
+    "web:dev": "pnpm --filter @sentryops/web run dev"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@sentryops/contracts": "workspace:*",
+    "@sentryops/db": "workspace:*",
+    "@sentryops/domain": "workspace:*",
+    "@types/node": "^24.19.1",
+    "eslint": "^10.12.0",
+    "globals": "^17.13.0",
+    "prettier": "^3.9.9",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.71.1",
+    "vitest": "^5.0.3"
+  }
+}

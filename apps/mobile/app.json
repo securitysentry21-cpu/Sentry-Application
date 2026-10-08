@@ -1,0 +1,25 @@
+{
+  "expo": {
+    "name": "SENTRY",
+    "slug": "sentry-guard",
+    "version": "0.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "backgroundColor": "#12161B",
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.example.sentry.guard"
+    },
+    "android": {
+      "package": "com.example.sentry.guard",
+      "adaptiveIcon": {
+        "backgroundColor": "#12161B",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false
+    }
+  }
+}
