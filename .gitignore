@@ -21,6 +21,7 @@ packages/domain/src/__negative_control__.ts
 
 # local state
 .local/
+.claude/worktrees/
 .tmp/
 coverage/
 *.log

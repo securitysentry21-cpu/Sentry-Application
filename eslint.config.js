@@ -39,6 +39,8 @@ export default tseslint.config(
       'apps/mobile/ios/**',
       '**/next-env.d.ts',
       'packages/db/src/generated/**',
+      // Agent worktrees are separate checkouts; they are linted on their own.
+      '.claude/**',
     ],
   },
   js.configs.recommended,

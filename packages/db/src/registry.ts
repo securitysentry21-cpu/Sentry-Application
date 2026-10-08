@@ -35,4 +35,23 @@ export function tenantTables(registry: TableRegistry): string[] {
 export const TABLES: TableRegistry = {
   organizations: { kind: 'tenant-root' },
   schema_migrations: { kind: 'internal', reason: 'migration bookkeeping; holds no tenant data' },
+
+  // Phase 1: identity and tenancy.
+  users: {
+    kind: 'global',
+    reason:
+      'one person can belong to several organizations (ARCH §6.3); reached only through services by ID, email or provider subject, never listed globally (SEC §4.5)',
+  },
+  organization_members: { kind: 'tenant' },
+  invitations: { kind: 'tenant' },
+  organization_settings: { kind: 'tenant' },
+  audit_logs: { kind: 'tenant-append-only' },
+  dashboard_sessions: {
+    kind: 'global',
+    reason: "a dashboard user's own sign-in sessions; they hold no organization data",
+  },
+  auth_states: {
+    kind: 'global',
+    reason: 'ten-minute OIDC sign-in state, from before any user or organization is known',
+  },
 };

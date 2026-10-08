@@ -4,12 +4,13 @@ import { afterAll, describe, expect, it } from 'vitest';
 
 import { buildApp } from '../src/app.ts';
 import { defineRoute, type RouteDefinition } from '../src/routes/registry.ts';
+import { createDeps } from '../src/server.ts';
 import { CROSS_TENANT_FIXTURES } from './cross-tenant-fixtures.ts';
 import { NOW, testConfig, UNREACHABLE_DATABASE } from './support.ts';
 
 // No route is called here, so the pool never connects.
 const pool = createPool(UNREACHABLE_DATABASE);
-const deps = { pool, clock: new FakeClock(NOW), config: testConfig(UNREACHABLE_DATABASE) };
+const deps = createDeps(testConfig(UNREACHABLE_DATABASE), pool, { clock: new FakeClock(NOW), oidc: null });
 
 afterAll(async () => {
   await pool.end();

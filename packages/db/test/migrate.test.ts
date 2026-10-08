@@ -34,6 +34,18 @@ describe('migrations (ARCH §19.4)', () => {
     expect(await latestMigrationVersion()).toBe(versions.at(-1));
   });
 
+  it('databases are UTF-8, so Urdu names survive a round trip (D-14)', async () => {
+    const name = 'محمد عارف';
+    const { rows } = await withClient(db.urls.migrator, (c) =>
+      c.query<{ encoding: string; name: string }>(
+        `select pg_encoding_to_char(encoding) as encoding, $1::text as name
+           from pg_database where datname = current_database()`,
+        [name],
+      ),
+    );
+    expect(rows[0]).toEqual({ encoding: 'UTF8', name });
+  });
+
   it('does nothing when no migration is pending', async () => {
     await expect(withClient(db.urls.migrator, (c) => migrate(c))).resolves.toEqual([]);
   });

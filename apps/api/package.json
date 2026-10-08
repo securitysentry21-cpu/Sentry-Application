@@ -7,6 +7,7 @@
   "scripts": {
     "dev": "node --watch --env-file-if-exists=.env src/main.ts",
     "start": "node src/main.ts",
+    "operator": "node --env-file-if-exists=.env src/cli/operator.ts",
     "typecheck": "tsc -p tsconfig.json"
   },
   "dependencies": {
@@ -14,7 +15,13 @@
     "@sentryops/db": "workspace:*",
     "@sentryops/domain": "workspace:*",
     "fastify": "5.12.5",
+    "jose": "6.2.12",
+    "kysely": "0.29.6",
     "pino": "10.4.0",
     "zod": "4.6.5"
+  },
+  "devDependencies": {
+    "@types/pg": "8.23.1",
+    "pg": "8.23.1"
   }
 }

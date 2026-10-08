@@ -10,7 +10,91 @@ export type Generated<T> = T extends ColumnType<infer S, infer I, infer U>
   ? ColumnType<S, I | undefined, U>
   : ColumnType<T, T | undefined, T>;
 
+export type Json = JsonValue;
+
+export type JsonArray = JsonValue[];
+
+export type JsonObject = {
+  [x: string]: JsonValue | undefined;
+};
+
+export type JsonPrimitive = boolean | number | string | null;
+
+export type JsonValue = JsonArray | JsonObject | JsonPrimitive;
+
 export type Timestamp = ColumnType<Date, Date | string, Date | string>;
+
+export interface AuditLogs {
+  action: string;
+  actor_type: string;
+  actor_user_id: string | null;
+  created_at: Generated<Timestamp>;
+  id: string;
+  ip_address: string | null;
+  metadata: Generated<Json>;
+  organization_id: string;
+  reason: string | null;
+  request_id: string | null;
+  resource_id: string | null;
+  resource_type: string;
+  user_agent: string | null;
+}
+
+export interface AuthStates {
+  code_verifier: string;
+  created_at: Generated<Timestamp>;
+  expires_at: Timestamp;
+  id: string;
+  nonce: string;
+  return_to: string;
+  state_hash: Buffer;
+  used_at: Timestamp | null;
+}
+
+export interface DashboardSessions {
+  absolute_expires_at: Timestamp;
+  created_at: Generated<Timestamp>;
+  id: string;
+  idle_expires_at: Timestamp;
+  ip_address: string | null;
+  last_seen_at: Generated<Timestamp>;
+  revoked_at: Timestamp | null;
+  revoked_reason: string | null;
+  token_hash: Buffer;
+  user_agent: string | null;
+  user_id: string;
+}
+
+export interface Invitations {
+  accepted_at: Timestamp | null;
+  accepted_by_user_id: string | null;
+  attempts: Generated<number>;
+  code_hash: Buffer | null;
+  created_at: Generated<Timestamp>;
+  created_by_user_id: string | null;
+  email: string | null;
+  expires_at: Timestamp;
+  guard_id: string | null;
+  id: string;
+  organization_id: string;
+  phone: string | null;
+  purpose: string;
+  revoked_at: Timestamp | null;
+  revoked_by_user_id: string | null;
+  role: string | null;
+  token_hash: Buffer;
+}
+
+export interface OrganizationMembers {
+  created_at: Generated<Timestamp>;
+  id: string;
+  organization_id: string;
+  role: string;
+  status: string;
+  updated_at: Generated<Timestamp>;
+  user_id: string;
+  version: Generated<number>;
+}
 
 export interface Organizations {
   created_at: Generated<Timestamp>;
@@ -24,13 +108,42 @@ export interface Organizations {
   updated_at: Generated<Timestamp>;
 }
 
+export interface OrganizationSettings {
+  id: string;
+  organization_id: string;
+  overrides: Generated<Json>;
+  schema_version: Generated<number>;
+  updated_at: Generated<Timestamp>;
+  updated_by_user_id: string | null;
+  version: Generated<number>;
+}
+
 export interface SchemaMigrations {
   applied_at: Generated<Timestamp>;
   checksum: string;
   version: string;
 }
 
+export interface Users {
+  auth_provider_user_id: string | null;
+  created_at: Generated<Timestamp>;
+  email: string | null;
+  id: string;
+  locale: Generated<string>;
+  name: string;
+  phone: string | null;
+  status: Generated<string>;
+  updated_at: Generated<Timestamp>;
+}
+
 export interface DB {
+  audit_logs: AuditLogs;
+  auth_states: AuthStates;
+  dashboard_sessions: DashboardSessions;
+  invitations: Invitations;
+  organization_members: OrganizationMembers;
+  organization_settings: OrganizationSettings;
   organizations: Organizations;
   schema_migrations: SchemaMigrations;
+  users: Users;
 }

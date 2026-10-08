@@ -10,6 +10,518 @@
     }
   ],
   "paths": {
+    "/api/v1/audit-logs": {
+      "get": {
+        "summary": "The organization's audit log, newest first.",
+        "x-policy": {
+          "access": {
+            "kind": "permission",
+            "permission": "audit.read"
+          },
+          "ownership": "organization",
+          "rateLimit": "default",
+          "audit": null
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "type": "object",
+                  "properties": {
+                    "entries": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                          },
+                          "createdAt": {
+                            "type": "string",
+                            "format": "date-time",
+                            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                          },
+                          "actorType": {
+                            "type": "string",
+                            "enum": [
+                              "USER",
+                              "SYSTEM",
+                              "PLATFORM_OPERATOR"
+                            ]
+                          },
+                          "actorName": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "action": {
+                            "type": "string",
+                            "enum": [
+                              "MEMBER_INVITED",
+                              "INVITATION_REVOKED",
+                              "INVITATION_ACCEPTED",
+                              "ROLE_CHANGED",
+                              "MEMBER_DISABLED",
+                              "MEMBER_ENABLED",
+                              "MEMBER_REMOVED",
+                              "USER_DISABLED",
+                              "GUARD_CREATED",
+                              "GUARDS_BULK_IMPORTED",
+                              "GUARD_UPDATED",
+                              "GUARD_DISABLED",
+                              "GUARD_TERMINATED",
+                              "DEVICE_ENROLLMENT_CODE_ISSUED",
+                              "DEVICE_REGISTERED",
+                              "DEVICE_REVOKED",
+                              "TRACKING_CONSENT_RECORDED",
+                              "SITE_CREATED",
+                              "SITE_UPDATED",
+                              "GEOFENCE_CHANGED",
+                              "CHECKPOINT_CREATED",
+                              "CHECKPOINT_UPDATED",
+                              "CHECKPOINT_QR_ROTATED",
+                              "CHECKPOINT_QR_PRINTED",
+                              "PATROL_ROUTE_CREATED",
+                              "PATROL_ROUTE_UPDATED",
+                              "SHIFT_CREATED",
+                              "SHIFTS_BULK_CREATED",
+                              "SHIFT_UPDATED",
+                              "SHIFT_REASSIGNED",
+                              "SHIFT_CANCELLED",
+                              "SHIFT_MANUAL_START",
+                              "SHIFT_FORCE_ENDED",
+                              "SHIFT_EXTENDED",
+                              "SHIFT_REOPENED",
+                              "LOCATION_HISTORY_VIEWED",
+                              "LOCATION_HISTORY_EXPORTED",
+                              "LOCATION_REPORT_VIEWED",
+                              "INCIDENT_CREATED",
+                              "INCIDENT_UPDATED",
+                              "INCIDENT_STATUS_CHANGED",
+                              "ATTACHMENT_ORIGINAL_DOWNLOADED",
+                              "ALERT_ACKNOWLEDGED",
+                              "ALERT_RESOLVED",
+                              "ALERT_DISMISSED",
+                              "SOS_VIEWED",
+                              "SOS_ACKNOWLEDGED",
+                              "SOS_RESOLVED",
+                              "SOS_DRILL_STARTED",
+                              "SOS_DRILL_ENDED",
+                              "ORGANIZATION_CREATED",
+                              "SETTINGS_CHANGED",
+                              "EXPORT_REQUESTED",
+                              "EXPORT_DOWNLOADED",
+                              "RETENTION_RUN",
+                              "PLATFORM_ACCESS"
+                            ]
+                          },
+                          "resourceType": {
+                            "type": "string"
+                          },
+                          "resourceId": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "format": "uuid",
+                                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "reason": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "metadata": {
+                            "type": "object",
+                            "propertyNames": {
+                              "type": "string"
+                            },
+                            "additionalProperties": {}
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "createdAt",
+                          "actorType",
+                          "actorName",
+                          "action",
+                          "resourceType",
+                          "resourceId",
+                          "reason",
+                          "metadata"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "nextCursor": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "entries",
+                    "nextCursor"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/callback": {
+      "get": {
+        "summary": "Completes sign-in: verifies the provider response and issues a session.",
+        "x-policy": {
+          "access": {
+            "kind": "public"
+          },
+          "ownership": "none",
+          "rateLimit": "signin",
+          "audit": null
+        },
+        "responses": {
+          "302": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "type": "null"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/dev-login": {
+      "post": {
+        "summary": "Development sign-in by email, without an identity provider. Disabled in production.",
+        "x-policy": {
+          "access": {
+            "kind": "public"
+          },
+          "ownership": "none",
+          "rateLimit": "signin",
+          "audit": null
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean",
+                      "const": true
+                    }
+                  },
+                  "required": [
+                    "ok"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "VALIDATION_FAILED",
+                            "UNAUTHENTICATED",
+                            "FORBIDDEN",
+                            "NOT_FOUND",
+                            "ORG_CONTEXT_REQUIRED",
+                            "ORG_SUSPENDED",
+                            "VERSION_CONFLICT",
+                            "SHIFT_INVALID_TRANSITION",
+                            "SHIFT_OVERLAP",
+                            "SHIFT_NOT_ACTIVE",
+                            "SHIFT_OUTSIDE_START_WINDOW",
+                            "TRACKING_PERMISSION_REQUIRED",
+                            "LOCATION_FIX_REQUIRED",
+                            "STARTED_OFF_SITE_BLOCKED",
+                            "OUTSIDE_SHIFT_WINDOW",
+                            "TIMESTAMP_TOO_OLD",
+                            "DEVICE_NOT_REGISTERED",
+                            "DEVICE_REVOKED",
+                            "INVALID_QR",
+                            "LAST_OWNER",
+                            "SELF_ROLE_CHANGE",
+                            "INVITATION_EXPIRED",
+                            "ENROLLMENT_CODE_INVALID",
+                            "ATTACHMENT_TOO_LARGE",
+                            "ATTACHMENT_TYPE_NOT_ALLOWED",
+                            "EXPORT_RANGE_TOO_LARGE",
+                            "APP_VERSION_UNSUPPORTED",
+                            "RATE_LIMITED",
+                            "INTERNAL_ERROR",
+                            "NOT_READY"
+                          ]
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "requestId": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "path": {
+                                "type": "string"
+                              },
+                              "issue": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "path",
+                              "issue"
+                            ],
+                            "additionalProperties": false
+                          }
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message",
+                        "requestId"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/login": {
+      "get": {
+        "summary": "Starts sign-in at the identity provider (authorization code with PKCE).",
+        "x-policy": {
+          "access": {
+            "kind": "public"
+          },
+          "ownership": "none",
+          "rateLimit": "signin",
+          "audit": null
+        },
+        "responses": {
+          "302": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "type": "null"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "VALIDATION_FAILED",
+                            "UNAUTHENTICATED",
+                            "FORBIDDEN",
+                            "NOT_FOUND",
+                            "ORG_CONTEXT_REQUIRED",
+                            "ORG_SUSPENDED",
+                            "VERSION_CONFLICT",
+                            "SHIFT_INVALID_TRANSITION",
+                            "SHIFT_OVERLAP",
+                            "SHIFT_NOT_ACTIVE",
+                            "SHIFT_OUTSIDE_START_WINDOW",
+                            "TRACKING_PERMISSION_REQUIRED",
+                            "LOCATION_FIX_REQUIRED",
+                            "STARTED_OFF_SITE_BLOCKED",
+                            "OUTSIDE_SHIFT_WINDOW",
+                            "TIMESTAMP_TOO_OLD",
+                            "DEVICE_NOT_REGISTERED",
+                            "DEVICE_REVOKED",
+                            "INVALID_QR",
+                            "LAST_OWNER",
+                            "SELF_ROLE_CHANGE",
+                            "INVITATION_EXPIRED",
+                            "ENROLLMENT_CODE_INVALID",
+                            "ATTACHMENT_TOO_LARGE",
+                            "ATTACHMENT_TYPE_NOT_ALLOWED",
+                            "EXPORT_RANGE_TOO_LARGE",
+                            "APP_VERSION_UNSUPPORTED",
+                            "RATE_LIMITED",
+                            "INTERNAL_ERROR",
+                            "NOT_READY"
+                          ]
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "requestId": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "path": {
+                                "type": "string"
+                              },
+                              "issue": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "path",
+                              "issue"
+                            ],
+                            "additionalProperties": false
+                          }
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message",
+                        "requestId"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/logout": {
+      "post": {
+        "summary": "Signs out: revokes the session and clears the cookie.",
+        "x-policy": {
+          "access": {
+            "kind": "authenticated"
+          },
+          "ownership": "none",
+          "rateLimit": "default",
+          "audit": null
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean",
+                      "const": true
+                    }
+                  },
+                  "required": [
+                    "ok"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/session": {
+      "get": {
+        "summary": "Whether the browser has a live session (no error when it does not).",
+        "x-policy": {
+          "access": {
+            "kind": "public"
+          },
+          "ownership": "none",
+          "rateLimit": "none",
+          "audit": null
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "type": "object",
+                  "properties": {
+                    "signedIn": {
+                      "type": "boolean"
+                    },
+                    "devAuth": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "signedIn",
+                    "devAuth"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/health": {
       "get": {
         "summary": "The process is alive.",
@@ -37,6 +549,1401 @@
                   },
                   "required": [
                     "status"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/invitations": {
+      "get": {
+        "summary": "Member invitations of the current organization.",
+        "x-policy": {
+          "access": {
+            "kind": "permission",
+            "permission": "members.manage"
+          },
+          "ownership": "organization",
+          "rateLimit": "default",
+          "audit": null
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "type": "object",
+                  "properties": {
+                    "invitations": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                          },
+                          "email": {
+                            "type": "string"
+                          },
+                          "role": {
+                            "type": "string",
+                            "enum": [
+                              "OWNER",
+                              "ADMIN",
+                              "SUPERVISOR",
+                              "DISPATCHER"
+                            ]
+                          },
+                          "status": {
+                            "type": "string",
+                            "enum": [
+                              "PENDING",
+                              "ACCEPTED",
+                              "REVOKED",
+                              "EXPIRED"
+                            ]
+                          },
+                          "expiresAt": {
+                            "type": "string",
+                            "format": "date-time",
+                            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                          },
+                          "createdAt": {
+                            "type": "string",
+                            "format": "date-time",
+                            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                          },
+                          "createdByName": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "email",
+                          "role",
+                          "status",
+                          "expiresAt",
+                          "createdAt",
+                          "createdByName"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "invitations"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Invites a person by email to a staff role. Returns the link once.",
+        "x-policy": {
+          "access": {
+            "kind": "permission",
+            "permission": "members.manage"
+          },
+          "ownership": "organization",
+          "rateLimit": "invitation",
+          "audit": "MEMBER_INVITED"
+        },
+        "responses": {
+          "201": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "type": "object",
+                  "properties": {
+                    "invitation": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "format": "uuid",
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                        },
+                        "email": {
+                          "type": "string"
+                        },
+                        "role": {
+                          "type": "string",
+                          "enum": [
+                            "OWNER",
+                            "ADMIN",
+                            "SUPERVISOR",
+                            "DISPATCHER"
+                          ]
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "PENDING",
+                            "ACCEPTED",
+                            "REVOKED",
+                            "EXPIRED"
+                          ]
+                        },
+                        "expiresAt": {
+                          "type": "string",
+                          "format": "date-time",
+                          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                        },
+                        "createdAt": {
+                          "type": "string",
+                          "format": "date-time",
+                          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                        },
+                        "createdByName": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "email",
+                        "role",
+                        "status",
+                        "expiresAt",
+                        "createdAt",
+                        "createdByName"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "acceptUrl": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "invitation",
+                    "acceptUrl"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "VALIDATION_FAILED",
+                            "UNAUTHENTICATED",
+                            "FORBIDDEN",
+                            "NOT_FOUND",
+                            "ORG_CONTEXT_REQUIRED",
+                            "ORG_SUSPENDED",
+                            "VERSION_CONFLICT",
+                            "SHIFT_INVALID_TRANSITION",
+                            "SHIFT_OVERLAP",
+                            "SHIFT_NOT_ACTIVE",
+                            "SHIFT_OUTSIDE_START_WINDOW",
+                            "TRACKING_PERMISSION_REQUIRED",
+                            "LOCATION_FIX_REQUIRED",
+                            "STARTED_OFF_SITE_BLOCKED",
+                            "OUTSIDE_SHIFT_WINDOW",
+                            "TIMESTAMP_TOO_OLD",
+                            "DEVICE_NOT_REGISTERED",
+                            "DEVICE_REVOKED",
+                            "INVALID_QR",
+                            "LAST_OWNER",
+                            "SELF_ROLE_CHANGE",
+                            "INVITATION_EXPIRED",
+                            "ENROLLMENT_CODE_INVALID",
+                            "ATTACHMENT_TOO_LARGE",
+                            "ATTACHMENT_TYPE_NOT_ALLOWED",
+                            "EXPORT_RANGE_TOO_LARGE",
+                            "APP_VERSION_UNSUPPORTED",
+                            "RATE_LIMITED",
+                            "INTERNAL_ERROR",
+                            "NOT_READY"
+                          ]
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "requestId": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "path": {
+                                "type": "string"
+                              },
+                              "issue": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "path",
+                              "issue"
+                            ],
+                            "additionalProperties": false
+                          }
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message",
+                        "requestId"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/invitations/:id/revoke": {
+      "post": {
+        "summary": "Revokes a pending invitation.",
+        "x-policy": {
+          "access": {
+            "kind": "permission",
+            "permission": "members.manage"
+          },
+          "ownership": "organization",
+          "rateLimit": "default",
+          "audit": "INVITATION_REVOKED"
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "email": {
+                      "type": "string"
+                    },
+                    "role": {
+                      "type": "string",
+                      "enum": [
+                        "OWNER",
+                        "ADMIN",
+                        "SUPERVISOR",
+                        "DISPATCHER"
+                      ]
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "PENDING",
+                        "ACCEPTED",
+                        "REVOKED",
+                        "EXPIRED"
+                      ]
+                    },
+                    "expiresAt": {
+                      "type": "string",
+                      "format": "date-time",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                    },
+                    "createdAt": {
+                      "type": "string",
+                      "format": "date-time",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                    },
+                    "createdByName": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "email",
+                    "role",
+                    "status",
+                    "expiresAt",
+                    "createdAt",
+                    "createdByName"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "VALIDATION_FAILED",
+                            "UNAUTHENTICATED",
+                            "FORBIDDEN",
+                            "NOT_FOUND",
+                            "ORG_CONTEXT_REQUIRED",
+                            "ORG_SUSPENDED",
+                            "VERSION_CONFLICT",
+                            "SHIFT_INVALID_TRANSITION",
+                            "SHIFT_OVERLAP",
+                            "SHIFT_NOT_ACTIVE",
+                            "SHIFT_OUTSIDE_START_WINDOW",
+                            "TRACKING_PERMISSION_REQUIRED",
+                            "LOCATION_FIX_REQUIRED",
+                            "STARTED_OFF_SITE_BLOCKED",
+                            "OUTSIDE_SHIFT_WINDOW",
+                            "TIMESTAMP_TOO_OLD",
+                            "DEVICE_NOT_REGISTERED",
+                            "DEVICE_REVOKED",
+                            "INVALID_QR",
+                            "LAST_OWNER",
+                            "SELF_ROLE_CHANGE",
+                            "INVITATION_EXPIRED",
+                            "ENROLLMENT_CODE_INVALID",
+                            "ATTACHMENT_TOO_LARGE",
+                            "ATTACHMENT_TYPE_NOT_ALLOWED",
+                            "EXPORT_RANGE_TOO_LARGE",
+                            "APP_VERSION_UNSUPPORTED",
+                            "RATE_LIMITED",
+                            "INTERNAL_ERROR",
+                            "NOT_READY"
+                          ]
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "requestId": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "path": {
+                                "type": "string"
+                              },
+                              "issue": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "path",
+                              "issue"
+                            ],
+                            "additionalProperties": false
+                          }
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message",
+                        "requestId"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "VALIDATION_FAILED",
+                            "UNAUTHENTICATED",
+                            "FORBIDDEN",
+                            "NOT_FOUND",
+                            "ORG_CONTEXT_REQUIRED",
+                            "ORG_SUSPENDED",
+                            "VERSION_CONFLICT",
+                            "SHIFT_INVALID_TRANSITION",
+                            "SHIFT_OVERLAP",
+                            "SHIFT_NOT_ACTIVE",
+                            "SHIFT_OUTSIDE_START_WINDOW",
+                            "TRACKING_PERMISSION_REQUIRED",
+                            "LOCATION_FIX_REQUIRED",
+                            "STARTED_OFF_SITE_BLOCKED",
+                            "OUTSIDE_SHIFT_WINDOW",
+                            "TIMESTAMP_TOO_OLD",
+                            "DEVICE_NOT_REGISTERED",
+                            "DEVICE_REVOKED",
+                            "INVALID_QR",
+                            "LAST_OWNER",
+                            "SELF_ROLE_CHANGE",
+                            "INVITATION_EXPIRED",
+                            "ENROLLMENT_CODE_INVALID",
+                            "ATTACHMENT_TOO_LARGE",
+                            "ATTACHMENT_TYPE_NOT_ALLOWED",
+                            "EXPORT_RANGE_TOO_LARGE",
+                            "APP_VERSION_UNSUPPORTED",
+                            "RATE_LIMITED",
+                            "INTERNAL_ERROR",
+                            "NOT_READY"
+                          ]
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "requestId": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "path": {
+                                "type": "string"
+                              },
+                              "issue": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "path",
+                              "issue"
+                            ],
+                            "additionalProperties": false
+                          }
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message",
+                        "requestId"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/invitations/accept": {
+      "post": {
+        "summary": "Accepts an invitation as the signed-in user; the invitation email must match.",
+        "x-policy": {
+          "access": {
+            "kind": "authenticated"
+          },
+          "ownership": "none",
+          "rateLimit": "default",
+          "audit": "INVITATION_ACCEPTED"
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "type": "object",
+                  "properties": {
+                    "organizationId": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "organizationName": {
+                      "type": "string"
+                    },
+                    "role": {
+                      "type": "string",
+                      "enum": [
+                        "OWNER",
+                        "ADMIN",
+                        "SUPERVISOR",
+                        "DISPATCHER"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "organizationId",
+                    "organizationName",
+                    "role"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "VALIDATION_FAILED",
+                            "UNAUTHENTICATED",
+                            "FORBIDDEN",
+                            "NOT_FOUND",
+                            "ORG_CONTEXT_REQUIRED",
+                            "ORG_SUSPENDED",
+                            "VERSION_CONFLICT",
+                            "SHIFT_INVALID_TRANSITION",
+                            "SHIFT_OVERLAP",
+                            "SHIFT_NOT_ACTIVE",
+                            "SHIFT_OUTSIDE_START_WINDOW",
+                            "TRACKING_PERMISSION_REQUIRED",
+                            "LOCATION_FIX_REQUIRED",
+                            "STARTED_OFF_SITE_BLOCKED",
+                            "OUTSIDE_SHIFT_WINDOW",
+                            "TIMESTAMP_TOO_OLD",
+                            "DEVICE_NOT_REGISTERED",
+                            "DEVICE_REVOKED",
+                            "INVALID_QR",
+                            "LAST_OWNER",
+                            "SELF_ROLE_CHANGE",
+                            "INVITATION_EXPIRED",
+                            "ENROLLMENT_CODE_INVALID",
+                            "ATTACHMENT_TOO_LARGE",
+                            "ATTACHMENT_TYPE_NOT_ALLOWED",
+                            "EXPORT_RANGE_TOO_LARGE",
+                            "APP_VERSION_UNSUPPORTED",
+                            "RATE_LIMITED",
+                            "INTERNAL_ERROR",
+                            "NOT_READY"
+                          ]
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "requestId": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "path": {
+                                "type": "string"
+                              },
+                              "issue": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "path",
+                              "issue"
+                            ],
+                            "additionalProperties": false
+                          }
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message",
+                        "requestId"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "VALIDATION_FAILED",
+                            "UNAUTHENTICATED",
+                            "FORBIDDEN",
+                            "NOT_FOUND",
+                            "ORG_CONTEXT_REQUIRED",
+                            "ORG_SUSPENDED",
+                            "VERSION_CONFLICT",
+                            "SHIFT_INVALID_TRANSITION",
+                            "SHIFT_OVERLAP",
+                            "SHIFT_NOT_ACTIVE",
+                            "SHIFT_OUTSIDE_START_WINDOW",
+                            "TRACKING_PERMISSION_REQUIRED",
+                            "LOCATION_FIX_REQUIRED",
+                            "STARTED_OFF_SITE_BLOCKED",
+                            "OUTSIDE_SHIFT_WINDOW",
+                            "TIMESTAMP_TOO_OLD",
+                            "DEVICE_NOT_REGISTERED",
+                            "DEVICE_REVOKED",
+                            "INVALID_QR",
+                            "LAST_OWNER",
+                            "SELF_ROLE_CHANGE",
+                            "INVITATION_EXPIRED",
+                            "ENROLLMENT_CODE_INVALID",
+                            "ATTACHMENT_TOO_LARGE",
+                            "ATTACHMENT_TYPE_NOT_ALLOWED",
+                            "EXPORT_RANGE_TOO_LARGE",
+                            "APP_VERSION_UNSUPPORTED",
+                            "RATE_LIMITED",
+                            "INTERNAL_ERROR",
+                            "NOT_READY"
+                          ]
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "requestId": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "path": {
+                                "type": "string"
+                              },
+                              "issue": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "path",
+                              "issue"
+                            ],
+                            "additionalProperties": false
+                          }
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message",
+                        "requestId"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/me": {
+      "get": {
+        "summary": "The signed-in user, memberships and permissions.",
+        "x-policy": {
+          "access": {
+            "kind": "authenticated"
+          },
+          "ownership": "none",
+          "rateLimit": "default",
+          "audit": null
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "type": "object",
+                  "properties": {
+                    "user": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "format": "uuid",
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "email": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "locale": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "name",
+                        "email",
+                        "locale"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "memberships": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "organizationId": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                          },
+                          "organizationName": {
+                            "type": "string"
+                          },
+                          "organizationStatus": {
+                            "type": "string",
+                            "enum": [
+                              "ACTIVE",
+                              "SUSPENDED",
+                              "CLOSED"
+                            ]
+                          },
+                          "organizationTimezone": {
+                            "type": "string"
+                          },
+                          "memberId": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                          },
+                          "role": {
+                            "type": "string",
+                            "enum": [
+                              "OWNER",
+                              "ADMIN",
+                              "SUPERVISOR",
+                              "DISPATCHER",
+                              "GUARD"
+                            ]
+                          },
+                          "permissions": {
+                            "type": "array",
+                            "items": {
+                              "type": "string",
+                              "enum": [
+                                "org.settings.read",
+                                "org.settings.write",
+                                "owners.manage",
+                                "members.manage",
+                                "guards.read",
+                                "guards.write",
+                                "guards.read.own",
+                                "devices.read",
+                                "devices.revoke",
+                                "devices.enroll",
+                                "devices.read.own",
+                                "sites.read",
+                                "sites.write",
+                                "sites.read.assigned",
+                                "checkpoints.write",
+                                "checkpoints.qr.print",
+                                "patrols.read",
+                                "patrols.write",
+                                "patrols.read.assigned",
+                                "shifts.read",
+                                "shifts.write",
+                                "shifts.supervise",
+                                "shifts.read.own",
+                                "shifts.self",
+                                "live.read",
+                                "location.history.read",
+                                "location.history.read.own",
+                                "incidents.create",
+                                "incidents.read",
+                                "incidents.read.own",
+                                "incidents.manage",
+                                "incidents.acknowledge",
+                                "incidents.notes",
+                                "incidents.notes.own",
+                                "alerts.read",
+                                "alerts.acknowledge",
+                                "alerts.resolve",
+                                "sos.activate",
+                                "sos.read",
+                                "sos.read.own",
+                                "sos.ack",
+                                "sos.resolve",
+                                "sos.drill",
+                                "reports.read",
+                                "exports.create",
+                                "audit.read"
+                              ]
+                            }
+                          }
+                        },
+                        "required": [
+                          "organizationId",
+                          "organizationName",
+                          "organizationStatus",
+                          "organizationTimezone",
+                          "memberId",
+                          "role",
+                          "permissions"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "serverTime": {
+                      "type": "string",
+                      "format": "date-time",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                    }
+                  },
+                  "required": [
+                    "user",
+                    "memberships",
+                    "serverTime"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/members": {
+      "get": {
+        "summary": "Staff members of the current organization.",
+        "x-policy": {
+          "access": {
+            "kind": "permission",
+            "permission": "members.manage"
+          },
+          "ownership": "organization",
+          "rateLimit": "default",
+          "audit": null
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "type": "object",
+                  "properties": {
+                    "members": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                          },
+                          "userId": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "email": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "role": {
+                            "type": "string",
+                            "enum": [
+                              "OWNER",
+                              "ADMIN",
+                              "SUPERVISOR",
+                              "DISPATCHER",
+                              "GUARD"
+                            ]
+                          },
+                          "status": {
+                            "type": "string",
+                            "enum": [
+                              "INVITED",
+                              "ACTIVE",
+                              "DISABLED",
+                              "REMOVED"
+                            ]
+                          },
+                          "version": {
+                            "type": "integer",
+                            "minimum": -9007199254740991,
+                            "maximum": 9007199254740991
+                          },
+                          "createdAt": {
+                            "type": "string",
+                            "format": "date-time",
+                            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                          },
+                          "updatedAt": {
+                            "type": "string",
+                            "format": "date-time",
+                            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "userId",
+                          "name",
+                          "email",
+                          "role",
+                          "status",
+                          "version",
+                          "createdAt",
+                          "updatedAt"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "members"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/members/:id": {
+      "patch": {
+        "summary": "Changes a member's role or status.",
+        "x-policy": {
+          "access": {
+            "kind": "permission",
+            "permission": "members.manage"
+          },
+          "ownership": "organization",
+          "rateLimit": "default",
+          "audit": "ROLE_CHANGED"
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "userId": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "email": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "role": {
+                      "type": "string",
+                      "enum": [
+                        "OWNER",
+                        "ADMIN",
+                        "SUPERVISOR",
+                        "DISPATCHER",
+                        "GUARD"
+                      ]
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "INVITED",
+                        "ACTIVE",
+                        "DISABLED",
+                        "REMOVED"
+                      ]
+                    },
+                    "version": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "createdAt": {
+                      "type": "string",
+                      "format": "date-time",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                    },
+                    "updatedAt": {
+                      "type": "string",
+                      "format": "date-time",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "userId",
+                    "name",
+                    "email",
+                    "role",
+                    "status",
+                    "version",
+                    "createdAt",
+                    "updatedAt"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "VALIDATION_FAILED",
+                            "UNAUTHENTICATED",
+                            "FORBIDDEN",
+                            "NOT_FOUND",
+                            "ORG_CONTEXT_REQUIRED",
+                            "ORG_SUSPENDED",
+                            "VERSION_CONFLICT",
+                            "SHIFT_INVALID_TRANSITION",
+                            "SHIFT_OVERLAP",
+                            "SHIFT_NOT_ACTIVE",
+                            "SHIFT_OUTSIDE_START_WINDOW",
+                            "TRACKING_PERMISSION_REQUIRED",
+                            "LOCATION_FIX_REQUIRED",
+                            "STARTED_OFF_SITE_BLOCKED",
+                            "OUTSIDE_SHIFT_WINDOW",
+                            "TIMESTAMP_TOO_OLD",
+                            "DEVICE_NOT_REGISTERED",
+                            "DEVICE_REVOKED",
+                            "INVALID_QR",
+                            "LAST_OWNER",
+                            "SELF_ROLE_CHANGE",
+                            "INVITATION_EXPIRED",
+                            "ENROLLMENT_CODE_INVALID",
+                            "ATTACHMENT_TOO_LARGE",
+                            "ATTACHMENT_TYPE_NOT_ALLOWED",
+                            "EXPORT_RANGE_TOO_LARGE",
+                            "APP_VERSION_UNSUPPORTED",
+                            "RATE_LIMITED",
+                            "INTERNAL_ERROR",
+                            "NOT_READY"
+                          ]
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "requestId": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "path": {
+                                "type": "string"
+                              },
+                              "issue": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "path",
+                              "issue"
+                            ],
+                            "additionalProperties": false
+                          }
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message",
+                        "requestId"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "VALIDATION_FAILED",
+                            "UNAUTHENTICATED",
+                            "FORBIDDEN",
+                            "NOT_FOUND",
+                            "ORG_CONTEXT_REQUIRED",
+                            "ORG_SUSPENDED",
+                            "VERSION_CONFLICT",
+                            "SHIFT_INVALID_TRANSITION",
+                            "SHIFT_OVERLAP",
+                            "SHIFT_NOT_ACTIVE",
+                            "SHIFT_OUTSIDE_START_WINDOW",
+                            "TRACKING_PERMISSION_REQUIRED",
+                            "LOCATION_FIX_REQUIRED",
+                            "STARTED_OFF_SITE_BLOCKED",
+                            "OUTSIDE_SHIFT_WINDOW",
+                            "TIMESTAMP_TOO_OLD",
+                            "DEVICE_NOT_REGISTERED",
+                            "DEVICE_REVOKED",
+                            "INVALID_QR",
+                            "LAST_OWNER",
+                            "SELF_ROLE_CHANGE",
+                            "INVITATION_EXPIRED",
+                            "ENROLLMENT_CODE_INVALID",
+                            "ATTACHMENT_TOO_LARGE",
+                            "ATTACHMENT_TYPE_NOT_ALLOWED",
+                            "EXPORT_RANGE_TOO_LARGE",
+                            "APP_VERSION_UNSUPPORTED",
+                            "RATE_LIMITED",
+                            "INTERNAL_ERROR",
+                            "NOT_READY"
+                          ]
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "requestId": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "path": {
+                                "type": "string"
+                              },
+                              "issue": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "path",
+                              "issue"
+                            ],
+                            "additionalProperties": false
+                          }
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message",
+                        "requestId"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "VALIDATION_FAILED",
+                            "UNAUTHENTICATED",
+                            "FORBIDDEN",
+                            "NOT_FOUND",
+                            "ORG_CONTEXT_REQUIRED",
+                            "ORG_SUSPENDED",
+                            "VERSION_CONFLICT",
+                            "SHIFT_INVALID_TRANSITION",
+                            "SHIFT_OVERLAP",
+                            "SHIFT_NOT_ACTIVE",
+                            "SHIFT_OUTSIDE_START_WINDOW",
+                            "TRACKING_PERMISSION_REQUIRED",
+                            "LOCATION_FIX_REQUIRED",
+                            "STARTED_OFF_SITE_BLOCKED",
+                            "OUTSIDE_SHIFT_WINDOW",
+                            "TIMESTAMP_TOO_OLD",
+                            "DEVICE_NOT_REGISTERED",
+                            "DEVICE_REVOKED",
+                            "INVALID_QR",
+                            "LAST_OWNER",
+                            "SELF_ROLE_CHANGE",
+                            "INVITATION_EXPIRED",
+                            "ENROLLMENT_CODE_INVALID",
+                            "ATTACHMENT_TOO_LARGE",
+                            "ATTACHMENT_TYPE_NOT_ALLOWED",
+                            "EXPORT_RANGE_TOO_LARGE",
+                            "APP_VERSION_UNSUPPORTED",
+                            "RATE_LIMITED",
+                            "INTERNAL_ERROR",
+                            "NOT_READY"
+                          ]
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "requestId": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "path": {
+                                "type": "string"
+                              },
+                              "issue": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "path",
+                              "issue"
+                            ],
+                            "additionalProperties": false
+                          }
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message",
+                        "requestId"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "error"
                   ],
                   "additionalProperties": false
                 }
@@ -80,6 +1987,286 @@
             }
           },
           "503": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "VALIDATION_FAILED",
+                            "UNAUTHENTICATED",
+                            "FORBIDDEN",
+                            "NOT_FOUND",
+                            "ORG_CONTEXT_REQUIRED",
+                            "ORG_SUSPENDED",
+                            "VERSION_CONFLICT",
+                            "SHIFT_INVALID_TRANSITION",
+                            "SHIFT_OVERLAP",
+                            "SHIFT_NOT_ACTIVE",
+                            "SHIFT_OUTSIDE_START_WINDOW",
+                            "TRACKING_PERMISSION_REQUIRED",
+                            "LOCATION_FIX_REQUIRED",
+                            "STARTED_OFF_SITE_BLOCKED",
+                            "OUTSIDE_SHIFT_WINDOW",
+                            "TIMESTAMP_TOO_OLD",
+                            "DEVICE_NOT_REGISTERED",
+                            "DEVICE_REVOKED",
+                            "INVALID_QR",
+                            "LAST_OWNER",
+                            "SELF_ROLE_CHANGE",
+                            "INVITATION_EXPIRED",
+                            "ENROLLMENT_CODE_INVALID",
+                            "ATTACHMENT_TOO_LARGE",
+                            "ATTACHMENT_TYPE_NOT_ALLOWED",
+                            "EXPORT_RANGE_TOO_LARGE",
+                            "APP_VERSION_UNSUPPORTED",
+                            "RATE_LIMITED",
+                            "INTERNAL_ERROR",
+                            "NOT_READY"
+                          ]
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "requestId": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "path": {
+                                "type": "string"
+                              },
+                              "issue": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "path",
+                              "issue"
+                            ],
+                            "additionalProperties": false
+                          }
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message",
+                        "requestId"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/settings": {
+      "get": {
+        "summary": "Organization settings, defaults merged with overrides.",
+        "x-policy": {
+          "access": {
+            "kind": "permission",
+            "permission": "org.settings.read"
+          },
+          "ownership": "organization",
+          "rateLimit": "default",
+          "audit": null
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "type": "object",
+                  "properties": {
+                    "settings": {
+                      "type": "object",
+                      "propertyNames": {
+                        "type": "string"
+                      },
+                      "additionalProperties": {}
+                    },
+                    "editableKeys": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "version": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    }
+                  },
+                  "required": [
+                    "settings",
+                    "editableKeys",
+                    "version"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "summary": "Changes dashboard-editable settings.",
+        "x-policy": {
+          "access": {
+            "kind": "permission",
+            "permission": "org.settings.write"
+          },
+          "ownership": "organization",
+          "rateLimit": "default",
+          "audit": "SETTINGS_CHANGED"
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "type": "object",
+                  "properties": {
+                    "settings": {
+                      "type": "object",
+                      "propertyNames": {
+                        "type": "string"
+                      },
+                      "additionalProperties": {}
+                    },
+                    "editableKeys": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "version": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    }
+                  },
+                  "required": [
+                    "settings",
+                    "editableKeys",
+                    "version"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "VALIDATION_FAILED",
+                            "UNAUTHENTICATED",
+                            "FORBIDDEN",
+                            "NOT_FOUND",
+                            "ORG_CONTEXT_REQUIRED",
+                            "ORG_SUSPENDED",
+                            "VERSION_CONFLICT",
+                            "SHIFT_INVALID_TRANSITION",
+                            "SHIFT_OVERLAP",
+                            "SHIFT_NOT_ACTIVE",
+                            "SHIFT_OUTSIDE_START_WINDOW",
+                            "TRACKING_PERMISSION_REQUIRED",
+                            "LOCATION_FIX_REQUIRED",
+                            "STARTED_OFF_SITE_BLOCKED",
+                            "OUTSIDE_SHIFT_WINDOW",
+                            "TIMESTAMP_TOO_OLD",
+                            "DEVICE_NOT_REGISTERED",
+                            "DEVICE_REVOKED",
+                            "INVALID_QR",
+                            "LAST_OWNER",
+                            "SELF_ROLE_CHANGE",
+                            "INVITATION_EXPIRED",
+                            "ENROLLMENT_CODE_INVALID",
+                            "ATTACHMENT_TOO_LARGE",
+                            "ATTACHMENT_TYPE_NOT_ALLOWED",
+                            "EXPORT_RANGE_TOO_LARGE",
+                            "APP_VERSION_UNSUPPORTED",
+                            "RATE_LIMITED",
+                            "INTERNAL_ERROR",
+                            "NOT_READY"
+                          ]
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "requestId": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "path": {
+                                "type": "string"
+                              },
+                              "issue": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "path",
+                              "issue"
+                            ],
+                            "additionalProperties": false
+                          }
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message",
+                        "requestId"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "409": {
             "description": "Error",
             "content": {
               "application/json": {

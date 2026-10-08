@@ -24,7 +24,7 @@ export const healthRoutes = [
     summary: 'The API can serve requests: the database answers and the schema is current.',
     policy: PROBE,
     responses: { 200: z.object({ status: z.literal('ready') }), 503: errorEnvelopeSchema },
-    handler: async (request, _reply, deps) => {
+    handler: async ({ request, deps }) => {
       const readiness = await checkReadiness(deps.pool);
       if (!readiness.ok) {
         // Details go to the log, not to the anonymous caller.

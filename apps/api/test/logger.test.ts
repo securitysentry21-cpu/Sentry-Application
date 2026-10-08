@@ -6,6 +6,7 @@ import pino from 'pino';
 import { expect, it } from 'vitest';
 
 import { buildApp } from '../src/app.ts';
+import { createDeps } from '../src/server.ts';
 import { loggerOptions } from '../src/logger.ts';
 import { NOW, testConfig, UNREACHABLE_DATABASE } from './support.ts';
 
@@ -61,7 +62,7 @@ it('SEC §15 every log line written while serving a request carries its request_
   const { sink, lines } = collector();
   const pool = createPool(UNREACHABLE_DATABASE);
   const app = buildApp(
-    { pool, clock: new FakeClock(NOW), config: testConfig(UNREACHABLE_DATABASE) },
+    createDeps(testConfig(UNREACHABLE_DATABASE), pool, { clock: new FakeClock(NOW), oidc: null }),
     { logger: { ...loggerOptions('info'), stream: sink } },
   );
   try {

@@ -6,6 +6,7 @@ import type { FastifyInstance } from 'fastify';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 
 import { buildApp } from '../src/app.ts';
+import { createDeps } from '../src/server.ts';
 import { NOW, testConfig, UNREACHABLE_DATABASE } from './support.ts';
 
 let db: TestDatabase;
@@ -16,7 +17,7 @@ beforeAll(async () => {
   db = await createTestDatabase(inject('adminUrl'));
   pool = createPool(db.urls.app_runtime, { max: 2 });
   app = buildApp(
-    { pool, clock: new FakeClock(NOW), config: testConfig(db.urls.app_runtime) },
+    createDeps(testConfig(db.urls.app_runtime), pool, { clock: new FakeClock(NOW), oidc: null }),
     { logger: false },
   );
   await app.ready();
@@ -76,7 +77,7 @@ describe('health and readiness (ARCH §18.5)', () => {
   it('GET /api/v1/ready returns NOT_READY, without internal details, when the database is unreachable', async () => {
     const deadPool = createPool(UNREACHABLE_DATABASE, { connectionTimeoutMs: 1_000 });
     const broken = buildApp(
-      { pool: deadPool, clock: new FakeClock(NOW), config: testConfig(UNREACHABLE_DATABASE) },
+      createDeps(testConfig(UNREACHABLE_DATABASE), deadPool, { clock: new FakeClock(NOW), oidc: null }),
       { logger: false },
     );
     try {

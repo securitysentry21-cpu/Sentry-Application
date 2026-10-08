@@ -45,6 +45,10 @@ export function buildApp(deps: AppDeps, options: BuildOptions = {}): FastifyInst
     // SEC §15: every log line carries `request_id` (Fastify's default name is reqId).
     requestIdLogLabel: 'request_id',
     exposeHeadRoutes: false,
+    // Behind the AWS load balancer the client address comes from X-Forwarded-For; only then.
+    trustProxy: deps.config.TRUST_PROXY,
+    // A full sync batch (500 items) fits comfortably; anything larger is refused before parsing.
+    bodyLimit: 2 * 1024 * 1024,
     // ARCH §15.1: honour a well-formed X-Request-Id, otherwise generate one.
     genReqId: (req) => {
       const incoming = req.headers['x-request-id'];

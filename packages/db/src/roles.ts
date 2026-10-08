@@ -36,9 +36,14 @@ export async function bootstrapRoles(
   }
 }
 
-/** Creates a database owned by `migrator` that only the runtime roles may connect to. */
+/**
+ * Creates a UTF-8 database owned by `migrator` that only the runtime roles may connect to. UTF-8 is
+ * explicit because a cluster's default can be a single-byte Windows encoding that can't hold Urdu.
+ */
 export async function createDatabase(admin: pg.ClientBase, name: string): Promise<void> {
-  await admin.query(`create database ${quoteIdent(name)} owner ${MIGRATOR}`);
+  await admin.query(
+    `create database ${quoteIdent(name)} owner ${MIGRATOR} encoding 'UTF8' template template0`,
+  );
   await admin.query(`revoke all on database ${quoteIdent(name)} from public`);
   await admin.query(
     `grant connect on database ${quoteIdent(name)} to ${MIGRATOR}, ${RUNTIME_ROLES.join(', ')}`,

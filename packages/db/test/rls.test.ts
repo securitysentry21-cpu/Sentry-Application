@@ -60,6 +60,31 @@ beforeAll(async () => {
         `insert into fixture_events (id, organization_id, site_id, kind) values ($1, $2, $3, 'STARTED')`,
         [randomUUID(), org, site],
       );
+      // One row per organization in every Phase 1 tenant table (the per-table test requires it).
+      const user = randomUUID();
+      await m.query(`insert into users (id, email, name) values ($1, $2, 'Member')`, [
+        user,
+        `${user}@example.test`,
+      ]);
+      await m.query(
+        `insert into organization_members (id, organization_id, user_id, role, status)
+         values ($1, $2, $3, 'OWNER', 'ACTIVE')`,
+        [randomUUID(), org, user],
+      );
+      await m.query(
+        `insert into invitations (id, organization_id, purpose, role, email, token_hash, expires_at)
+         values ($1, $2, 'MEMBER', 'ADMIN', 'invitee@example.test', gen_random_bytes(32), now() + interval '7 days')`,
+        [randomUUID(), org],
+      );
+      await m.query(
+        `insert into organization_settings (id, organization_id, overrides) values ($1, $2, '{}')`,
+        [randomUUID(), org],
+      );
+      await m.query(
+        `insert into audit_logs (id, organization_id, actor_type, action, resource_type)
+         values ($1, $2, 'SYSTEM', 'SETTINGS_CHANGED', 'organization')`,
+        [randomUUID(), org],
+      );
     }
   });
   runtime = new pg.Pool({ connectionString: db.urls.app_runtime, max: 2 });

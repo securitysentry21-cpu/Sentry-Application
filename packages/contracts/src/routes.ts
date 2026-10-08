@@ -7,6 +7,7 @@ import type { Permission } from './permissions.ts';
 export const RATE_LIMIT_CLASSES = [
   'none',
   'default',
+  'signin',
   'sync',
   'sos',
   'scan',

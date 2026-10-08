@@ -12,6 +12,8 @@ apps/mobile/ios
 packages/db/src/generated
 docs/generated
 next-env.d.ts
+# Agent worktrees are separate checkouts with their own tooling runs.
+.claude
 
 # The specs and decision records are prose maintained by hand.
 docs/*.md

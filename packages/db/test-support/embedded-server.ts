@@ -25,6 +25,9 @@ const server = new EmbeddedPostgres({
   password: 'postgres',
   port: Number(portArg),
   persistent: true, // the parent removes the folder after this process has exited
+  // initdb otherwise takes the operating system's encoding: WIN1252 on Windows, which cannot
+  // store Urdu (D-14). Production runs UTF-8, so every local cluster does too.
+  initdbFlags: ['--encoding=UTF8', '--locale=C'],
   onLog: () => {},
   onError: (message: unknown) => {
     if (process.env.DEBUG_POSTGRES) console.error(String(message));
