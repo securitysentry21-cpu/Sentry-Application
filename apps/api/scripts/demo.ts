@@ -3,8 +3,14 @@
 // Creates (once) the organization "Demo Security" with owner owner@demo.test, guards, a gate and a
 // patrol beat in the pilot colony, and today's shifts. Then simulated guard phones enroll with
 // dashboard-issued codes, start their shifts and send positions through the real API, exactly as
-// the guard app does. One phone "loses signal" after two minutes, so the live map shows it turn
-// DELAYED, then OFFLINE, with its position marked last known. Ctrl+C stops the phones.
+// the guard app does. Ctrl+C stops the phones. What to watch, on the Live map and the Alerts page:
+//   - Bilal walks off the patrol beat after a minute: "Left site" opens about five minutes later,
+//     and resolves with the time outside when he walks back at nine minutes.
+//   - Sana's phone reports background location turned off: "Tracking disabled", until it is back.
+//   - Usman's battery is at 12%: "Low battery".
+//   - Hina's phone loses signal after two minutes: DELAYED, then OFFLINE on the map, with her
+//     position marked last known, and "Device offline" after ten minutes.
+// The demo runs the alert detectors itself every minute, so the worker is not needed.
 //
 // Run `pnpm db:up` and `pnpm api:dev` first, then sign in to the dashboard as owner@demo.test.
 import { generateKeyPairSync, randomUUID } from 'node:crypto';
@@ -13,6 +19,7 @@ import { createPool, verifyRuntimeRole } from '@sentryops/db';
 import type { InjectOptions } from 'fastify';
 
 import { buildApp } from '../src/app.ts';
+import { alertsForOrganization } from '../src/workers/detectors.ts';
 import { loadConfig } from '../src/config.ts';
 import { provisionOrganization } from '../src/provisioning.ts';
 import { createDeps } from '../src/server.ts';
@@ -26,6 +33,8 @@ if (config.NODE_ENV === 'production' || !config.DEV_AUTH) {
 const OWNER = 'owner@demo.test';
 const ORG = 'Demo Security';
 const GATE = { lat: 31.4697, lng: 74.4078 };
+/** About 1.3 km north of the beat: well outside it. */
+const OFF_SITE = { lat: 31.4855, lng: 74.4075 };
 const BEAT = [
   { lat: 31.4655, lng: 74.4001 },
   { lat: 31.4655, lng: 74.4112 },
@@ -135,6 +144,8 @@ type Phone = {
   refresh: string;
   position: { lat: number; lng: number };
   home: { lat: number; lng: number };
+  /** Picked up a shift already running from an earlier demo run (no new start). */
+  resumed: boolean;
 };
 const phones: Phone[] = [];
 const bootId = randomUUID();
@@ -159,27 +170,50 @@ for (const g of GUARDS) {
       })
     ).id;
   const home = g.site === 'gate' ? GATE : { lat: 31.469, lng: 74.406 };
-  // Today's shift, from now for 8 hours (skipped if one already overlaps).
   const now = deps.clock.now();
+  // A rerun: a shift still running from an earlier demo run is picked up by the new phone, as when
+  // a guard switches phones mid-shift (the old phone is retired as REPLACED). A leftover shift that
+  // never started is cancelled.
+  const leftover = await call<{ shifts: { id: string; status: string }[] }>({
+    method: 'GET',
+    url: `/api/v1/shifts?from=${encodeURIComponent(new Date(now.getTime() - 86_400_000).toISOString())}&to=${encodeURIComponent(new Date(now.getTime() + 9 * 3_600_000).toISOString())}&guardId=${guardId}`,
+    cookie,
+    org,
+  });
+  const running = leftover.shifts.find((x) => x.status === 'ACTIVE');
+  for (const old of leftover.shifts.filter((x) => x.status === 'SCHEDULED')) {
+    await call({
+      method: 'POST',
+      url: `/api/v1/shifts/${old.id}/cancel`,
+      cookie,
+      org,
+      payload: { reason: 'Demo restarted' },
+    });
+  }
   let shiftId: string;
-  try {
-    shiftId = (
-      await call<{ id: string }>({
-        method: 'POST',
-        url: '/api/v1/shifts',
-        cookie,
-        org,
-        payload: {
-          guardId,
-          siteId: g.site === 'gate' ? gateId : beatId,
-          startsAt: new Date(now.getTime() + 60_000).toISOString(),
-          endsAt: new Date(now.getTime() + 8 * 3_600_000).toISOString(),
-        },
-      })
-    ).id;
-  } catch {
-    console.log(`${g.displayName} already has a shift now; skipping.`);
-    continue;
+  if (running) {
+    shiftId = running.id;
+  } else {
+    // Today's shift, from a minute from now for 8 hours.
+    try {
+      shiftId = (
+        await call<{ id: string }>({
+          method: 'POST',
+          url: '/api/v1/shifts',
+          cookie,
+          org,
+          payload: {
+            guardId,
+            siteId: g.site === 'gate' ? gateId : beatId,
+            startsAt: new Date(now.getTime() + 60_000).toISOString(),
+            endsAt: new Date(now.getTime() + 8 * 3_600_000).toISOString(),
+          },
+        })
+      ).id;
+    } catch {
+      console.log(`${g.displayName} has an ended shift covering now; skipping.`);
+      continue;
+    }
   }
   // The phone enrolls with a dashboard-issued code, as a guard would.
   const { code } = await call<{ code: string }>({
@@ -216,6 +250,7 @@ for (const g of GUARDS) {
     refresh: enrolled.session.refreshToken,
     position: { ...home },
     home,
+    resumed: running !== undefined,
   });
 }
 
@@ -242,6 +277,10 @@ const item = (type: string, fields: Record<string, unknown>) => ({
 console.log(`${phones.length} simulated phones enrolled. Starting shifts in about a minute…`);
 await new Promise((r) => setTimeout(r, 61_000));
 for (const p of phones) {
+  if (p.resumed) {
+    console.log(`${p.name}: picked up the running shift on a new phone`);
+    continue;
+  }
   const res = await sync(p, [
     item('SHIFT_START', {
       shiftId: p.shiftId,
@@ -259,16 +298,52 @@ let stopping = false;
 process.once('SIGINT', () => {
   stopping = true;
 });
-console.log('Phones are reporting every 10 s. Open the Live map. Ctrl+C to stop.');
+const status = (fields: Record<string, unknown>) => ({
+  locationPermission: 'ALWAYS',
+  preciseLocation: true,
+  locationServicesEnabled: true,
+  trackingServiceState: 'RUNNING',
+  batteryPct: 64,
+  isCharging: false,
+  ...fields,
+});
+// Who plays which part, by name; a rerun that skips a guard with a shift already running still works.
+const WANDERER = phones.find((p) => p.name === 'Bilal Khan');
+const PERMISSION = phones.find((p) => p.name === 'Sana Iqbal');
+const BATTERY = phones.find((p) => p.name === 'Usman Tariq');
+const SILENT = phones.at(-1);
+let lastDetectors = 0;
+let permissionState: 'ok' | 'off' | 'restored' = 'ok';
+let batteryReported = false;
+
+console.log('Phones are reporting every 10 s. Open the Live map and the Alerts page. Ctrl+C to stop.');
 while (!stopping) {
+  const elapsed = Date.now() - started;
   for (const [index, p] of phones.entries()) {
     // The last phone "loses signal" after two minutes: watch it turn DELAYED, then OFFLINE.
-    if (index === phones.length - 1 && Date.now() - started > 120_000) continue;
+    if (p === SILENT && elapsed > 120_000) continue;
+    const wandering = p === WANDERER && elapsed > 60_000 && elapsed < 9 * 60_000;
+    const target = wandering ? OFF_SITE : p.home;
+    const pull = p === WANDERER ? 0.3 : 0.05;
     const drift = (index % 2 === 0 ? 0.00025 : 0.00045) * (Math.random() - 0.5);
     p.position = {
-      lat: p.position.lat + drift + (p.home.lat - p.position.lat) * 0.05,
-      lng: p.position.lng + drift * 1.4 + (p.home.lng - p.position.lng) * 0.05,
+      lat: p.position.lat + drift + (target.lat - p.position.lat) * pull,
+      lng: p.position.lng + drift * 1.4 + (target.lng - p.position.lng) * pull,
     };
+    const extra: Record<string, unknown>[] = [];
+    if (p === PERMISSION && permissionState === 'ok' && elapsed > 30_000) {
+      extra.push(
+        item('DEVICE_STATUS', { shiftId: p.shiftId, status: status({ locationPermission: 'WHEN_IN_USE' }) }),
+      );
+      permissionState = 'off';
+    } else if (p === PERMISSION && permissionState === 'off' && elapsed > 4 * 60_000) {
+      extra.push(item('DEVICE_STATUS', { shiftId: p.shiftId, status: status({}) }));
+      permissionState = 'restored';
+    }
+    if (p === BATTERY && !batteryReported) {
+      extra.push(item('DEVICE_STATUS', { shiftId: p.shiftId, status: status({ batteryPct: 12 }) }));
+      batteryReported = true;
+    }
     try {
       await sync(p, [
         item('LOCATION', {
@@ -281,6 +356,7 @@ while (!stopping) {
           },
         }),
         item('HEARTBEAT', { shiftId: p.shiftId }),
+        ...extra,
       ]);
     } catch {
       // The 15-minute access token ran out: refresh, as the app does.
@@ -292,6 +368,12 @@ while (!stopping) {
       p.access = fresh.session.accessToken;
       p.refresh = fresh.session.refreshToken;
     }
+  }
+  if (Date.now() - lastDetectors >= 60_000 && org) {
+    lastDetectors = Date.now();
+    await alertsForOrganization(deps, org).catch((e: unknown) => {
+      console.error(`alert detectors failed: ${e instanceof Error ? e.message : 'unknown'}`);
+    });
   }
   await new Promise((r) => setTimeout(r, 10_000));
 }
