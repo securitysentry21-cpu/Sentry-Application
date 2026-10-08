@@ -3,7 +3,7 @@
 
 | | |
 |---|---|
-| Spec revision | 2 (supersedes the single-file Revision 1 spec) |
+| Spec revision | 3 (supersedes Revision 2; changes in §0.2; decisions in `docs/DECISIONS.md`) |
 | Date | 2026-10-08 |
 | Approver | Product owner (Faraz) |
 | Implementation agent | Claude Code |
@@ -41,10 +41,40 @@
 - Concrete geofence rules with hysteresis; concrete alert catalog with de-duplication, auto-resolve and escalation.
 - SOS delivery states defined (received, notified, acknowledged), escalation ladder, SMS escalation, dashboard alarm, phone silent-mode constraints, SOS never rate-limited.
 - Supervisor notification path defined. Revision 1 sent push notifications to supervisors who only had a web dashboard.
-- Guard sign-in by phone OTP (guards often have no email), invitations, device registration, shared-device rules.
+- Guard sign-in by phone OTP (guards often have no email), invitations, device registration, shared-device rules. *(Revision 3 replaces OTP sign-in with invitation-SMS enrollment, D-02, and drops shared devices, D-05.)*
 - Pre-shift readiness check and Android manufacturer battery-killer handling.
 - Tenant isolation in depth: request context + scoped data access + PostgreSQL row-level security + composite keys + an automated test that fails if any route lacks a policy.
 - New: external approvals and platform-constraints register with lead times (ARCH §20), common mis-implementations list (SEC §20), Phase 0B tracking spike on real devices before the mobile build is committed.
+
+### 0.2 What changed in Revision 3 (all three documents)
+
+Source: `docs/SPEC_REVIEW_R2.md` and the product owner's decisions of 2026-10-08, recorded in `docs/DECISIONS.md`. `[R3]` marks capability added in Revision 3.
+
+- **Approved decisions:**
+  - D-01: the identity provider serves dashboard users only.
+  - D-02, D-30, D-31: a guard enrolls their own phone with the invitation SMS into a device-bound session. There are no per-sign-in codes, and a new phone needs a code issued from the dashboard.
+  - D-04: alerts reach both the control room and the duty officers through the web dashboard; duty officers use it on their phones (revised in round 4).
+  - D-05: each guard uses their own phone; no shared phones in V1.
+  - D-08, D-09, D-10, D-14: SMS in V1; SSE; Kysely with plain SQL migrations; Urdu + English in the guard app, English dashboard in V1.
+  - D-13: one deployment ("cell") per data region, launching with one.
+  - D-33: RLS enabled (not forced) plus a startup role check.
+  - D-34: Pilot 0 once tracking is proven, with no SOS button until SOS is proven.
+  - D-36: tracking health is always shown separately from location age.
+- **Rejected:** foreground-only tracking (D-35), so "Allow all the time" stays required; removing the outbox, the realtime replay buffer and per-organization sequence, or the async geofence worker (all kept).
+- **Corrections:**
+  - freshness thresholds derived from the sampling settings; stationary defined; heartbeats driven by location callbacks;
+  - INV-08 extended to scans, start attempts and incidents;
+  - a late-synced offline start is accepted, and guards can join another organization after termination;
+  - the demo shift is always startable; future timestamps are clamped;
+  - NOTIFIED requires a display receipt; shift notifications ship with push; tracking resumes after an extension made while the phone was offline; numbers aligned.
+- **New mechanisms** (ADV-X01–X08): NULLIF in RLS policies, startup role check, schema linter, negative controls, ID traceability, generated docs, a coordinate-field audit meta-test, a generated idempotency test, per-item quarantine in sync, and the realtime sequence assigned after commit.
+- **Owner answers, round 3:** the first cell runs on AWS in Frankfurt (D-37); the pilot organization has about 1,000 guards, rolled out in stages (D-34); guards pay for their own mobile data, so the data budget is a hard limit; English and Urdu only, English by default (D-14); bulk guard import added.
+- **Owner answers, round 4:**
+  - duty officers use the web dashboard on their phones, and there is no supervisor mode in the native app, which is now for guards only (D-04 revised);
+  - SOS reaches duty officers by dashboard alarm, web push and SMS from the first second;
+  - the live map uses Google Maps (D-12);
+  - the pilot covers many sites across one very large housing colony;
+  - AWS is kept after comparing Supabase and Firebase (D-37).
 
 ---
 
@@ -54,7 +84,7 @@
 
 A multi-tenant security operations platform. A private security company uses it to manage guards, manage client sites, assign guards to sites through shifts, track guards during active shifts, verify that guards physically visit required patrol checkpoints, detect operational exceptions, receive alerts, record incidents, review history and produce operational reports.
 
-Guards use a mobile app. Owners, administrators, supervisors and dispatchers use a web dashboard; supervisors and dispatchers can also receive and acknowledge alerts on the mobile app (D-04).
+Guards use a mobile app. Owners, administrators, supervisors and dispatchers use a web dashboard; duty officers in the field use the same dashboard on their phones (D-04).
 
 ### 1.2 Core principle — exceptions, not dots on a map
 
@@ -80,7 +110,7 @@ Product claims about location evidence are worded as: "the device location evide
 
 ### 1.4 Operating context (drives many requirements)
 
-- Guards often use low-to-mid-range Android phones, sometimes their own; work night shifts; may be walking, gloved, stressed, in darkness, carrying equipment; connectivity is intermittent (basements, warehouses, outskirts); literacy and language vary; mobile data may be paid by the guard.
+- Guards use their own phones (D-05), often low-to-mid-range Android; work night shifts; may be walking, gloved, stressed, in darkness, carrying equipment; connectivity is intermittent (basements, warehouses, outskirts); literacy and language vary; mobile data is paid by the guard (confirmed 2026-10-08).
 - Supervisors and dispatchers work from a control room (desktop screens left open 24/7) and from the field (phone).
 - Security companies must prove service to their own clients (site owners). Reports are commercial evidence; data integrity matters.
 - Records may be used in disputes, disciplinary processes and legal proceedings.
@@ -94,7 +124,7 @@ Product claims about location evidence are worded as: "the device location evide
 | Area | Included |
 |---|---|
 | Organizations | organizations, members, fixed roles, tenant isolation, invitations [R2], organization settings [R2] |
-| Guards | profiles, status, employee numbers, devices, tracking consent records [R2] |
+| Guards | profiles, status, employee numbers, devices, tracking consent records [R2], bulk import from CSV [R3] |
 | Sites | sites, address, coordinates by map pin, circular geofence, checkpoints, printable QR labels [R2] |
 | Shifts | create, bulk create from a weekly pattern [R2], assign, start/end, late and missed detection, auto-end [R2], supervisor manual start / force-end / extend / reopen [R2] |
 | Tracking | shift-bound background tracking, accuracy handling, offline queue, sync, idempotency, freshness, device health reporting [R2], pre-shift readiness check [R2] |
@@ -102,14 +132,14 @@ Product claims about location evidence are worded as: "the device location evide
 | Incidents | create (online/offline), categories, severity, description, photos, location, timestamps, reference numbers [R2], notes and history [R2] |
 | Emergency | SOS, escalation ladder [R2], SMS escalation (D-08), dashboard alarm, drill mode [R2] |
 | Dashboard | exception-first home, live map, guard status, alerts, active shifts, sites, incidents, guard detail, location history |
-| Mobile for supervisors | alerts feed and SOS acknowledgement (D-04) [R2] |
+| Dashboard on phones | duty officers use the web dashboard on their phones: live map, alerts, SOS acknowledgement, web push (D-04) [R3] |
 | Reports | attendance, patrol, incident, location, site activity / proof of service [R2]; CSV export |
 | Audit | administrative and security-sensitive actions, location-history access |
-| Operations | observability, synthetic SOS monitoring [R2], backups and disaster recovery [R2] |
+| Operations | observability, synthetic SOS monitoring [R2], backups and disaster recovery [R2], one deployment per data region with each organization's region chosen when it is provisioned (D-13) [R3] |
 
 ### 2.2 Out of scope for V1 (do NOT add silently)
 
-Payroll; salary management; invoicing; customer billing; accounting; AI guard scoring; facial recognition; biometric identification; licence-plate recognition; camera surveillance; body-camera streaming; voice recording and voice notes; automatic police or emergency-service dispatch; hardware trackers; NFC; BLE beacons; predictive analytics; route optimization; public customer/client portal; guard-to-guard chat; social features; advertising; selling or sharing location data; shift swapping/trading; guard self-scheduling; leave management; break tracking; relief/handover workflow; post orders and document library; sub-zones/posts within a site; polygon geofences; custom roles or custom permissions; guards belonging to more than one organization; WhatsApp integration; automatic background SMS from the guard's phone; offline map tiles; duress PIN; enforced device attestation (App Attest / Play Integrity); white-labelling; public API and webhooks; SSO/SAML; automated voice-call escalation.
+Payroll; salary management; invoicing; customer billing; accounting; AI guard scoring; facial recognition; biometric identification; licence-plate recognition; camera surveillance; body-camera streaming; voice recording and voice notes; automatic police or emergency-service dispatch; hardware trackers; NFC; BLE beacons; predictive analytics; route optimization; public customer/client portal; guard-to-guard chat; social features; advertising; selling or sharing location data; shift swapping/trading; guard self-scheduling; leave management; break tracking; relief/handover workflow; post orders and document library; sub-zones/posts within a site; polygon geofences; custom roles or custom permissions; guards belonging to more than one organization; WhatsApp integration; automatic background SMS from the guard's phone; offline map tiles; duress PIN; enforced device attestation (App Attest / Play Integrity); white-labelling; public API and webhooks; SSO/SAML; automated voice-call escalation; shared or site phones (D-05); moving an organization between data regions.
 
 These may become future features. They MUST NOT complicate V1 without explicit approval.
 
@@ -117,11 +147,11 @@ These may become future features. They MUST NOT complicate V1 without explicit a
 
 | ID | Assumption | Affects |
 |---|---|---|
-| A-01 | Primary launch market is Pakistan (Revision 1 sample coordinates are Karachi). | device matrix, SMS providers, language, map provider, data residency, legal review |
-| A-02 | Most guards use Android; a minority use iPhone. | test matrix, Phase 0B devices |
-| A-03 | Guard phones may be personal or company-issued; one signed-in guard per phone at a time. | D-05 |
-| A-04 | A guard belongs to exactly one organization. If this changes, architecture is revisited. | data model |
-| A-05 | V1 scale target: ≤ 50 organizations, ≤ 2,000 concurrently active guards, ≤ 20,000 guards total (D-23). | load tests, partitioning |
+| A-01 | Primary launch market is Pakistan. Confirmed 2026-10-08: the company is registered in Pakistan and a pilot customer is lined up. | device matrix, SMS providers, language, map provider, data residency, legal review |
+| A-02 | Most guards use Android; a minority use iPhone (confirmed 2026-10-08). | test matrix, Phase 0B devices |
+| A-03 | Guards use their own phones, one per guard (confirmed 2026-10-08). Shared or site phones are not supported in V1. | D-05 |
+| A-04 | A guard belongs to one organization at a time; after termination they can join another. If this changes, architecture is revisited. | data model |
+| A-05 | V1 scale target: ≤ 50 organizations, ≤ 2,000 concurrently active guards, ≤ 20,000 guards total (D-23). The pilot organization alone has about 1,000 guards (confirmed 2026-10-08), at many sites across one very large housing colony (about 312,000–313,000 kanals). | load tests, partitioning |
 | A-06 | Shifts are ≤ 24 h, typically 8 or 12 h, many overnight. | state machine, battery budget |
 | A-07 | Organizations are provisioned by the platform operator, not by self-serve signup (D-19). | onboarding |
 
@@ -148,7 +178,7 @@ Roles are fixed in V1. Authorization is implemented as permissions (ARCH §4.6) 
 | Manage owners and administrators | ✔ | – | – | – | – |
 | Invite / disable / change role of supervisors, dispatchers, guards | ✔ | ✔ | – | – | – |
 | Guard profiles (create, edit, disable, terminate) | ✔ | ✔ | view | view | own (view) |
-| Devices (view, revoke) | ✔ | ✔ | view | – | own (view) |
+| Devices (view, revoke; issue new-phone codes) | ✔ | ✔ | view; issue new-phone codes (D-31) | – | own (view) |
 | Sites, geofences, checkpoints; QR rotate and print | ✔ | ✔ | view | view | assigned site (view; no QR data) |
 | Patrol routes and schedules | ✔ | ✔ | view | view | assigned (view) |
 | Create / edit / cancel shifts | ✔ | ✔ | ✔ (D-03) | – | – |
@@ -188,16 +218,17 @@ Created by the platform operator (D-19) with name, legal name, IANA timezone (ex
 
 - Owners and administrators invite members by email (dashboard roles) or phone number (guards).
 - An invitation is bound to one organization, one role and, for guards, one guard record. It is single-use, expires after 7 days, and can be revoked.
+- A guard's invitation is a single SMS with an install link and an enrollment code. Redeeming it enrolls the guard's own phone, and it is normally the only SMS a guard ever receives (D-02).
+- Administrators can import guards in bulk from a CSV file (employee number, name, phone), check a validation preview, then send the invitations in batches within the daily invitation limit [R3].
 - Guards cannot self-register into an organization.
 
 ### 4.3 Guard onboarding flow
 
-1. Administrator creates the guard record (employee number, name, phone) and sends an invitation (SMS with link and code).
-2. Guard installs the app and signs in (D-02: phone OTP recommended; employee number + PIN as an organization-level fallback where SMS is unreliable).
+1. Administrator creates the guard record (employee number, name, phone) and sends the invitation: one SMS with an install link and an enrollment code.
+2. Guard installs the app from the link, and the code is redeemed. On Android the Play install referrer carries it through installation; otherwise the guard opens the link again or types the code. Redeeming it binds this phone to the guard and starts a device-bound session (D-02, D-30). There is no password and no code at each sign-in; later confirmations arrive as in-app or push popups.
 3. Tracking disclosure screen (PROD §7.2) → guard accepts → consent recorded with the disclosure version.
 4. Permission flow (PROD §7.3).
-5. Device registration.
-6. Readiness check (PROD §7.4).
+5. Readiness check (PROD §7.4).
 
 Declining permissions never crashes or loops the app; it explains the consequence and how to fix it later.
 
@@ -205,10 +236,11 @@ Declining permissions never crashes or loops the app; it explains the consequenc
 
 Statuses: ACTIVE, INACTIVE, SUSPENDED, TERMINATED. Disabling or terminating a guard: revokes sessions and devices, force-ends any active shift (reason recorded), prompts the administrator about future shifts, and keeps all history.
 
-### 4.5 Devices (D-05)
+### 4.5 Devices (D-05, D-31)
 
-- V1 default: one ACTIVE device per guard. Registering a new device revokes the previous one (reason REPLACED) and opens a `DEVICE_CHANGED` alert (LOW) so supervisors know.
-- Shared company phones are supported only by sign-out/sign-in; never two guards at once. Data captured by one guard is never uploaded under another guard's identity.
+- Each guard uses their own phone: one ACTIVE device per guard.
+- Moving to a new phone needs a new enrollment code, issued from the dashboard by a Supervisor, Administrator or Owner and sent by SMS (D-31). Redeeming it revokes the previous device (reason REPLACED) and opens a `DEVICE_CHANGED` alert (LOW) so supervisors know. An SMS to the guard's number alone never moves the account, because numbers get recycled.
+- Shared or site phones are not supported in V1. If a phone is lent to another guard, data captured by one guard is never uploaded under another guard's identity.
 - A guard cannot sign out while a shift is ACTIVE; they must end the shift first. A guard with unsent data is warned before sign-out and must confirm data loss explicitly.
 
 ---
@@ -251,7 +283,7 @@ Shift start and end are stored as UTC instants and entered/displayed in the site
 - SCHEDULED shifts: time, guard and site may be changed (recorded as events; the guard is notified).
 - ACTIVE shifts: only extending the end time or force-ending.
 - COMPLETED / MISSED / CANCELLED: immutable except notes (MISSED may be reopened, below).
-- Guards are notified of assignments, changes and cancellations for shifts in the next 14 days, and reminded before start (default 30 min).
+- Guards are notified of assignments, changes and cancellations for shifts in the next 14 days, and reminded before start (default 30 min). These are push notifications, delivered from Phase 5 (ARCH §22).
 
 ### 6.3 States and transitions
 
@@ -283,7 +315,7 @@ The phone must send a location fix captured at most `shift.start_max_fix_age_sec
 1. Guard is authenticated, membership ACTIVE, guard ACTIVE.
 2. Device is registered, ACTIVE, and belongs to the guard.
 3. Shift belongs to the guard.
-4. Shift is SCHEDULED.
+4. Shift is SCHEDULED, or MISSED and this start was captured offline inside the start window (late sync, PROD §6.3).
 5. Capture time is within the start window: from scheduled start − `shift.earliest_start_minutes` to the start deadline.
 6. Guard has no other ACTIVE shift.
 7. A fresh location fix is attached (`LOCATION_FIX_REQUIRED` otherwise). The server cannot verify phone permissions; it verifies evidence (a fresh fix) and records the phone-reported permission state.
@@ -301,6 +333,7 @@ With no connectivity the phone records the start locally, starts tracking at onc
 
 - Guard ends their own ACTIVE shift (online, or offline then synced). **Tracking stops immediately when the guard taps End** — not when the server confirms (INV-08). Queued data keeps uploading.
 - Phone failsafe: tracking stops by itself at scheduled end + `shift.auto_end_after_minutes`, even with no server contact, with the message "Shift time over — tracking stopped. Tap End Shift."
+- If a supervisor extends the shift while the phone is offline, the failsafe still stops tracking at the old time. When the phone next reaches the server and finds the shift ACTIVE with a later end, it notifies the guard "Shift extended — tap to resume tracking" and reports the gap.
 - Server auto-ends at the same moment (`AUTO_ENDED`). A `SHIFT_OVERRUN` LOW alert opens at scheduled end + `shift.overrun_alert_after_minutes` so a supervisor can extend if the relief guard is late.
 - On end: open patrol runs are closed, shift-scoped condition alerts auto-resolve (PROD §12.4).
 
@@ -329,7 +362,7 @@ With no connectivity the phone records the start locally, starts tracking at onc
 - Every action has icon + text; no icon-only critical control.
 - Every critical action confirms with haptic + visual feedback (optional sound).
 - Plain-language messages; error codes shown small, for support only.
-- Languages (D-14): all strings externalized from the first screen built; English + Urdu at launch if A-01 holds, with correct right-to-left layout; 24-hour time by default.
+- Languages (D-14): English and Urdu only. English is the default; the guard picks the language on first launch and can change it in settings. Urdu uses a correct right-to-left layout. All strings are externalized from the first screen built; 24-hour time by default.
 - Works offline for: start (D-06), end, tracking, patrol scans, incidents (photos queued), SOS.
 - Core flows need no map tiles; data use is kept small.
 
@@ -344,7 +377,7 @@ Localized, versioned text covering what is collected, when (only during shifts a
 > • help supervisors respond to emergencies.
 > Location tracking runs only during your assigned shift and during an SOS. It stops when your shift ends.
 
-The guard taps "I understand"; the acceptance is recorded with the disclosure version and language. A new disclosure version is shown again before the next shift start.
+The guard taps "I understand"; the acceptance is recorded with the disclosure version and language. A new disclosure version is shown again before the next shift start. The disclosure also tells the guard that Android may show a notice that SENTRY is a workplace monitoring app; Google Play requires this, and it is expected.
 
 ### 7.3 Permission flows
 
@@ -355,6 +388,8 @@ The guard taps "I understand"; the acceptance is recorded with the disclosure ve
 4. Battery optimization — open the system settings page so the guard can exempt the app (see ARCH §20 for the policy constraint on the direct-request permission).
 5. Manufacturer background restrictions — guided screens per manufacturer (Xiaomi/Redmi/Poco, Oppo/Realme/OnePlus, Vivo, Samsung, Huawei/Honor, Infinix/Tecno/itel) with deep links where available. The guard confirms each step; confirmations are reported.
 6. Unused-app permission removal (Android 11+) — ask the guard to turn off "Pause app activity if unused".
+
+No physical-activity or motion permission is requested in V1: moving and stationary are detected from location alone (PROD §8.2).
 
 **iOS**
 1. Location "While Using", then upgrade to "Always", each with an explanation screen.
@@ -403,8 +438,8 @@ During the shift:
 ```text
 ABC Warehouse            SHIFT ACTIVE
 Started 19:57
-Tracking active · 20 s ago · ±8 m
-All data sent
+Tracking: running · location 20 s ago · ±8 m
+Server confirmed 6 s ago · all data sent
 
 Next patrol: 22:00 (Main Entrance first)
 
@@ -418,7 +453,7 @@ Next patrol: 22:00 (Main Entrance first)
 | Topic | Example states |
 |---|---|
 | Tracking | "Tracking active · 20 s ago · ±8 m" · "Waiting for GPS" · "Low accuracy (~120 m)" · "Tracking problem: location permission changed — Fix" · "Approximate location only — Fix" |
-| Sync | "All data sent" · "Sending…" · "Offline — 42 updates waiting · oldest 18 min" · "Signed out — 42 updates cannot be sent" |
+| Sync | "Server confirmed 6 s ago · all data sent" · "Sending…" · "Offline — 42 updates waiting · oldest 18 min" · "Signed out — 42 updates cannot be sent" |
 | Actions | "Saved on this phone — will send when online" → "Received by server" → "Verified" |
 | Interruptions | "Tracking was interrupted 21:10–21:42" (shown after the app was killed and reopened) |
 | Clock | "Your phone's time is wrong — turn on automatic time" |
@@ -445,9 +480,17 @@ Type grid with icons → severity (preset by type, e.g., FIRE and MEDICAL defaul
 
 See PROD §11. Hold for 3 s with a progress ring and haptic ticks; releasing early cancels. No extra confirmation dialog after the hold.
 
-### 7.10 Supervisor mode on mobile (D-04) [R2]
+### 7.10 Supervisors on mobile (D-04)
 
-When the signed-in user is a Supervisor, Dispatcher, Administrator or Owner, the app shows: open alerts sorted by severity, SOS acknowledge, alert detail with the guard's last known location and freshness, and a "Call guard" button. Supervisors are never tracked.
+There is no supervisor mode in the native app; the app is for guards only. Duty officers use the web dashboard on their phones (PROD §14.7). It shows:
+
+- open alerts sorted by severity;
+- SOS acknowledgement;
+- alert detail, with the guard's tracking health and the age of the last known location shown separately (PROD §8.3);
+- a "Call guard" button;
+- the live map.
+
+Supervisors are never tracked.
 
 ### 7.11 Diagnostics screen
 
@@ -477,34 +520,50 @@ No silent 24/7 tracking. Off-shift location reaching the server is rejected and 
 | Stationary | one fix every 5 min |
 | Start, end, checkpoint scan, incident | fresh on-demand fix (wait ≤ 10 s for good accuracy, take the best) |
 | SOS active | one fix every 10 s |
-| Heartbeat (phone online, shift active) | every 60 s, even with no new point |
+| Heartbeat (phone online, shift active) | every 60 s, even with no new point. Provisional: Phase 0B sets the default between 60 and 180 s from battery and data measurements. Heartbeats ride on location callbacks, never on a held wake lock. |
 | Upload | every 60 s when online; immediately for SOS, start, end, scans, incidents |
 
 Adaptive or motion-based tuning is not built until basic tracking is proven reliable on real devices.
 
-### 8.3 Freshness — two signals
+**Moving and stationary** are detected from location alone, with no motion permission. The phone is stationary when its last fixes stay within max(20 m, accuracy) of each other for 2 min. It is moving again on the first fix more than 20 m from that point.
 
-Revision 1 used one timestamp. A stationary guard indoors may be connected but without a new fix; an offline guard may have fresh fixes not yet uploaded. So:
+### 8.3 Freshness — tracking health and location age (D-36) [R3]
 
-- **Last contact** — when the server last heard anything from the guard's phone.
-- **Last fix** — capture time of the newest usable location.
+A stationary guard indoors may be connected but without a new fix; an offline guard may have fresh fixes not yet uploaded. So the product shows two separate signals, plus the phone's own report, and never merges them into one:
 
-Freshness states, evaluated top to bottom (first match wins):
+- **Tracking health**: when the server last heard anything from the guard's phone (its last acknowledgement of a heartbeat, location or status item).
+- **Location age**: capture time of the newest usable fix.
+- **Device report**: what the phone last said about itself: tracking service, GPS accuracy, permissions, battery, app version.
 
-| State | Condition (defaults) | Map |
+Tracking health, by last contact:
+
+| State | Condition (defaults) | Shown as |
 |---|---|---|
-| UNKNOWN | no usable fix since shift start | no marker; listed as "Location unknown" |
-| OFFLINE | last contact > 10 min ago | grey marker at last fix: "Offline · last contact 14 min ago" |
-| STALE | last fix > 5 min ago | hollow grey marker: "Last known 7 min ago" |
-| RECENT | last fix > 2 min ago | muted marker with age |
-| LIVE | otherwise | solid marker with age |
+| LIVE | last contact ≤ 90 s ago | "LIVE · last update 8 s ago" |
+| DELAYED | last contact 90 s – 5 min ago | "DELAYED · last update 74 s ago" |
+| OFFLINE | last contact > 5 min ago | "OFFLINE · last update 8 min ago" |
 
-Revision 1's `CURRENT` is renamed `LIVE`. Settings validation rejects thresholds that cannot work: the LIVE limit must be at least twice the upload interval, and STALE must be greater than LIVE.
+Location age, by the newest usable fix:
+
+| State | Condition (defaults) | Shown as |
+|---|---|---|
+| UNKNOWN | no usable fix since shift start | no marker; "Location unknown" |
+| CURRENT | fix ≤ 150 s old | solid marker; "Location 12 s ago · ±8 m" |
+| LAST KNOWN | fix older than 150 s | hollow marker; "Last known location · 4 min ago · ±12 m" |
+
+The device report is shown alongside: "Tracking service: running · GPS ±12 m · Battery 63%". When tracking health is not LIVE, it carries the time it was reported ("as of 21:04").
 
 Rules:
-- The dashboard recomputes freshness locally every few seconds; a marker goes stale on screen even when no new events arrive.
+- **A last-known location is never presented as a live location** (INV-09). Marker colour follows tracking health; the marker is solid only while the location is CURRENT; every marker carries its age as text.
+- A stationary guard with a healthy phone normally reads "LIVE · last update 8 s ago" together with "Last known location · 4 min ago". That is the honest state: the phone only knows where it is when it takes a fix.
+- Thresholds are settings, validated against the sampling settings so a healthy phone can never trip them:
+  - `freshness.health_live_max_s ≥ sync.heartbeat_interval_s + 30`
+  - `freshness.offline_after_s ≥ 3 × sync.heartbeat_interval_s`
+  - `freshness.location_current_max_s ≥ tracking.max_interval_s + sync.upload_interval_s + 30`
+  - `freshness.location_stale_after_s ≥ tracking.stationary_fix_interval_s + sync.upload_interval_s + 60` (used by the `LOCATION_STALE` alert, PROD §12.1)
+- The dashboard, on desktops and phones, recomputes these states locally every few seconds; a guard turns DELAYED and then OFFLINE on screen even when no new events arrive.
 - Accuracy is always shown (number and circle). Fixes worse than 100 m are labelled "Low accuracy".
-- Tracking problems (permission removed, approximate only, location services off, possible mock location, wrong phone clock, low battery, battery saver) are shown alongside freshness, never instead of it.
+- Tracking problems (permission removed, approximate only, location services off, possible mock location, wrong phone clock, low battery, battery saver) are shown alongside both signals, never instead of them.
 - Markers never animate or interpolate between fixes.
 
 ### 8.4 Geofence behaviour
@@ -521,7 +580,7 @@ Departure is confirmed only when, since the first Outside fix, there has been no
 
 Return is confirmed by one Inside fix with accuracy ≤ 50 m, or two consecutive Inside fixes. Then `ENTERED_SITE` is recorded and the alert auto-resolves with the time spent outside.
 
-If the location goes stale while the guard is outside, the dashboard shows both: "Off site · location stale". Data that arrives late (offline sync) and reveals a past excursion that has already ended is recorded in the shift history and reports as "detected after sync"; it does not raise a live alert.
+If the location becomes LAST KNOWN while the guard is outside, the dashboard shows both: "Off site · last known location 6 min ago". Data that arrives late (offline sync) and reveals a past excursion that has already ended is recorded in the shift history and reports as "detected after sync"; it does not raise a live alert.
 
 All numbers are settings (PROD Appendix B).
 
@@ -558,7 +617,7 @@ V1 does not promise anti-spoofing. It collects evidence (accuracy, mock-location
 | OUTSIDE_RADIUS | the fix is clearly outside the checkpoint radius even allowing for accuracy | no |
 | WRONG_SITE | checkpoint belongs to a different site than the shift | no |
 | INVALID_QR | unknown, rotated, archived, or another organization's QR (same message for all) | no |
-| NO_ACTIVE_SHIFT | no active shift at scan time | no |
+| NO_ACTIVE_SHIFT | no active shift at scan time; stored without coordinates (INV-08) | no |
 | DUPLICATE | same checkpoint already counted in this run within the duplicate window | no (recorded) |
 
 Flags (do not change the outcome, appear in reports): MOCK_LOCATION, IMPLAUSIBLE_TRAVEL (two scans too far apart for the time between them — the classic "photographed QR codes" pattern), CLOCK_SKEW, LOW_ACCURACY, OUT_OF_ORDER.
@@ -574,7 +633,7 @@ A QR code alone never completes a checkpoint (INV-11). Offline scans are verifie
 Type: THEFT, INTRUSION, FIRE, MEDICAL, PROPERTY_DAMAGE, ALTERCATION, SUSPICIOUS_ACTIVITY, OTHER.
 Severity: LOW, MEDIUM, HIGH, CRITICAL.
 Status: OPEN → ACKNOWLEDGED → RESOLVED (resolution note required); a Supervisor+ may reopen with a reason.
-Also: human reference number per organization (e.g., `INC-000123`) [R2], title (≤ 120 chars), description (≤ 4,000 chars), location with accuracy, occurred time (may be set up to 24 h back; never in the future), reported time, received time, guard, shift and site (derived by the server from the guard's active shift, never trusted from the phone), optional checkpoint, up to 5 photos.
+Also: human reference number per organization (e.g., `INC-000123`) [R2], title (≤ 120 chars), description (≤ 4,000 chars), location with accuracy, occurred time (may be set up to 24 h back; never in the future), reported time, received time, guard, shift and site (derived by the server from the guard's active shift, never trusted from the phone), optional checkpoint, up to 5 photos. Guards can file incidents only during an ACTIVE shift or an open SOS (INV-08).
 
 ### 10.2 Integrity
 
@@ -598,6 +657,7 @@ CRITICAL → `INCIDENT_CRITICAL` (CRITICAL, escalates like SOS by default). HIGH
 
 - Press and hold for 3 s (progress ring, haptic tick each second; releasing early cancels). No confirmation dialog afterwards — it adds delay under stress.
 - Available whenever a guard is signed in: on every screen during a shift, and on the home screen off-shift. An off-shift SOS is accepted; it has no shift and starts SOS tracking (a disclosed, legitimate emergency purpose).
+- SOS alerts the guard's own company: its control room and duty officers. It is not an emergency service, and the app, store listings and review notes say so (Apple guideline 5.1.5).
 
 ### 11.2 What the phone does, immediately and in this order
 
@@ -612,8 +672,9 @@ CRITICAL → `INCIDENT_CRITICAL` (CRITICAL, escalates like SOS by default). HIGH
 |---|---|---|
 | QUEUED | saved on phone, not yet sent | "SOS ACTIVE — waiting for network…" |
 | SENDING | request in flight | "Sending SOS…" |
-| RECEIVED | server stored it and confirmed | "SOS received by control room" |
-| NOTIFIED | server confirms at least one person was reached: a push or SMS accepted by the provider, or the alarm displayed on a connected dashboard or supervisor app | "Supervisors alerted" |
+| RECEIVED | server stored it and confirmed | "SOS received — alerting supervisors…" |
+| ALERT_SENT | the server handed at least one push or SMS to a provider: queued, not yet confirmed on any device | "Alert sent to 4 supervisors" |
+| NOTIFIED | the alarm was displayed on a connected dashboard, or a supervisor's phone confirmed the alert arrived | "Alert showing in the control room" or "Alert reached 2 supervisors' phones" |
 | ACKNOWLEDGED | a person acknowledged it | "Help acknowledged by Sarah K. at 21:14" |
 | RESOLVED | a supervisor closed it | "SOS closed" |
 
@@ -623,9 +684,9 @@ The phone never shows a later state without server confirmation. It learns state
 
 | Time unacknowledged | Action |
 |---|---|
-| 0 s | Full-screen alarm with repeating sound on every connected dashboard and supervisor app; push to all Supervisors, Dispatchers and Administrators |
-| 60 s | SMS to Supervisors and Administrators (D-08); push repeated |
-| 180 s | SMS and push to Owners and the organization's emergency contacts |
+| 0 s | Full-screen alarm with repeating sound on every connected dashboard, including duty officers' phones; web push to all Supervisors, Dispatchers and Administrators; SMS to Supervisors (the duty officers) |
+| 60 s | SMS to Administrators (D-08); web push repeated |
+| 180 s | SMS and web push to Owners, and SMS to the organization's emergency contacts |
 | every 120 s after | repeat until acknowledged |
 
 Acknowledgement stops escalation. Resolution is a separate step with a resolution type (GENUINE, FALSE_ALARM, ACCIDENTAL, DRILL, OTHER) and a note.
@@ -633,10 +694,11 @@ Acknowledgement stops escalation. Resolution is a separate step with a resolutio
 ### 11.5 Reaching people who are not looking at a screen
 
 Phones on silent, Do Not Disturb or Focus can suppress ordinary notifications. This is a platform constraint, not a bug we can fix in code (ARCH §20):
-- The supervisor app uses the highest notification priority each platform allows without special approval (iOS time-sensitive notifications; an Android high-importance alarm channel) and asks the supervisor during setup to allow these to break through Do Not Disturb.
-- iOS Critical Alerts require an Apple entitlement that must be applied for and may be refused (EXT entry). V1 MUST NOT depend on it.
-- The supervisor app setup includes a test: "Send me a test SOS alert".
-- Organizations must staff monitoring. The dashboard home shows **monitoring coverage** [R2]: how many dashboards and supervisor apps are connected right now, with a warning when active shifts exist and nobody is connected.
+- Duty officers use the dashboard on their phones (D-04) and install it to the home screen so it can receive web push. On iOS (16.4+), web push only reaches a dashboard installed that way.
+- Web push and SMS both follow the phone's silent and Do Not Disturb settings, and neither can force a sound. So SOS sends an SMS to duty officers from the first second (PROD §11.4), and the control room's dashboard, which is staffed, is the primary receiver.
+- The dashboard's notification setup includes a test: "Send me a test SOS alert".
+- Organizations must staff monitoring. The dashboard home shows **monitoring coverage** [R2]: how many dashboards are connected right now, on desktops and phones, with a warning when active shifts exist and nobody is connected.
+- If SOS acknowledgement times in the pilot show that duty officers are being missed, a native alarm for them is the next step. It is not in V1.
 
 ### 11.6 Dashboard alarm
 
@@ -671,8 +733,8 @@ Owners and Administrators can open a drill window. SOS events during a drill are
 | INCIDENT_HIGH | HIGH incident (setting) | HIGH | never | no |
 | GUARD_LEFT_SITE | departure confirmed (PROD §8.4) | HIGH | guard back inside | optional |
 | TRACKING_DISABLED | permission removed, location services off, approximate only, or signed out during a shift | HIGH | condition cleared | no |
-| DEVICE_OFFLINE | no contact beyond the offline threshold | MEDIUM | contact resumes | no |
-| LOCATION_STALE | phone in contact but no usable fix beyond the stale threshold (suppressed while DEVICE_OFFLINE is open) | MEDIUM | usable fix arrives | no |
+| DEVICE_OFFLINE | no contact for `alerts.device_offline_after_s` (default 10 min; the guard already shows OFFLINE after 5 min) | MEDIUM | contact resumes | no |
+| LOCATION_STALE | phone in contact but the newest usable fix is older than `freshness.location_stale_after_s` on two consecutive detector runs (suppressed while DEVICE_OFFLINE is open) | MEDIUM | usable fix arrives | no |
 | SHIFT_NOT_STARTED | late beyond the late threshold | MEDIUM | shift starts, or superseded by SHIFT_MISSED | no |
 | SHIFT_MISSED | shift became MISSED | HIGH | late offline start arrives (system) | no |
 | CHECKPOINT_MISSED | patrol run INCOMPLETE or MISSED | MEDIUM | never | no |
@@ -698,7 +760,7 @@ Shift-scoped condition alerts (left site, tracking disabled, offline, stale, low
 
 ### 12.5 Who is notified
 
-An organization setting maps each severity to roles and channels. Defaults: CRITICAL — dashboard alarm + push to Supervisors, Dispatchers, Administrators + escalation ladder; HIGH — dashboard + push to Supervisors; MEDIUM and LOW — dashboard only.
+An organization setting maps each severity to roles and channels. Defaults: CRITICAL — dashboard alarm + web push to Supervisors, Dispatchers, Administrators + escalation ladder; HIGH — dashboard + web push to Supervisors; MEDIUM and LOW — dashboard only.
 
 Guards cannot change alert state; they can only fix the underlying condition. Every manual alert change is audited.
 
@@ -706,7 +768,7 @@ Guards cannot change alert state; they can only fix the underlying condition. Ev
 
 ## 13. Notifications
 
-- Channels: push (guard app and supervisor mode), SMS (SOS escalation; D-08), email (invitations and export-ready notices). The live dashboard is not a notification channel but counts toward SOS "NOTIFIED" when it displays the alarm.
+- Channels: push (guard app), web push (dashboard, including duty officers' phones), SMS (guard invitations and new-phone codes, SOS escalation; D-08), email (dashboard invitations and export-ready notices). The live dashboard is not a notification channel but counts toward SOS "NOTIFIED" when it displays the alarm.
 - "Sent" never means "seen". For SOS, only a human acknowledgement proves attention (Revision 1 §72).
 - Content is lock-screen safe by default: "SOS — Ahmed K. — ABC Warehouse". No coordinates or incident descriptions in push or SMS bodies by default; SMS contains a short link to the alert, which requires sign-in. An organization may turn on coordinates in SOS SMS (setting, default off).
 - Guard notifications: shift assigned / changed / cancelled, shift reminder, SOS acknowledged, plus phone-generated "tracking problem" notifications.
@@ -725,8 +787,8 @@ Dashboard · Live Map · Guards · Sites · Shifts · Patrols · Incidents · Al
 ```text
 🔴 SOS — Ahmed Khan — ABC Warehouse — 40 s ago      [ ACKNOWLEDGE ]
 
-ACTIVE GUARDS 24   ON SITE 21   OFF SITE 1   STALE/OFFLINE 1   TRACKING PROBLEMS 1
-SHIFTS NOT STARTED 2   OPEN INCIDENTS 3   MONITORING: 2 dashboards, 3 supervisor apps
+ACTIVE GUARDS 24   ON SITE 21   OFF SITE 1   DELAYED/OFFLINE 1   TRACKING PROBLEMS 1
+SHIFTS NOT STARTED 2   OPEN INCIDENTS 3   MONITORING: 3 dashboards, 2 phones
 
 ALERTS (severity, then age)
 🔴 SOS activated — Ahmed
@@ -738,20 +800,21 @@ Every number is clickable to the filtered list. An active SOS banner stays at th
 
 ### 14.3 Live map
 
-Markers follow PROD §8.3; site geofence circles; accuracy circles; clustering when many markers; filters by site, freshness and alert. Clicking a guard shows:
+Markers follow PROD §8.3; site geofence circles; accuracy circles; clustering when many markers; filters by site, freshness and alert. The map is Google Maps (D-12), with road and satellite views. It stays usable with about 1,000 guards spread across a very large site area, and duty officers get the same view on their phones. Clicking a guard shows:
 
 ```text
 Ahmed Khan
 ON DUTY · ABC Warehouse · Shift 20:00–08:00
-Last fix: 12 seconds ago · Accuracy: 8 m · Inside site
-Battery 64% · App 1.4.2 · No tracking problems
+Tracking: LIVE · last update 8 s ago
+Location: 12 s ago · ±8 m · inside site
+Tracking service: running · Battery 64% · App 1.4.2 · No tracking problems
 ```
 
 Popups render plain text only.
 
 ### 14.4 Guard detail
 
-Guard, status, current shift and site, current location and freshness, tracking health (permissions, battery, app version, device), consent version, shift history, patrol history, incidents, alerts.
+Guard, status, current shift and site, tracking health and location age (PROD §8.3), device report (tracking service, permissions, battery, app version, device), consent version, shift history, patrol history, incidents, alerts.
 
 ### 14.5 Location history
 
@@ -771,7 +834,7 @@ Sites (map pin, radius preview, checkpoints, QR print, patrol route editor) · S
 
 - Control-room sessions stay signed in while the tab is open. If the session cannot be renewed, the dashboard shows a blocking "Signed out — live monitoring stopped" screen; it never keeps showing a frozen map.
 - If live updates disconnect for more than 10 s, a banner says so; freshness keeps ticking locally; on reconnect the dashboard reloads current state.
-- Alerts, SOS acknowledgement and guard detail work on a phone browser (≥ 360 px).
+- Duty officers use the dashboard on their phones (D-04). The live map, alerts, SOS acknowledgement and guard detail work on a phone browser (≥ 360 px), and the dashboard installs to the home screen to receive web push.
 - Site-bound times show in the site timezone with its abbreviation; ages ("12 s ago") use server time.
 - Accessibility target WCAG 2.2 AA; status is never conveyed by colour alone.
 
@@ -814,7 +877,7 @@ Report dates use the site's timezone (organization timezone for multi-site repor
 ## 17. Store, distribution and review readiness
 
 - Privacy policy, terms of service and support page live before submission; store descriptions explain background location accurately.
-- A demo organization with no real people: a reviewer guard account with a **rolling demo shift that is always startable** (re-created daily covering "now − 1 h to now + 11 h"), demo settings that allow starting away from the site, and SOS in drill mode routed only to internal test recipients — a reviewer must never page a real person.
+- A demo organization with no real people, made of four parts. First, a reviewer guard account that signs in without a Pakistani SMS: a pre-issued demo enrollment code goes in the review notes. Second, a **demo shift that is always startable**: every 15 minutes, if the reviewer guard has no ACTIVE shift, a refresher cancels any unstarted demo shift and creates one that started 10 minutes ago. Third, demo settings that allow starting away from the site. Fourth, SOS in drill mode, routed only to internal test recipients — a reviewer must never page a real person.
 - Review instructions: how to sign in, see the assigned shift, start it, what tracking does, how the dashboard shows it.
 - Platform-specific declarations and their lead times are in ARCH §20.
 
@@ -855,16 +918,16 @@ The system prefers **honest operational state over reassuring UI**. This princip
 
 ## Appendix A — Product decisions
 
-Status of all items: **OPEN** until the product owner approves. Decision numbers are global across the three documents.
+Status: **OPEN** unless marked APPROVED or REJECTED; `docs/DECISIONS.md` holds the reasoning. Decision numbers are global across the three documents.
 
 | ID | Question | Options | Recommendation | Needed by |
 |---|---|---|---|---|
-| D-02 | Guard sign-in method | phone OTP · employee no. + admin-set PIN · both | phone OTP; PIN as per-organization fallback where SMS is unreliable | Phase 1 |
+| D-02 | Guard sign-in method | phone OTP · employee no. + admin-set PIN · invitation SMS + device-bound session | **APPROVED 2026-10-08:** the invitation SMS (link + code) enrolls the guard's own phone into a device-bound session; no per-sign-in codes; later confirmations are popups | Phase 1 |
 | D-03 | Supervisor scope; may supervisors plan shifts? | org-wide · site-scoped | org-wide; yes | Phase 1 |
-| D-04 | How supervisors receive alerts on the move | supervisor mode in the app · web push · SMS only | supervisor mode + SMS for SOS escalation | Phase 5 |
-| D-05 | Devices per guard; shared phones | one active device · several | one active device; shared phones via sign-out/sign-in only | Phase 2 |
+| D-04 | How supervisors receive alerts on the move | supervisor mode in the app · web push · SMS only | **APPROVED 2026-10-08, revised the same day:** the control room and duty officers both use the web dashboard (duty officers on their phones, with web push); no supervisor mode in the native app; SMS to duty officers from the first second of an SOS | Phase 5 |
+| D-05 | Devices per guard; shared phones | one active device · several | **APPROVED 2026-10-08:** one active device per guard, the guard's own phone; no shared phones in V1 | Phase 2 |
 | D-06 | Offline shift start | allow (provisional) · require online | allow | Phase 3 |
-| D-14 | Launch languages | English · English + Urdu · more | English + Urdu if A-01 holds; i18n from the first screen regardless | Phase 2 |
+| D-14 | Launch languages | English · English + Urdu · more | **APPROVED 2026-10-08:** English and Urdu only. English is the default and Urdu is selectable in the guard app; the dashboard is English-only in V1 but i18n-ready | Phase 2 |
 | D-15 | Starting outside the geofence | block · allow and flag | allow and flag | Phase 3 |
 | D-16 | Patrol accountability | per shift · per site (shared) | per shift | Phase 7 |
 | D-17 | Do QR-only (location unconfirmed) scans count? | yes, labelled · no | yes, labelled "QR only" | Phase 7 |
@@ -872,13 +935,16 @@ Status of all items: **OPEN** until the product owner approves. Decision numbers
 | D-21 | Reason for viewing location history | optional · mandatory · per-organization setting | field always present, optional by default, organization may require | Phase 6 |
 | D-22 | Guard sees own location trail | yes · no | yes, own shifts only | Phase 6 |
 | D-24 | Checkpoint coordinates calibrated on site with the app | V1 · V1.1 | V1.1; map pin in V1 | Phase 7 |
-| D-25 | App distribution | public store listing · private enterprise channels | public listing with demo organization | Phase 10 |
+| D-25 | App distribution | public store listing · private enterprise channels | public listing with demo organization; on iOS, public or unlisted App Store distribution (Apple Business custom apps don't reach Pakistan, ARCH §20) | Phase 10 |
+| D-34 | First pilot | pilot after Phase 4 · pilot at launch | **APPROVED 2026-10-08:** Android pilot with the lined-up customer once tracking is proven (Phase 4 exit tests and the device-matrix subset on its guards' phones). It is rolled out in stages: a few sites (about 50 guards) first, then the rest of the ~1,000 guards once that stage meets the tracking-reliability gate (ARCH §21.4). No SOS button until Phase 8's exit criteria pass | Phase 4 |
+| D-35 | Foreground-only tracking (never ask for "Allow all the time") | foreground-only · background permission | **REJECTED 2026-10-08:** "Allow all the time" stays required (PROD §7.3–§7.4) | Phase 0B |
+| D-36 | How tracking state is shown | one combined freshness state · tracking health and location age shown separately | **APPROVED 2026-10-08:** separately (PROD §8.3) | Phase 5 |
 
 ---
 
 ## Appendix B — Default settings
 
-All values are per-organization settings unless marked *system*. Changing a setting is validated and audited.
+All values are per-organization settings unless marked *system*. Changing a setting is validated and audited. In V1 the dashboard lets organizations edit only these: `shift.late_alert_after_minutes`, `shift.missed_after_minutes`, `geofence.radius_m` (default for new sites), `alerts.routing`, `sos.escalation`, `sos.emergency_contacts`, `sos.emergency_call_number`, `sos.sms_include_coordinates`, `privacy.require_history_access_reason`, `retention.location_days`. The operator sets the rest. From Phase 1 this table is generated from `packages/contracts` (ADV-X04).
 
 | Key | Default | Bounds / note |
 |---|---|---|
@@ -899,11 +965,13 @@ All values are per-organization settings unless marked *system*. Changing a sett
 | tracking.sos_interval_s | 10 | 5–30 |
 | tracking.sos_max_hours | 4 | 1–12 |
 | sync.upload_interval_s | 60 | 15–300 |
-| sync.heartbeat_interval_s | 60 | 30–300 |
+| sync.heartbeat_interval_s | 60 | 30–300; provisional, Phase 0B sets the default (60–180) |
 | sync.max_offline_age_hours | 168 | *system*; older data rejected |
-| freshness.live_max_s | 120 | ≥ 2 × upload interval |
-| freshness.stale_after_s | 300 | > live_max |
-| freshness.offline_after_s | 600 | > heartbeat × 3 |
+| freshness.health_live_max_s | 90 | ≥ heartbeat interval + 30 |
+| freshness.offline_after_s | 300 | ≥ 3 × heartbeat interval |
+| freshness.location_current_max_s | 150 | ≥ tracking.max_interval_s + upload interval + 30 |
+| freshness.location_stale_after_s | 420 | ≥ stationary fix interval + upload interval + 60 |
+| alerts.device_offline_after_s | 600 | ≥ freshness.offline_after_s |
 | geofence.radius_m | 100 | *system* bounds 50–5,000 |
 | geofence.max_usable_accuracy_m | 100 | 20–500 |
 | geofence.outside_buffer_m | 25 | 0–200 |
@@ -921,7 +989,7 @@ All values are per-organization settings unless marked *system*. Changing a sett
 | alerts.incident_high_enabled | true | |
 | alerts.routing | see PROD §12.5 | per severity: roles + channels |
 | sos.hold_duration_ms | 3000 | *system* |
-| sos.escalation | 0 s push+dashboard → 60 s SMS supervisors/admins → 180 s owners + emergency contacts; repeat 120 s | per organization |
+| sos.escalation | 0 s dashboard alarm + web push + SMS to supervisors (duty officers) → 60 s SMS to administrators → 180 s owners + emergency contacts; repeat every 120 s | per organization |
 | sos.sms_include_coordinates | false | |
 | sos.emergency_contacts | [] | phone numbers |
 | sos.emergency_call_number | — | used by "Call supervisor" |
@@ -932,7 +1000,7 @@ All values are per-organization settings unless marked *system*. Changing a sett
 | retention.operational_months | 12 | |
 | retention.audit_months | 24 | ≥ 12 |
 | retention.incident_evidence_window_minutes | 30 | location kept around incidents/SOS |
-| notifications.non_sos_sms_monthly_cap | 1,000 | SOS never capped |
+| notifications.non_sos_sms_monthly_cap | 3,000 | SOS never capped; covers onboarding about 1,000 guards in the first month |
 | exports.max_range_days | 92 | *system* |
 
 ---
@@ -948,12 +1016,12 @@ All values are per-organization settings unless marked *system*. Changing a sett
 | Patrol route / run / visit | Ordered checkpoints / one required execution inside a shift / one scan |
 | Fix | One location reading with accuracy |
 | Last contact / last fix | When the server last heard from the phone / capture time of the newest usable fix |
-| Freshness | LIVE, RECENT, STALE, OFFLINE, UNKNOWN (PROD §8.3) |
+| Tracking health / location age | LIVE, DELAYED, OFFLINE: when the server last heard from the phone / CURRENT, LAST KNOWN, UNKNOWN: age of the newest usable fix (PROD §8.3) |
 | recorded_at / captured_at / received_at | phone clock at capture / server's estimate of true capture time / server receipt time |
 | Client event ID | Phone-generated unique ID that makes resubmission harmless |
 | Outbox | The phone's durable queue of unsent events |
 | QR only | A scan with a valid QR whose location could not be confirmed |
 | Drill | An SOS exercise, labelled everywhere |
 | Readiness check | Pre-shift phone setup checklist |
-| Monitoring coverage | How many dashboards and supervisor apps are connected right now |
+| Monitoring coverage | How many dashboards (desktop and phone) are connected right now |
 

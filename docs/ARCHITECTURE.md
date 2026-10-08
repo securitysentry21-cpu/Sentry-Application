@@ -3,7 +3,7 @@
 
 | | |
 |---|---|
-| Spec revision | 2 |
+| Spec revision | 3 — changes listed in PROD §0.2; decisions in `docs/DECISIONS.md` |
 | Date | 2026-10-08 |
 | Approver | Product owner (Faraz) |
 | Implementation agent | Claude Code |
@@ -64,13 +64,15 @@ For other gaps choose the simplest option consistent with the spec, record it in
 
 | Component | Responsibility |
 |---|---|
-| Mobile app (Expo) | guard mode (tracking, outbox, shifts, patrols, incidents, SOS) and supervisor mode (alerts, SOS acknowledgement) |
+| Mobile app (Expo) | guards only: tracking, outbox, shifts, patrols, incidents, SOS. There is no supervisor mode (D-04) |
 | API (Fastify) | the only gateway to the database; authentication, authorization, validation, business rules |
 | Workers (same codebase, separate processes) | jobs, detectors, escalation, notifications, attachment processing, exports, retention |
-| Web dashboard (Next.js) | UI only; talks to the API; never to the database |
+| Web dashboard (Next.js) | UI only; talks to the API; never to the database. Also used by duty officers on their phones: responsive, installable to the home screen, receives web push (D-04) |
 | PostgreSQL | system of record; row-level security; job queue (D-11) |
 | Object storage (S3-compatible, private) | incident photos, exports |
-| External providers | identity (D-01), push (D-26), SMS (D-08), maps (D-12), error tracking |
+| External providers | identity for dashboard users (D-01), push (D-26: FCM/APNs for the guard app, Web Push for the dashboard), SMS through a Pakistani aggregator (D-08), maps (Google Maps, D-12), error tracking |
+
+**Cells (D-13) [R3].** Everything above except the external providers is deployed once per data region as an independent *cell*, with its own database, file storage, API and workers. Each organization lives in exactly one cell, chosen when the operator provisions it. V1 runs one cell, on AWS in Frankfurt (D-37). To keep a second cell possible on any provider, including a Pakistani one, a cell uses only portable building blocks: containers, PostgreSQL and S3-compatible storage. No provider-specific queues, functions or databases.
 
 ### 1.2 Key flows
 
@@ -99,8 +101,8 @@ sequenceDiagram
   P->>A: POST /sos (priority lane, no batching)
   A->>DB: tx: sos_event + SOS_ACTIVATED alert + outbox
   A-->>P: RECEIVED + sosEventId
-  W->>S: realtime alarm + push (T+0)
-  W->>S: SMS (T+60 s if unacknowledged), owners (T+180 s)
+  W->>S: realtime alarm + web push + SMS to duty officers (T+0)
+  W->>S: SMS to administrators (T+60 s if unacknowledged), owners (T+180 s)
   S->>A: acknowledge
   P->>A: GET /sos/:id (poll) -> ACKNOWLEDGED by name
 ```
@@ -115,24 +117,26 @@ Every component has a reason. Nothing is added because it is fashionable.
 |---|---|---|
 | API | Node.js LTS, TypeScript (strict), Fastify | Revision 1 |
 | Contracts | zod schemas in `packages/contracts`; OpenAPI generated from them | one source of truth for API, web and mobile |
-| Database | PostgreSQL ≥ 16 managed; 18 preferred (native `uuidv7()`) | RLS, exclusion constraints, partitioning |
+| Database | PostgreSQL ≥ 16 managed, with point-in-time recovery | RLS, exclusion constraints, partitioning; UUIDv7 is generated in the API, so the PostgreSQL version doesn't matter |
 | Required extensions | `btree_gist` (no-overlap shifts), `citext`, `pgcrypto` | verify availability on the chosen provider (EXT-14) |
-| DB access | Kysely or Drizzle (D-10) | explicit SQL and transactions; `SET LOCAL` per transaction; no ORM hiding tenant filters |
+| DB access | Kysely, plain SQL migrations, `kysely-codegen` types (D-10, approved) | explicit SQL and transactions; `SET LOCAL` per transaction; no ORM hiding tenant filters; a schema-first ORM conflicts with SQL-first migrations that carry RLS and grants |
 | Migrations | SQL-first, in `packages/db`, run by a dedicated migration role | reviewable; RLS policies and grants live in migrations |
 | Jobs | pg-boss on PostgreSQL (D-11) | no extra infrastructure; jobs enqueued in the same transaction |
-| Realtime | Server-Sent Events + PostgreSQL LISTEN/NOTIFY (D-09, D-11) | simplest viable; swap to Redis pub/sub only if measured need |
+| Realtime | Server-Sent Events + PostgreSQL LISTEN/NOTIFY (D-09 approved, D-11), replay buffer with a per-organization sequence assigned after commit (§14) | simplest viable; swap to Redis pub/sub only if measured need |
 | Object storage | S3-compatible, private bucket | Revision 1 |
 | Web | Next.js (App Router), client of the API | no direct DB access from Next.js |
-| Mobile | Expo with development builds (EAS), config plugins, native modules where needed; Expo Go is not used | Revision 1; background location needs native config |
+| Mobile | Expo (SDK 55+, New Architecture only) with development builds (EAS), config plugins, native modules where needed; Expo Go is not used; builds target Android API 36 | Revision 1; background location needs native config |
 | Mobile local storage | SQLite (transactional) for the outbox; secure storage for tokens | durability across kills and reboots |
-| Background location | decided by Phase 0B spike (D-07) | highest technical risk |
-| Maps | Google Maps or Mapbox behind `MapProvider` (D-12) | Revision 1 §85 |
-| Push | FCM + APNs (D-26) | |
+| Background location | decided by Phase 0B spike (D-07); must support the New Architecture | highest technical risk |
+| Maps | Google Maps Platform behind `MapProvider` (D-12, approved): Maps JavaScript API with Advanced Markers and clustering; current APIs only, never deprecated ones such as the legacy `Marker` | owner preference; strong map data in Pakistan (reasoned) |
+| Push | FCM + APNs for the guard app; Web Push (VAPID) for the dashboard (D-26) | duty officers use the dashboard on their phones (D-04) |
 | SMS | provider behind `SmsProvider` (D-08) | |
 | Error tracking | Sentry-compatible with PII scrubbing | |
-| Identity | mature provider (D-01) | never build password auth |
+| Workspace package scope | our own registered npm scope | `@sentry/*` belongs to Sentry.io: name collisions and dependency confusion |
+| Hosting (first cell) | AWS eu-central-1 (Frankfurt): ECS on Fargate behind an Application Load Balancer, RDS for PostgreSQL, S3, KMS, Secrets Manager (D-37, §19.8) | mature security tooling; meets every requirement in this table natively; uses only the portable building blocks of §1.1 |
+| Identity | dashboard users: mature provider (D-01); guards: invitation-code enrollment into our own device-bound sessions (D-02, D-30) | never build password auth; the guard app has no identity-provider or SMS-OTP dependency |
 
-**Hosting constraint:** the API, SSE endpoint and workers run as long-lived processes (containers or VMs). Serverless functions are not suitable for SSE streams, LISTEN/NOTIFY listeners or pg-boss workers. The Next.js dashboard MAY be hosted anywhere.
+**Hosting constraint:** the API, SSE endpoint and workers run as long-lived processes (containers or VMs). Serverless functions are not suitable for SSE streams, LISTEN/NOTIFY listeners or pg-boss workers. The Next.js dashboard is served from the same origin as the API: one domain, one reverse proxy, `/api/*` routed to the API. Browser cookies then authenticate REST and SSE alike, with no CORS allow-list, cross-site cookie or stream ticket.
 
 **Connection-pooling constraint:** if a pooler in transaction mode is used, (a) tenant context must be set with `SET LOCAL` inside each transaction (session-level `SET` leaks between clients), and (b) LISTEN/NOTIFY needs a dedicated direct (non-pooled) connection per API instance.
 
@@ -143,7 +147,7 @@ Every component has a reason. Nothing is added because it is fashionable.
 ```text
 apps/api            Fastify API; workers entrypoint (separate process, same code)
 apps/web            Next.js dashboard
-apps/mobile         Expo app (guard mode + supervisor mode)
+apps/mobile         Expo app (guards only)
 packages/contracts  zod schemas, enums, permission map, error codes, OpenAPI generation
 packages/domain     pure logic, no IO: geofence, freshness, shift state machine,
                     checkpoint verification, capture-time estimation, alert rules, CSV escaping
@@ -158,6 +162,7 @@ docs/
 - Handlers are thin; services own transactions; repositories own SQL; domain functions are pure.
 - All server code reads time from an injectable `Clock`. `Date.now()` / `new Date()` are banned in `packages/domain` and services (lint rule); tests use a fake clock.
 - Lint MUST actually run in CI and fail on errors. A lint step that is a no-op is a defect.
+- Workspace packages use our own registered npm scope, never `@sentry/*`.
 
 ---
 
@@ -185,7 +190,8 @@ All access to tenant tables goes through repository functions that take the cont
 
 ### 4.3 Row-level security
 
-- Every tenant table: `ENABLE ROW LEVEL SECURITY` and `FORCE ROW LEVEL SECURITY`; policy `organization_id = current_setting('app.org_id', true)::uuid` for SELECT/INSERT/UPDATE/DELETE as applicable. A missing setting yields NULL → no rows (fail closed).
+- Every tenant table: `ENABLE ROW LEVEL SECURITY` (not FORCE, D-33); policy `organization_id = NULLIF(current_setting('app.org_id', true), '')::uuid` for SELECT/INSERT/UPDATE/DELETE as applicable. A missing or empty setting yields NULL → no rows (fail closed). The `NULLIF` matters: once a pooled connection has used the setting, it returns `''` instead of NULL, and a bare `::uuid` cast throws.
+- Tables are owned by `migrator`, so data migrations it runs are not filtered. The API and workers check at startup that they are connected as their runtime role, without `BYPASSRLS` and owning no tables, and refuse to start otherwise (ADV-X07). That covers the case FORCE would guard: a misconfigured `DATABASE_URL`.
 - Every request transaction begins with `SET LOCAL app.org_id = '<uuid>'` (and `app.user_id`).
 - Roles:
 
@@ -197,7 +203,7 @@ All access to tenant tables goes through repository functions that take the cont
 | `retention_worker` | no | explicit DELETE policies on retained tables | retention job |
 
 - Tests run as `app_runtime`, never as a superuser or table owner (a superuser silently bypasses RLS and makes isolation tests pass falsely).
-- Decide FORCE vs ENABLE deliberately per table and test the behaviour of every role against it. Any table without RLS is listed in `docs/DECISIONS.md` with the reason (e.g., `users`, which is global).
+- Test the behaviour of every role against every tenant table, on fresh connections and on connections that already served another tenant. Any table without RLS is listed in `docs/DECISIONS.md` with the reason (e.g., `users`, which is global within a cell).
 
 ### 4.4 Composite foreign keys
 
@@ -222,30 +228,34 @@ Cache keys, pub/sub channels and object keys are prefixed with the organization:
 
 ## 5. Identity, sessions and devices
 
-### 5.1 Identity provider (D-01)
+### 5.1 Identity provider (D-01) — dashboard users only
 
-The provider handles identities only: email/password or passkeys for dashboard users, phone OTP for guards (D-02), verification, password reset, MFA, account disabling, session revocation, JWT signing-key rotation. **Organization membership, roles and permissions live in our database**, the single source of truth; the provider's own organization/role features are not used for authorization.
+The provider handles dashboard users' identities only: email/password or passkeys, verification, password reset, MFA (authenticator app or passkey), account disabling, session revocation, JWT signing-key rotation. Guards have no provider accounts (§5.3). **Organization membership, roles and permissions live in our database**, the single source of truth; the provider's own organization/role features are not used for authorization.
 
 ### 5.2 Dashboard sessions
 
 HttpOnly secure cookies; MFA enforced for Owner and Administrator; silent renewal while the tab is open; blocking signed-out screen if renewal fails (PROD §14.7).
 
-### 5.3 Mobile sessions
+### 5.3 Guard enrollment and mobile sessions (D-02, D-30) [R3]
 
-- Tokens in Keychain / Android Keystore (secure storage).
-- Short-lived access token; refresh token valid ≥ 14 days so a long offline shift never loses identity.
+- **Enrollment.** The guard's invitation SMS carries an install link and an enrollment code. Redeeming it (`POST /enrollments/redeem`) proves possession of the SMS, creates a P-256 key pair in Keystore / Secure Enclave that never leaves the phone, registers its public key with the device, and returns our own session. On Android the code travels through installation via the Play install referrer (verify in Phase 2); otherwise the guard opens the link again or types the code.
+- **Session.** Our API issues it: a short-lived access token, and a refresh token valid ≥ 14 days (sliding) so a long offline shift never loses identity. Refresh tokens rotate on every use and are stored hashed; presenting an already-rotated token revokes the whole session. Tokens and the device key live in Keychain / Android Keystore.
+- **No provider SDK in the sync path.** The sync engine refreshes its own session, so native or headless uploads keep working with the app's UI closed.
+- **SOS fallback.** An SOS signed with the device key is accepted even when the session has expired, as long as the device is ACTIVE, or REPLACED within its grace window (INV-15).
 - Capture continues offline even if the access token has expired; the outbox uploads after refresh.
 - If refresh is impossible (revoked or disabled): stop tracking, keep the queue, show "Signed out by your organization — pending data cannot be sent".
+- Later messages to the guard (for example "Your account was moved to a new phone") are in-app or push notifications, not SMS.
 
-### 5.4 Device registration
+### 5.4 Devices (D-05, D-31)
 
 - On first launch the app generates an `installation_id` (random UUID kept in secure storage). Hardware identifiers are never used as identity.
-- `POST /devices/register` binds installation to guard → server `device_id`. The app sends `X-Device-Id` on every request; the server checks the device is ACTIVE and belongs to the authenticated guard.
+- Enrollment binds the installation and its public key to the guard → server `device_id`. The app sends `X-Device-Id` on every request; the server checks the device is ACTIVE and belongs to the authenticated guard.
+- One ACTIVE device per guard: the guard's own phone. Moving to a new phone needs a new enrollment code issued from the dashboard by a Supervisor, Administrator or Owner (`POST /guards/:id/enrollment-codes`, audited). Redeeming it revokes the old device as REPLACED. An SMS to the guard's number alone is never enough, because numbers get recycled.
 - Revocation reasons: REPLACED (pending uploads captured before revocation are accepted for 72 h), LOST / COMPROMISED / ADMIN (everything rejected).
 
-### 5.5 Shared phones
+### 5.5 Lent phones
 
-The outbox is partitioned by (user, organization). One user's queue is never uploaded with another user's token. Switching user with pending data requires the first user to sync or explicitly confirm data loss.
+Shared or site phones are not supported in V1 (D-05). Because a guard can still lend their phone, the outbox stays partitioned by (user, organization): one user's queue is never uploaded with another user's session, and switching user with pending data requires the first user to sync or explicitly confirm data loss.
 
 ---
 
@@ -253,7 +263,7 @@ The outbox is partitioned by (user, organization). One user's queue is never upl
 
 ### 6.1 Conventions
 
-- Primary keys UUIDv7 generated by the database or API. The only client-generated IDs are `client_event_id` values, used solely as idempotency keys.
+- Primary keys UUIDv7, generated in the API. The only client-generated IDs are `client_event_id` values, used solely as idempotency keys.
 - Tenant tables: `organization_id uuid NOT NULL`, `UNIQUE (organization_id, id)`, RLS (ARCH §4.3), composite FKs (ARCH §4.4).
 - All timestamps `timestamptz`, stored UTC. Mutable tables have `created_at`, `updated_at`; admin-editable tables add `created_by`, `updated_by`.
 - Editable entities carry `version int NOT NULL DEFAULT 1` for optimistic concurrency (guards, sites, checkpoints, patrol_routes, shifts, incidents, alerts, sos_events, settings, members).
@@ -268,13 +278,13 @@ The outbox is partitioned by (user, organization). One user's queue is never upl
 ```text
 organizations, organization_settings, org_sequences
 users, organization_members, invitations
-guards, guard_devices, push_tokens, tracking_consents
+guards, guard_devices, mobile_sessions, push_tokens, tracking_consents
 sites, checkpoints, patrol_routes, patrol_route_checkpoints, patrol_runs, checkpoint_visits
 shifts, shift_events, shift_live_state
 location_points, device_status_events
 incidents, incident_events, incident_attachments
 sos_events, alerts, alert_events, notification_deliveries
-exports, audit_logs, outbox
+exports, audit_logs, outbox, realtime_events, quarantined_items
 ```
 
 Revision 1's `site_geofences` table is folded into `sites` (one circle per site in V1). A separate table is introduced only when polygons or multiple zones are approved.
@@ -286,7 +296,8 @@ Shorthand: `ts` = timestamptz; `→ X` = composite FK `(organization_id, x_id) �
 ```text
 organizations                (RLS: id = app.org_id)
   id, name, legal_name, status ACTIVE|SUSPENDED|CLOSED,
-  timezone text NOT NULL (IANA), default_locale, created_at, updated_at
+  timezone text NOT NULL (IANA), default_locale,
+  data_region text NOT NULL (the cell's region, D-13; checked at startup), created_at, updated_at
 
 organization_settings
   organization_id PK → organizations, settings jsonb NOT NULL (validated by versioned zod schema),
@@ -295,8 +306,8 @@ organization_settings
 org_sequences
   organization_id, name, next_value bigint; PK (organization_id, name)    -- incident reference numbers
 
-users                        (global; no RLS; access only through services, never listed globally)
-  id, auth_provider_user_id UNIQUE NOT NULL, email citext UNIQUE NULL, phone UNIQUE NULL,
+users                        (global within a cell; no RLS; access only through services, never listed globally)
+  id, auth_provider_user_id UNIQUE NULL (dashboard users only; guards have none, D-02), email citext UNIQUE NULL, phone UNIQUE NULL,
   name, status ACTIVE|DISABLED, locale, created_at, updated_at
   CHECK (email IS NOT NULL OR phone IS NOT NULL)
 
@@ -305,25 +316,34 @@ organization_members
   status INVITED|ACTIVE|DISABLED|REMOVED, version, created_at, updated_at
   UNIQUE (organization_id, user_id)
 
-invitations
-  id, organization_id, role, email NULL, phone NULL, guard_id NULL → guards,
-  token_hash bytea UNIQUE, expires_at, accepted_at, accepted_by_user_id, revoked_at, created_by, created_at
+invitations                  (member invitations, guard enrollment and new-phone codes)
+  id, organization_id, purpose MEMBER|GUARD_ENROLLMENT|NEW_DEVICE, role, email NULL, phone NULL, guard_id NULL → guards,
+  token_hash bytea UNIQUE (link token), code_hash bytea NULL (typed code), attempts int DEFAULT 0,
+  expires_at, accepted_at, accepted_by_user_id, revoked_at, created_by, created_at
 
 guards
   id, organization_id, user_id NULL, employee_number, display_name, phone,
   status ACTIVE|INACTIVE|SUSPENDED|TERMINATED, preferred_locale, version, created/updated (+by)
   UNIQUE (organization_id, employee_number)
-  UNIQUE (user_id) WHERE user_id IS NOT NULL                  -- A-04: one organization per guard user
+  UNIQUE (user_id) WHERE user_id IS NOT NULL AND status <> 'TERMINATED'   -- A-04: one organization at a time
 
 guard_devices
-  id, organization_id, guard_id → guards, installation_id uuid, platform IOS|ANDROID,
+  id, organization_id, guard_id → guards, installation_id uuid, public_key bytea NOT NULL, key_algorithm text NOT NULL,
+  platform IOS|ANDROID,
   manufacturer, model, os_version, app_version, status ACTIVE|REVOKED,
   revoked_reason REPLACED|LOST|COMPROMISED|ADMIN NULL, revoked_at, revoked_by, last_seen_at, created_at, updated_at
   UNIQUE (organization_id, installation_id)
   UNIQUE (guard_id) WHERE status = 'ACTIVE'                  -- D-05
 
+mobile_sessions              (D-30)
+  id, organization_id, guard_id → guards, device_id → guard_devices,
+  refresh_token_hash bytea UNIQUE NOT NULL, family_id uuid NOT NULL, issued_at, last_used_at, expires_at,
+  revoked_at NULL, revoked_reason ROTATION_REUSE|DEVICE_REVOKED|GUARD_DISABLED|SIGNED_OUT NULL, created_at
+  -- one row per rotation; presenting a rotated token revokes every row in its family
+
 push_tokens                  (user-scoped; accessed only by notification service)
-  id, user_id, installation_id, provider FCM|APNS, token, status ACTIVE|INVALID, last_registered_at, created_at
+  id, user_id, installation_id NULL, provider FCM|APNS|WEBPUSH, token (for Web Push: the subscription endpoint), keys jsonb NULL (Web Push keys),
+  status ACTIVE|INVALID, last_registered_at, created_at
   UNIQUE (provider, token)
 
 tracking_consents            (append-only)
@@ -338,8 +358,7 @@ sites
 checkpoints
   id, organization_id, site_id → sites, name, description, latitude NULL, longitude NULL,
   verification_radius_meters int CHECK (10..500),
-  qr_token_hash bytea UNIQUE NOT NULL,        -- HMAC-SHA256(pepper, token), ARCH §11.1
-  qr_token_ciphertext bytea NOT NULL,         -- encrypted token for reprinting, ARCH §11.1
+  qr_token_hash bytea UNIQUE NOT NULL,        -- SHA-256(token); the token itself is derived, ARCH §11.1
   qr_token_version int NOT NULL DEFAULT 1, qr_rotated_at,
   status ACTIVE|INACTIVE|ARCHIVED, version, created/updated (+by)
   UNIQUE (organization_id, site_id, id)
@@ -379,6 +398,7 @@ shift_events                 (append-only)
   types: CREATED, UPDATED, REASSIGNED, CANCELLED, STARTED, START_REJECTED, ENDED, AUTO_ENDED,
          FORCE_ENDED, EXTENDED, MARKED_MISSED, REOPENED, ENTERED_SITE, LEFT_SITE,
          TRACKING_DEGRADED, TRACKING_RESTORED
+  -- START_REJECTED payloads hold no coordinates (INV-08)
 
 shift_live_state             (projection; rebuildable from source tables; never the source of truth)
   shift_id PK, organization_id, guard_id, site_id,
@@ -386,7 +406,8 @@ shift_live_state             (projection; rebuildable from source tables; never 
   last_contact_at,
   geofence_state INSIDE|UNCERTAIN|OUTSIDE_SUSPECTED|OUTSIDE_CONFIRMED|UNKNOWN,
   geofence_state_since, outside_since, outside_point_count,
-  tracking_issues text[], battery_pct, is_charging, app_version, pending_queue_count, oldest_pending_at,
+  tracking_issues text[], tracking_service_state RUNNING|STOPPED|PERMISSION_PROBLEM|UNKNOWN, device_report_at,
+  battery_pct, is_charging, app_version, pending_queue_count, oldest_pending_at,
   updated_at
 
 location_points              (append-only; high volume)
@@ -407,7 +428,7 @@ device_status_events         (append-only; short retention)
   location_permission ALWAYS|WHEN_IN_USE|DENIED|RESTRICTED|NOT_DETERMINED, precise_location bool,
   location_services_enabled bool, notifications_enabled bool, battery_pct, is_charging,
   power_save_mode bool, battery_optimization_exempt bool NULL, auto_time_enabled bool NULL,
-  oem_steps_confirmed text[], app_version, os_version, pending_queue_count, oldest_pending_at,
+  oem_steps_confirmed text[], tracking_service_state, app_version, os_version, pending_queue_count, oldest_pending_at,
   last_successful_sync_at
   UNIQUE (device_id, client_event_id)
 
@@ -422,7 +443,7 @@ checkpoint_visits            (append-only)
   id, organization_id, guard_id, shift_id NULL, checkpoint_id NULL (NULL when INVALID_QR),
   patrol_route_id NULL, patrol_run_id NULL, device_id, client_event_id,
   scanned_at_recorded, scanned_at (server-estimated), received_at,
-  latitude, longitude, accuracy_m, fix_age_s, distance_m, is_mock,
+  latitude NULL, longitude NULL (both NULL when NO_ACTIVE_SHIFT, INV-08), accuracy_m, fix_age_s, distance_m, distance_band_m, is_mock,
   verification_status VERIFIED|LOCATION_UNCONFIRMED|OUTSIDE_RADIUS|WRONG_SITE|INVALID_QR|NO_ACTIVE_SHIFT|DUPLICATE,
   verification_reason, flags text[], counted bool, qr_token_version NULL, created_at
   UNIQUE (device_id, client_event_id)
@@ -430,12 +451,13 @@ checkpoint_visits            (append-only)
 
 incidents
   id, organization_id, reference_number text NOT NULL, guard_id NULL, reported_by_user_id,
-  shift_id NULL, site_id NULL, checkpoint_id NULL,
+  shift_id NULL, sos_event_id NULL, site_id NULL, checkpoint_id NULL,
   type, severity, title (≤120), description (≤4000), latitude, longitude, accuracy_m,
   occurred_at, reported_at, received_at,
   status OPEN|ACKNOWLEDGED|RESOLVED, acknowledged_by, acknowledged_at, resolved_by, resolved_at,
   resolution_note, client_event_id NULL, device_id NULL, version, created_at, updated_at
   UNIQUE (organization_id, reference_number), UNIQUE (device_id, client_event_id)
+  CHECK (guard_id IS NULL OR shift_id IS NOT NULL OR sos_event_id IS NOT NULL)   -- guards file incidents only during a shift or an open SOS (INV-08)
 
 incident_events              (append-only)
   id, organization_id, incident_id → incidents,
@@ -454,7 +476,8 @@ sos_events
   activated_at_recorded, activated_at (server-estimated), received_at,
   latitude NULL, longitude NULL, accuracy_m NULL,
   status ACTIVE|ACKNOWLEDGED|RESOLVED, guard_cancel_requested_at NULL,
-  notified_at NULL, acknowledged_by, acknowledged_at, resolved_by, resolved_at,
+  alert_sent_at NULL (a provider accepted a push or SMS), notified_at NULL (display receipt, §13.1),
+  acknowledged_by, acknowledged_at, resolved_by, resolved_at,
   resolution GENUINE|FALSE_ALARM|ACCIDENTAL|DRILL|OTHER NULL, resolution_note,
   is_drill bool DEFAULT false, alert_id, version, created_at, updated_at
   UNIQUE (device_id, client_event_id)
@@ -494,6 +517,13 @@ audit_logs                   (append-only)
 
 outbox                       (internal)
   id, organization_id, topic, payload jsonb, created_at, processed_at NULL, attempts int
+
+realtime_events              (replay buffer, §14; written only by the outbox dispatcher)
+  organization_id, seq bigint, type, payload jsonb (IDs only), created_at
+  PK (organization_id, seq)    -- seq assigned after commit; pruned after 5 min or beyond 10,000 per organization
+
+quarantined_items            (short retention; sync items that hit a server error, §9.3)
+  id, organization_id, device_id, batch_id, client_event_id, item jsonb, error_code, created_at, replayed_at NULL
 ```
 
 ### 6.4 Indexes (validate against EXPLAIN on realistic volume; do not index every column)
@@ -510,6 +540,8 @@ patrol_runs            (organization_id, status, window_ends_at)
 audit_logs             (organization_id, created_at); (organization_id, resource_type, resource_id)
 notification_deliveries (status, created_at) WHERE status = 'QUEUED'
 outbox                 (created_at) WHERE processed_at IS NULL
+mobile_sessions        UNIQUE (refresh_token_hash); (family_id)
+quarantined_items      (created_at) WHERE replayed_at IS NULL
 ```
 
 Performance verification uses a dedicated environment seeded with ≥ 10 million location rows.
@@ -533,6 +565,7 @@ Phase 0 generates a Mermaid ERD from the schema into `docs/ARCHITECTURE.md`, reg
 - Commands from phones carry a `client_event_id`; a repeat returns the original outcome (ADV-SH02).
 - `start_deadline_at` = `starts_at + shift.missed_after_minutes`, recomputed on edit; set to `ends_at` on reopen.
 - Online guard start uses server receipt time as `actual_started_at` (INV-07). Offline-synced start uses `captured_at` (ARCH §8.7) with `start_source = APP_OFFLINE_SYNCED`; if `clock_status` is not `VERIFIED_MONOTONIC` the start is flagged.
+- A START captured offline inside the start window that arrives after the start deadline moves the shift MISSED → ACTIVE (late sync) and auto-resolves `SHIFT_MISSED` (PROD §6.3–§6.4, ADV-SH06).
 - Detectors (ARCH §16): late/missed every 60 s; auto-end and overrun every 60 s. Each compares timestamps against `now` (catch-up safe), never assumes it ran on every tick.
 - Bulk create: domain function expands the weekly pattern in the site timezone into instants (DST-correct via IANA zones), validates each row, returns a preview; commit inserts all rows in one transaction (exclusion constraint is the final guard against overlaps).
 
@@ -550,9 +583,9 @@ Phase 0B builds the same minimal tracker with each candidate and measures it on 
 | `react-native-background-geolocation` (Transistorsoft) | mature motion detection and persistence; Android release builds require a paid licence per app (EXT-12); evaluate using it for capture only, with our own outbox and sync protocol |
 | Custom native modules (Kotlin foreground service + Fused Location Provider; Swift CLLocationManager) via the Expo Modules API | maximum control, highest effort |
 
-Criteria: 12-hour overnight gap count and duration per matrix device, battery %/hour, data MB per shift, survival after swipe-away / kill / reboot, permission-change detection, availability of monotonic timestamps and mock flags, licence and maintenance.
+Criteria: 12-hour overnight gap count and duration per matrix device, battery %/hour, data MB per shift, survival after swipe-away / kill / reboot, permission-change detection, availability of monotonic timestamps and mock flags, licence and maintenance. Also measured [R3]: delivery latency and heartbeat cadence **as seen by the server** after the app is swiped away and the JavaScript runtime is killed (capture gaps alone are not enough); wake-lock use against Play's vitals thresholds; support for the New Architecture; battery and data at 60, 120 and 180 s heartbeats. Run on the pilot customer's guards' phones.
 
-Whatever is chosen sits behind a `LocationSource` interface. Our outbox and sync protocol (ARCH §8.6) is the contract; the library is replaceable.
+Whatever is chosen sits behind a `LocationSource` interface. Our outbox and sync protocol (ARCH §8.6) is the contract; the library is replaceable. Expect the native foreground service to own capture, the SQLite queue writes and the upload, so tracking keeps working when Android kills the JavaScript context.
 
 ### 8.2 Platform configuration
 
@@ -562,6 +595,8 @@ Whatever is chosen sits behind a `LocationSource` interface. Our outbox and sync
 - Fused Location Provider, high accuracy when moving. Record mock status (`Location.isMock()` on API 31+, older equivalent below).
 - `RECEIVE_BOOT_COMPLETED` to resume an active shift after reboot where the platform allows starting a location foreground service from the background for our target SDK (verify during Phase 0B; if not allowed, post a notification asking the guard to reopen the app, and let stale/offline detection surface the gap).
 - Do not depend on exact alarms (`SCHEDULE_EXACT_ALARM` is restricted on recent Android). The local end-of-shift failsafe is checked on every location callback and heartbeat.
+- Declare the app as an enterprise monitoring tool in the manifest, as Google Play's monitoring policy requires, in every build on every track; CI checks it (ADV-X08). Play Protect shows guards a notice that a monitoring app is installed; onboarding explains it (PROD §7.2). The policy also requires a persistent notification whenever the app is running; whether that extends outside shifts must be confirmed against the policy text (EXT-20).
+- Background location ("Allow all the time") is requested (D-35 rejected). The Play declaration (EXT-05) must justify why a foreground service started by the guard isn't enough: automatic resumption after a reboot or an OS kill during an active shift. If Play refuses, the fallback is tap-to-resume tracking without the permission, so the tracking code must keep working without it.
 
 **iOS**
 - `UIBackgroundModes: location`; `allowsBackgroundLocationUpdates = true`; **`pausesLocationUpdatesAutomatically = false`** (stationary guards must not be paused); `showsBackgroundLocationIndicator = true`.
@@ -569,16 +604,17 @@ Whatever is chosen sits behind a `LocationSource` interface. Our outbox and sync
 - Significant-location-change monitoring as a relaunch safety net.
 - Record `sourceInformation.isSimulatedBySoftware` (iOS 15+).
 - Known limit to verify per iOS version: after the user force-quits the app, background tracking stops until the app is reopened. Stale/offline detection makes this visible to supervisors; on reopen the app reports the interruption window.
+- Privacy manifest: the boot-time and uptime APIs behind `mono_ms` and `boot_id` (§8.7) are Apple "required reason" APIs and must be declared; confirm the exact categories in Phase 0B.
 
 Usage strings: `NSLocationWhenInUseUsageDescription`, `NSLocationAlwaysAndWhenInUseUsageDescription`, `NSLocationTemporaryUsageDescriptionDictionary`, `NSCameraUsageDescription` — specific to this product.
 
 ### 8.3 Sampling
 
-Implements PROD §8.2 from settings delivered by `GET /mobile/config`. Start, end, checkpoint, incident and SOS take an on-demand fix (wait ≤ 10 s for target accuracy, keep the best).
+Implements PROD §8.2 from settings delivered by `GET /mobile/config`. Start, end, checkpoint, incident and SOS take an on-demand fix (wait ≤ 10 s for target accuracy, keep the best). Moving and stationary are detected from location alone (PROD §8.2); no motion or physical-activity permission is requested in V1.
 
 ### 8.4 Heartbeats and device status
 
-While a shift is active and the phone is online, a HEARTBEAT item is sent every 60 s even without a new point. DEVICE_STATUS items are sent immediately on change (permission, precise/approximate, location services, power saver, notifications, battery thresholds) and with every heartbeat as a compact delta.
+While a shift is active and the phone is online, a HEARTBEAT item is sent every 60 s even without a new point, and rides on an upload whenever there is data. The 60 s default is provisional: Phase 0B measures battery and data at 60, 120 and 180 s and sets it. On Android the wake-up comes from a location request at the heartbeat interval, never from a partial wake lock held through the shift: Play counts foreground services in its wake-lock vitals (EXT-46). If iOS cannot heartbeat while stationary, tracking health uses a platform-specific offline threshold rather than paging supervisors about every still iPhone. DEVICE_STATUS items are sent immediately on change (permission, precise/approximate, location services, power saver, notifications, battery thresholds) and with every heartbeat as a compact delta.
 
 ### 8.5 Sync cadence
 
@@ -593,7 +629,7 @@ Upload every `sync.upload_interval_s` when online; immediately for SOS, start, e
   - SOS lane: `SOS`, `SOS_LOCATION`, `SOS_CANCEL_REQUEST`. Sent immediately and independently; never behind other items.
   - Main lane: `SHIFT_START`, `LOCATION`, `HEARTBEAT`, `DEVICE_STATUS`, `CHECKPOINT_SCAN`, `INCIDENT`, `INCIDENT_NOTE`, `SHIFT_END`. Sent in `seq` order, **one batch in flight at a time**, so the server sees a shift's START before its points and its points before its END.
   - Upload lane: incident photos (ARCH §12), after the incident is acknowledged.
-- **Per-item results** from the server: `ACCEPTED` | `DUPLICATE` (treated as accepted) | `REJECTED` (permanent, with code) | `RETRY` (transient). The phone deletes ACCEPTED, DUPLICATE and REJECTED items; REJECTED is logged to diagnostics and shown when meaningful (e.g., `START_REJECTED`). Whole-batch failure (network, 5xx, 429) → retry the same batch with the same IDs.
+- **Per-item results** from the server: `ACCEPTED` | `DUPLICATE` (treated as accepted) | `QUARANTINED` (the server kept the item for operator replay after an internal error; treated as accepted) | `REJECTED` (permanent, with code) | `RETRY` (transient). The phone deletes ACCEPTED, DUPLICATE, QUARANTINED and REJECTED items; REJECTED is logged to diagnostics and shown when meaningful (e.g., `START_REJECTED`). Whole-batch failure (network, 5xx, 429) → retry the same batch with the same IDs; an error in one item never fails the batch (§9.3).
 - **Limits:** batch ≤ 500 items and ≤ 512 KB compressed. Items older than `sync.max_offline_age_hours` are dropped (the server would reject them). If queued location items exceed 20,000, the oldest are thinned to one per 60 s. SOS, start, end, scans and incidents are never dropped or thinned.
 
 ### 8.7 Time and clock integrity
@@ -604,7 +640,7 @@ Upload every `sync.upload_interval_s` when online; immediately for SOS, start, e
   - same boot → `captured_at = received_at − (sent_mono_ms − item.mono_ms)`, `clock_status = VERIFIED_MONOTONIC`;
   - different boot → `captured_at = recorded_at` corrected by the last measured offset for that device, `clock_status = DEVICE_CLOCK_ONLY`;
   - `|recorded_at − captured_at| > 120 s` → flag `SKEWED_CLOCK`, raise the `CLOCK_SKEW` tracking issue.
-  - `captured_at` is clamped to ≤ `received_at`.
+  - `captured_at` is clamped to ≤ `received_at`; a phone clock more than 120 s ahead of receipt is flagged `SKEWED_CLOCK`. Nothing is rejected for being in the future.
 - Every response carries `X-Server-Time`; the app warns when its clock is more than 2 min off.
 - If the chosen library cannot supply per-fix monotonic timestamps, record `mono_ms` at callback time and document the added error.
 
@@ -614,6 +650,7 @@ Upload every `sync.upload_interval_s` when online; immediately for SOS, start, e
 - On launch, foreground and every heartbeat response the phone reconciles its local shift state with the server; **server state wins**.
 - Permission or service changes → immediate DEVICE_STATUS item and an in-app/notification prompt to fix.
 - After reboot or app update during a shift, tracking resumes where the platform permits; otherwise the guard is prompted and the gap is reported.
+- If reconciliation finds the shift ACTIVE with a later end than the one the local failsafe used (an extension made while the phone was offline), the phone notifies the guard "Shift extended — tap to resume tracking" and reports the gap.
 
 ### 8.9 Spoofing evidence (collected, never claimed as proof)
 
@@ -622,7 +659,7 @@ Upload every `sync.upload_interval_s` when online; immediately for SOS, start, e
 ### 8.10 Budgets (targets to measure in Phase 0B and Phase 4)
 
 - Battery: ≤ 3% per hour with screen off on a mid-range Android during an active shift.
-- Mobile data: ≤ 5 MB per 12-hour shift excluding photos.
+- Mobile data: ≤ 5 MB per 12-hour shift excluding photos. This is a hard limit, because guards pay for their own data (confirmed 2026-10-08).
 If not met, adjust sampling before building more features.
 
 ### 8.11 On-device data
@@ -667,15 +704,18 @@ Organization, guard and device come from the authenticated context and `X-Device
 6. Accuracy: null → flag `ACCURACY_UNKNOWN`; > 50,000 m → REJECTED; otherwise stored, with `LOW_ACCURACY` when > the usable threshold.
 7. Plausibility: implied speed from the previous accepted point > 70 m/s → flag `IMPLAUSIBLE_SPEED`.
 
+Items that carry coordinates but fall outside any shift window and open SOS — a scan with no active shift, a rejected START, an incident — keep only derived facts, never coordinates (INV-08, ADV-P05).
+
 Points captured during a shift but uploaded after the shift completed are **accepted** (ADV-L05). Items within a batch are processed in order, so a START earlier in the batch applies before that shift's points.
 
 ### 9.3 Write path
 
-One transaction per batch (chunks of ≤ 500):
+One transaction per batch (chunks of ≤ 500), with each item inside its own savepoint:
 - insert with `ON CONFLICT (device_id, client_event_id) DO NOTHING` → DUPLICATE; if the stored row's content differs from the resubmission, keep the original, return DUPLICATE and increment `idempotency_conflict` (INV-05, INV-06);
 - update `shift_live_state` by compare-and-set (only if newer `captured_at` / contact time);
 - insert outbox rows (geofence evaluation, realtime);
 - commit, then respond.
+- an unexpected error in one item rolls back only that item's savepoint: the raw item goes to `quarantined_items` (short retention; operator replay tool), its result is `QUARANTINED`, the operator is paged, and the rest of the batch commits. One bad item never freezes a phone's upload lane (ADV-O09).
 
 Target: p95 ≤ 300 ms for a 100-item batch.
 
@@ -694,7 +734,7 @@ Per device: 60 requests/min sustained, burst 120 (SEC §9). On overload return `
 ## 10. Geofence, freshness and live state
 
 - `packages/domain/geo`: haversine distance (WGS-84 mean radius; adequate for radii ≤ 5 km), point classification and the departure/return state machine from PROD §8.4, all pure and property-tested (e.g., a point with distance > radius is never INSIDE; adding accuracy never turns OUTSIDE into INSIDE).
-- `packages/domain/freshness`: state from (now, last_contact_at, last_fix_at, settings). The same function runs in the freshness detector, the snapshot endpoint and the dashboard's local ticker (PROD §8.3).
+- `packages/domain/freshness`: tracking health from (now, last_contact_at, settings) and location age from (now, last_fix_at, settings), returned as two separate results (D-36). The same functions run in the freshness detector, the snapshot endpoint, the dashboard's local ticker on desktops and phones (PROD §8.3).
 - Geofence evaluator (worker, outbox-driven, one shift at a time, ordered): reads new points since the watermark, updates `shift_live_state.geofence_state`, writes `shift_events`, opens/resolves alerts. Geofence edits mid-shift reset the evaluation to use the new circle from the next point.
 - `shift_live_state` is a projection that can be rebuilt from `location_points`, `device_status_events` and `shift_events` (a maintenance command exists and is tested).
 
@@ -704,11 +744,11 @@ Per device: 60 requests/min sustained, burst 120 (SEC §9). On overload return `
 
 ### 11.1 QR tokens
 
-- 128-bit random token from a CSPRNG, base64url (22 chars). QR content `SG1:<token>` (final prefix TBD): versioned, not a URL, no internal IDs.
-- Lookup: `qr_token_hash = HMAC-SHA256(QR_TOKEN_PEPPER, token)`, unique-indexed. A slow password hash is unnecessary for 128-bit random tokens and would prevent indexed lookup.
-- Reprinting: `qr_token_ciphertext` = token encrypted with a KMS/secret-manager key (AES-GCM); decrypted only by the print endpoint for Owner/Admin, audited (`CHECKPOINT_QR_PRINTED`).
-- Rotation: new token, `qr_token_version + 1`, old token invalid immediately, audited.
-- Pepper rotation: documented runbook; requires either reprinting all labels or a dual-hash lookup period (store `hash_v2` alongside `hash_v1` until relabelled).
+- Token: `HMAC-SHA256(QR_TOKEN_SECRET, checkpoint_id ‖ qr_token_version)`, truncated to 128 bits, base64url (22 chars). QR content `SG1:<token>` (final prefix TBD): versioned, not a URL, no internal IDs.
+- Lookup: `qr_token_hash = SHA-256(token)`, unique-indexed. A slow password hash is unnecessary for 128-bit tokens and would prevent indexed lookup.
+- Reprinting: the print endpoint (Owner/Admin, audited `CHECKPOINT_QR_PRINTED`) recomputes the token from the secret. Nothing is stored encrypted, so there is no ciphertext column or decrypt path.
+- Rotation: `qr_token_version + 1` produces a new token; the old one is invalid immediately; audited.
+- Secret rotation: documented runbook; requires reprinting all labels (or a dual-lookup period with `hash_v2` alongside `hash_v1` until relabelled).
 - Tokens never appear in logs, analytics, error reports or audit metadata.
 
 ### 11.2 Verification (server; identical for online and offline-synced scans)
@@ -716,7 +756,7 @@ Per device: 60 requests/min sustained, burst 120 (SEC §9). On overload return `
 Input: token, scan `recorded_at`/`mono_ms`, fix (lat, lon, accuracy, fix age, is_mock), authenticated guard and device.
 
 1. Look up `HMAC(token)`. Not found, archived, or another organization → `INVALID_QR` (identical response; never reveal existence).
-2. Active shift covering scan `captured_at` → else `NO_ACTIVE_SHIFT`.
+2. Active shift covering scan `captured_at` → else `NO_ACTIVE_SHIFT`, stored without coordinates (INV-08).
 3. `checkpoint.site_id = shift.site_id` → else `WRONG_SITE`.
 4. Same checkpoint already counted in the same run within `checkpoint.duplicate_window_s` → `DUPLICATE`. (Retrying the same `client_event_id` returns the original result, not DUPLICATE.)
 5. Location:
@@ -753,11 +793,11 @@ Keys: `org/{orgId}/incidents/{incidentId}/{attachmentId}/original` and `/view.jp
 
 ### 13.1 SOS
 
-`POST /sos` (idempotent by `client_event_id`):
+`POST /sos` (idempotent by `client_event_id`; authenticated by our session token or, when the session has expired, by a request signed with the device key, §5.3):
 - transaction: insert `sos_events` (or, if the guard already has an open SOS, add a RETRIGGERED alert event and update location), open `SOS_ACTIVATED` alert, set `next_escalation_at`, insert outbox rows (realtime, notifications);
 - respond `{ sosEventId, status: RECEIVED }` immediately — notification fan-out is never inline.
 
-`NOTIFIED` is set when the first of these is recorded: a notification delivery reaches `SENT` (provider accepted), or a dashboard/supervisor app reports display via `POST /alerts/:id/seen`.
+`ALERT_SENT` is set when a notification delivery first reaches `SENT`: a provider accepted it, which means queued, not delivered. `NOTIFIED` is set only on a display or delivery receipt from a person's device. A dashboard, on a desktop or a phone, reports the alarm on screen (`POST /alerts/:id/seen`). The dashboard's web-push service worker reports that the alert arrived on a device (`POST /alerts/:id/delivered`). Or the SMS aggregator returns a delivery report for an SOS SMS.
 
 Targets: p95 receipt → dashboard event ≤ 2 s; p95 receipt → first provider-accepted push ≤ 10 s.
 
@@ -777,21 +817,22 @@ A job every 15 s selects OPEN alerts with `next_escalation_at ≤ now`, applies 
 - Idempotency: `dedupe_key = {alertId}:{recipientId}:{channel}:{escalationLevel}`; a retried job never double-sends.
 - Retries: SOS — 3 attempts within 2 min; others — 5 within 30 min. Invalid push tokens are deactivated.
 - Status meanings: QUEUED → SENT (provider accepted) → DELIVERED (provider receipt where available) | FAILED | SUPPRESSED (throttled or duplicate).
-- Push priority: iOS `interruption-level: time-sensitive` for CRITICAL/HIGH; Android high-priority FCM data/notification messages on a dedicated high-importance channel with alarm sound for SOS. Critical Alerts only if the entitlement is granted (EXT-07).
+- Push priority: dashboard users get Web Push with `Urgency: high` for CRITICAL and HIGH. The browser decides how it is shown, and it follows the phone's silent and Do Not Disturb settings, which is why SOS also sends SMS to duty officers from the first second (PROD §11.4). Guards get FCM/APNs pushes (shift notifications, SOS acknowledged).
 - Non-production environments send SMS only to allow-listed numbers.
 
 ---
 
 ## 14. Realtime transport
 
-- **SSE** (D-09): `GET /api/v1/stream`. Web authenticates with the HttpOnly session cookie (EventSource cannot set headers). If token auth is ever needed, use a single-use stream ticket (`POST /stream/tickets`, valid 30 s, bound to user + organization), never logged.
+- **SSE** (D-09, approved): `GET /api/v1/stream`, served from the dashboard's own origin (§2), so the browser's HttpOnly session cookie authenticates it (EventSource cannot set headers). If token auth is ever needed, use a single-use stream ticket (`POST /stream/tickets`, valid 30 s, bound to user + organization), never logged.
 - On connect: resolve membership and permissions; attach the connection to the organization's topic server-side. Clients cannot name topics. Events are filtered per recipient permissions.
 - Revalidation: on membership/role change or session revocation, an internal event closes that user's connections; all connections are cycled every 30 min to re-authenticate.
 - Envelope: `{ id: "<orgSeq>", type, occurredAt, data }`, with a per-organization monotonic sequence. The server keeps a short replay buffer (5 min / 10,000 events per organization). If `Last-Event-ID` is outside the buffer, the server sends `resync`; the client reloads `GET /dashboard/snapshot`.
+- **The sequence is assigned after commit, by the single outbox dispatcher** (it holds an advisory lock) when it moves committed outbox rows into `realtime_events`. It is never assigned inside the business transaction: transactions commit out of order, so a client reconnecting with `Last-Event-ID` would silently skip events. The replay buffer is the `realtime_events` table, so any API instance can replay.
 - Event types: `guard.state`, `alert.opened`, `alert.updated`, `sos.activated`, `sos.updated`, `incident.created`, `incident.updated`, `shift.updated`, `coverage.updated`. Payloads are minimal; details are fetched over REST.
 - Fan-out: outbox → publisher → `NOTIFY` with IDs only (payload limit ~8 KB) → each API instance's dedicated listener connection → connections. Swap to Redis pub/sub only on measured need (D-11).
 - Keep-alive comment every 25 s; `X-Accel-Buffering: no` and equivalent settings so proxies do not buffer.
-- Monitoring coverage (PROD §11.5) = count of live dashboard connections + supervisor apps with a heartbeat in the last 2 min.
+- Monitoring coverage (PROD §11.5) = count of live dashboard connections, desktop and phone.
 - Target: 500 concurrent dashboard connections in V1.
 
 ---
@@ -801,7 +842,7 @@ A job every 15 s selects OPEN alerts with `next_escalation_at ≤ now`, applies 
 ### 15.1 Conventions
 
 - Base path `/api/v1`, from day one. JSON, camelCase. Timestamps RFC 3339 UTC with `Z`. IDs as UUID strings. Enums UPPER_SNAKE strings. Coordinates in degrees as numbers.
-- Request headers: `Authorization` (mobile) or session cookie (web); `X-Organization-Id` (web, multi-organization users); `X-Device-Id`, `X-App-Version`, `X-Platform` (mobile); `Idempotency-Key` (SHOULD on web POSTs that create resources); `X-Request-Id` (generated if absent).
+- Request headers: `Authorization: Bearer` with our session token (mobile) or the session cookie (web, same origin); `X-Device-Signature` (mobile SOS fallback when the session has expired); `X-Organization-Id` (web, multi-organization users); `X-Device-Id`, `X-App-Version`, `X-Platform` (mobile); `Idempotency-Key` (SHOULD on web POSTs that create resources); `X-Request-Id` (generated if absent).
 - Response headers: `X-Server-Time`, `X-Request-Id`.
 - Pagination: opaque cursor; default 50, max 100; stable sort.
 - Concurrency: editable resources return `version`; PATCH requires it; mismatch → 409 `VERSION_CONFLICT` with the current resource.
@@ -835,11 +876,11 @@ A job every 15 s selects OPEN alerts with `next_escalation_at ≤ now`, applies 
 - `POST /invitations/accept` [invitation token + authenticated user] audited
 
 **Guards and devices**
-- `GET /guards` · `POST /guards` · `GET /guards/:id` · `PATCH /guards/:id` · `POST /guards/:id/disable` · `POST /guards/:id/terminate` [guards.*] audited
+- `GET /guards` · `POST /guards` · `POST /guards/import?preview=true|false` (CSV) · `GET /guards/:id` · `PATCH /guards/:id` · `POST /guards/:id/disable` · `POST /guards/:id/terminate` [guards.*] audited
 - `GET /guards/:id/location` (live) [live.read]
 - `GET /guards/:id/location-history?shiftId=|from=&to=&reason=` [location.history.read] audited before data is returned
-- `POST /devices/register` [guard self] · `GET /guards/:id/devices` [devices.read] · `POST /devices/:id/revoke` [devices.revoke] audited
-- `POST /push-tokens` · `DELETE /push-tokens/:id` [authenticated]
+- `POST /enrollments/redeem` [enrollment code] audited (`DEVICE_REGISTERED`) · `POST /sessions/refresh` [refresh token] · `POST /guards/:id/enrollment-codes` [devices.enroll: Supervisor+] audited · `GET /guards/:id/devices` [devices.read] · `POST /devices/:id/revoke` [devices.revoke] audited
+- `POST /push-tokens` · `DELETE /push-tokens/:id` [authenticated; guard-app FCM/APNs tokens and dashboard Web Push subscriptions]
 - `POST /tracking-consents` [guard self]
 
 **Sites, checkpoints, patrols**
@@ -869,7 +910,7 @@ A job every 15 s selects OPEN alerts with `next_escalation_at ≤ now`, applies 
 - `POST /sos-drills` · `POST /sos-drills/:id/end` [sos.drill] audited
 
 **Alerts**
-- `GET /alerts` · `GET /alerts/:id` · `POST /alerts/:id/acknowledge` · `/resolve` · `/dismiss` · `/notes` · `/seen`
+- `GET /alerts` · `GET /alerts/:id` · `POST /alerts/:id/acknowledge` · `/resolve` · `/dismiss` · `/notes` · `/seen` · `/delivered`
 
 **Dashboard and realtime**
 - `GET /dashboard/snapshot` (live states, open alerts, coverage, server time) · `GET /stream`
@@ -892,7 +933,7 @@ A job every 15 s selects OPEN alerts with `next_escalation_at ≤ now`, applies 
 
 ### 16.1 Transactional outbox
 
-Side effects (realtime publish, notifications, alert evaluation, patrol-run generation, live-state creation) are written as `outbox` rows in the same transaction as the state change. A dispatcher moves them to pg-boss / NOTIFY. Delivery is at-least-once; every handler is idempotent.
+Side effects (realtime publish, notifications, alert evaluation, patrol-run generation, live-state creation) are written as `outbox` rows in the same transaction as the state change. A single dispatcher (it holds an advisory lock) moves them to pg-boss / NOTIFY and assigns the realtime sequence (§14). Delivery is at-least-once; every handler is idempotent.
 
 ### 16.2 Jobs
 
@@ -909,9 +950,12 @@ Side effects (realtime publish, notifications, alert evaluation, patrol-run gene
 | Export generator | queue | PROD §15.2 |
 | Retention | daily, 03:00 organization time | SEC §16.5 |
 | Push-token cleanup | daily | |
-| Demo shift refresher | daily | PROD §17 |
+| Demo shift refresher | 15 min | PROD §17 |
 | Synthetic SOS canary | 5 min (production) | ARCH §18.4 |
 | Partition maintenance | monthly, if partitioned | ARCH §6.5 |
+| Outbox dispatcher | continuous; single instance (advisory lock) | moves committed outbox rows to jobs and `realtime_events`; assigns the realtime sequence (§14) |
+| Quarantine monitor | 5 min | pages the operator on new quarantined sync items (§9.3) |
+| Enrollment-code expiry | daily | expires unused codes (§5.3) |
 
 Detectors are idempotent, tolerate missed runs (compare timestamps with `now`), batch per organization, and export lag metrics. Long-running work never depends on a web request staying open.
 
@@ -919,8 +963,8 @@ Detectors are idempotent, tolerate missed runs (compare timestamps with `now`), 
 
 ## 17. Maps
 
-- `MapProvider` interface (Revision 1 §85): `renderMap`, `renderMarker`, `renderGeofence`, `renderRoute`, `cluster`, `geocode`. Web only in V1; the guard app needs no map tiles; supervisor mode uses a static map image or a deep link to the phone's maps app.
-- Provider choice (D-12) after evaluating map data quality in launch cities, price at expected dashboard usage, and terms on storing geocoding results (pin-confirmed coordinates are user data; check the provider's terms anyway).
+- `MapProvider` interface (Revision 1 §85): `renderMap`, `renderMarker`, `renderGeofence`, `renderRoute`, `cluster`, `geocode`. Web only in V1; the guard app needs no map tiles. Duty officers see the same web map on their phones.
+- Provider (D-12, approved 2026-10-08): Google Maps Platform. Before Phase 2, confirm pricing at expected dashboard usage and the terms on storing geocoding results (pin-confirmed coordinates are user data). Use current APIs only (Advanced Markers, not the deprecated `Marker`). Test the live map with 1,000 markers spread over a very large colony, on a mid-range phone as well as a desktop.
 - Browser keys restricted by HTTP referrer and enabled APIs; quotas and budget alerts on; maps lazy-loaded.
 - Popups use text APIs only (never `setHTML` / `dangerouslySetInnerHTML` with user content).
 
@@ -934,7 +978,7 @@ Structured JSON logs with `request_id`, `org_id`, `user_id` (IDs only); error tr
 
 ### 18.2 Metrics
 
-`location_upload_success_rate`, `location_upload_latency`, `ingest_items_total{status,code}`, `idempotency_conflict_total`, `offline_sync_backlog` and `oldest_pending_age` (from heartbeats), `active_shifts`, `stale_locations`, `offline_devices`, `tracking_issues{type}`, `geofence_departures`, `sos_events`, `sos_receipt_to_dashboard_ms`, `sos_receipt_to_first_notify_ms`, `sos_unacknowledged_open`, `notification_delivery_rate{channel}`, `job_lag_seconds{job}`, `outbox_backlog`, `sse_connections`, `monitoring_coverage{org}`, `api_error_rate`, `db_pool_saturation`, `clock_skew_devices`, `mock_location_flags`.
+`location_upload_success_rate`, `location_upload_latency`, `ingest_items_total{status,code}`, `idempotency_conflict_total`, `offline_sync_backlog` and `oldest_pending_age` (from heartbeats), `active_shifts`, `stale_locations`, `offline_devices`, `tracking_issues{type}`, `geofence_departures`, `sos_events`, `sos_receipt_to_dashboard_ms`, `sos_receipt_to_first_notify_ms`, `sos_unacknowledged_open`, `notification_delivery_rate{channel}`, `job_lag_seconds{job}`, `outbox_backlog`, `sse_connections`, `monitoring_coverage{org}`, `api_error_rate`, `db_pool_saturation`, `clock_skew_devices`, `mock_location_flags`, `quarantined_items_total`, `sos_receipt_to_notified_ms`, `enrollment_redemptions_total{result}`, `tracking_health{state}`.
 
 ### 18.3 Targets (V1)
 
@@ -945,7 +989,7 @@ Structured JSON logs with `request_id`, `org_id`, `user_id` (IDs only); error tr
 | SOS receipt → first provider-accepted push | p95 ≤ 10 s |
 | Sync batch (100 items) | p95 ≤ 300 ms |
 | Detector lag | ≤ 2 min |
-| Dashboard snapshot (500 active guards) | p95 ≤ 1 s |
+| Dashboard snapshot (1,000 active guards in one organization) | p95 ≤ 1 s |
 
 ### 18.4 Platform alerting and synthetic SOS
 
@@ -962,7 +1006,7 @@ Device status events plus crash reporting without location or personal data (Rev
 
 ### 18.7 Runbooks (`docs/RUNBOOKS/`)
 
-SOS notifications failing · notification provider outage · database restore · mass device offline · key rotation (QR pepper, QR encryption key, provider keys) · tenant data incident response · revoking an app version.
+SOS notifications failing · notification provider outage · database restore · mass device offline · key rotation (QR token secret, session signing keys, provider keys) · replaying quarantined sync items · onboarding a large organization (bulk import, batched invitations) · tenant data incident response · revoking an app version.
 
 ---
 
@@ -970,7 +1014,7 @@ SOS notifications failing · notification provider outage · database restore ·
 
 ### 19.1 Environments
 
-development · staging · production. Separate cloud projects/accounts, credentials, buckets, push and SMS credentials. Non-production SMS goes only to allow-listed numbers. Production location data is never used for development. Hosting region per D-13.
+development · staging · production. Separate cloud projects/accounts, credentials, buckets, push and SMS credentials. Non-production SMS goes only to allow-listed numbers. Production location data is never used for development. Hosting per D-13: production is made of cells, one per data region; V1 runs one cell, on AWS in eu-central-1, Frankfurt (D-37).
 
 ### 19.2 Staging
 
@@ -978,7 +1022,7 @@ Test organizations, guards, sites, simulated shifts and alerts. The simulator sc
 
 ### 19.3 CI on every pull request (a failing security test blocks merge)
 
-typecheck · lint (must actually run) · unit · integration on real PostgreSQL in containers **as `app_runtime`** with RLS · security suite (cross-tenant, authorization, route-policy meta-test) · migration validation (empty database and seeded snapshot; down-migrations where defined) · OpenAPI drift · dependency audit · secret scanning · mobile typecheck/lint/unit · **native permission allow-list check** (merged AndroidManifest permissions and Info.plist usage keys must match an allow-list; a library that silently adds a permission fails CI) · build all apps.
+typecheck · lint (must actually run) · unit · integration on real PostgreSQL in containers **as `app_runtime`** with RLS · security suite (cross-tenant, authorization, route-policy meta-test) · migration validation (empty database and seeded snapshot; down-migrations where defined) · OpenAPI drift · dependency audit · secret scanning · mobile typecheck/lint/unit · **native permission allow-list check** (merged AndroidManifest permissions and Info.plist usage keys must match an allow-list; a library that silently adds a permission fails CI) · build all apps · schema linter (ADV-X01) · negative controls proving the security tests can fail (ADV-X02) · ID traceability (ADV-X03) · generated-docs drift (ADV-X04) · coordinate-field audit meta-test (ADV-X05) · generated idempotency test (ADV-X06) · runtime-role startup check (ADV-X07) · Play monitoring-tool declaration (ADV-X08) · no `@sentry/*` workspace packages.
 
 ### 19.4 Migrations
 
@@ -990,7 +1034,7 @@ Deterministic seed: Demo Company with 10 guards, 5 sites (realistic coordinates 
 
 ### 19.6 Backups and disaster recovery
 
-Managed PostgreSQL with point-in-time recovery (RPO target ≤ 15 min), daily snapshots kept 35 days, encrypted; multi-AZ in production. Object storage versioning and lifecycle rules. RTO target ≤ 4 h. Restore drill before launch and quarterly. Single points of failure documented.
+Managed PostgreSQL with point-in-time recovery (RPO target ≤ 15 min), daily snapshots kept 35 days, encrypted; multi-AZ in production. Backups are also copied to a second region: in 2026, war damage made some single-region cloud data in the Gulf unrecoverable. For the first cell, database backups and files are replicated to eu-west-1, Ireland (§19.8). Object storage versioning and lifecycle rules. RTO target ≤ 4 h. Restore drill before launch and quarterly. Single points of failure documented.
 
 ### 19.7 Mobile release
 
@@ -998,7 +1042,25 @@ Managed PostgreSQL with point-in-time recovery (RPO target ≤ 15 min), daily sn
 - Staged rollout on Play and phased release on the App Store.
 - Over-the-air updates only for JavaScript-only changes; never for native configuration, permissions or tracking behaviour that depends on native code.
 - App version gating through `/mobile/config`.
+- Builds target Android API 36, required for new apps and updates since 31 Aug 2026 (verified 2026-10-08).
 - Every release: smoke test on 3 matrix devices (one Pixel-class, one aggressive-manufacturer Android, one iPhone).
+
+### 19.8 Cloud security baseline (first cell, D-37) [R3]
+
+The first cell runs on AWS in eu-central-1 (Frankfurt), with backups in eu-west-1 (Ireland). These are the minimum controls. Phase 0 sets them up as infrastructure as code (Terraform), and production is never changed by hand:
+
+- **Accounts.** Separate AWS accounts for staging and production under AWS Organizations. People sign in through IAM Identity Center with MFA; root users are locked away with MFA and no access keys.
+- **Identity.** One least-privilege IAM role per service (API, workers, retention, migrations); no long-lived access keys anywhere.
+- **Database.** RDS for PostgreSQL:
+  - in private subnets with no public endpoint;
+  - Multi-AZ, with TLS required and encryption at rest with KMS;
+  - point-in-time recovery for 35 days;
+  - automated backups copied to eu-west-1, through RDS cross-region backup replication or AWS Backup (confirm in Phase 0).
+- **Files.** S3 with Block Public Access, KMS encryption and versioning, replicated to eu-west-1. Access only through short-lived presigned URLs (§12).
+- **Secrets.** AWS Secrets Manager, separate per environment (SEC §13).
+- **Edge.** Application Load Balancer accepting TLS 1.2+ only. AWS WAF managed rules sit in front of the API, complementing the application's own rate limits.
+- **Detection.** CloudTrail in every account and GuardDuty switched on, with findings routed to the operator on-call (§18.4).
+- **Cost.** Arm (Graviton) instance types, a smaller staging environment, and Savings Plans once usage is stable. The bill is reviewed monthly.
 
 ---
 
@@ -1010,25 +1072,30 @@ Things outside the codebase that can block or reshape the product late. Phase 0 
 
 | ID | Item | Why | Lead-time / risk | Needed by |
 |---|---|---|---|---|
-| EXT-01 | Legal-entity verification for developer accounts (e.g., D-U-N-S number for an organization enrolment) | Apple and Google organization accounts | days to weeks; blocks everything below | Phase 0B |
+| EXT-01 | Legal-entity verification for developer accounts (D-U-N-S number for an organization enrolment). The company is registered in Pakistan (confirmed 2026-10-08) | Apple and Google organization accounts | days to weeks; blocks everything below | start now; Phase 0B |
 | EXT-02 | Apple Developer Program (organization) | iOS device builds, TestFlight, App Store | after EXT-01 | Phase 0B |
-| EXT-03 | Google Play Console (organization) | Android distribution; personal accounts face extra closed-testing requirements before production (verify current rules) | identity verification lead time | Phase 4 |
+| EXT-03 | Google Play Console (organization) | Android distribution; new personal accounts need 12 testers for 14 days before production (verified 2026-10-08), so use an organization account | identity verification lead time | Phase 4 |
 | EXT-04 | Play foreground-service type declaration (location) | Android 14+ apps using a location foreground service | review; may need a video | before first Play track release |
-| EXT-05 | Play background-location permission declaration | `ACCESS_BACKGROUND_LOCATION` is core | review with a video of the prominent disclosure and the feature; rejections are common; plan ≥ 2 cycles | before first Play track release |
-| EXT-06 | Play Data safety form; current target-API-level requirement | listing requirement; target level deadlines recur yearly | moderate | Phase 10 |
-| EXT-07 | Apple Critical Alerts entitlement | lets SOS alerts sound on silent iPhones | must be applied for; may be refused; product must not depend on it | apply in Phase 5 |
+| EXT-05 | Play background-location permission declaration | `ACCESS_BACKGROUND_LOCATION` is requested (D-35 rejected) | review with a video of the prominent disclosure and the feature; rejections are common; plan ≥ 2 cycles. Play may ask why a foreground service started by the guard isn't enough: the justification is automatic resumption after a reboot or OS kill during a shift. Fallback if refused: tap-to-resume without the permission (§8.2) | before first Play track release (submit at the end of Phase 4) |
+| EXT-06 | Play Data safety form; current target-API-level requirement (API 36 since 31 Aug 2026, verified 2026-10-08) | listing requirement; target level deadlines recur yearly | moderate | Phase 10 |
+| EXT-07 | Apple Critical Alerts entitlement | no longer needed: there is no native supervisor app (D-04) | — | — |
 | EXT-08 | App Store review of background location and a login-gated B2B app | review notes, demo account | days; rejection risk | Phase 10 |
 | EXT-09 | APNs key and Firebase project (FCM) | push | low | Phase 5 |
-| EXT-10 | SMS provider with verified delivery to the launch country; sender ID / masking registration rules there (verify operator/regulator requirements) | SOS escalation, invitations | registration can take weeks; delivery quality varies by route | Phase 1 (invitations), Phase 8 |
-| EXT-11 | Identity provider production instance with phone OTP enabled for the launch country, pricing tier for MFA and SMS, custom domain | guard sign-in | some providers restrict SMS by country | Phase 1 |
+| EXT-10 | Pakistani SMS aggregator with verified delivery on Jazz, Zong, Telenor and Ufone; sender-ID / masking registration with the company's documents (verify operator/regulator requirements) | guard invitations and new-phone codes (D-02), SOS escalation | registration can take weeks; delivery quality varies by route | start now; Phase 2 (guard enrollment), Phase 8 |
+| EXT-11 | Identity provider production instance for dashboard users: email, MFA (authenticator app or passkeys), custom domain. Guards no longer depend on it (D-02) | dashboard sign-in | low | Phase 1 |
 | EXT-12 | Background-location library licence (if D-07 selects a commercial library) | Android release builds | purchase tied to package name | Phase 4 |
-| EXT-13 | Map provider billing account, restricted keys, quotas; terms on storing geocoded coordinates | dashboard maps | low | Phase 2 |
-| EXT-14 | Cloud account and region (D-13); managed PostgreSQL version and extensions (`btree_gist`, `citext`, `pgcrypto`); PITR; direct connections for LISTEN/NOTIFY | core infrastructure | low, but a missing extension is an architectural dead end | Phase 0 |
+| EXT-13 | Google Maps Platform billing account, restricted keys, quotas and budget alerts; terms on storing geocoded coordinates (D-12) | dashboard maps | low | Phase 2 |
+| EXT-14 | Cloud account for the first cell: AWS eu-central-1, with backups in eu-west-1 (D-13, D-37); managed PostgreSQL version and extensions (`btree_gist`, `citext`, `pgcrypto`); PITR; direct connections for LISTEN/NOTIFY; backups copied to a second region | core infrastructure | a missing extension is an architectural dead end. Checked 2026-10-08: no hyperscaler region exists in Pakistan; among local providers only QCloud claims managed PostgreSQL with PITR (vendor claim: test a real restore and the extensions first); Gulf regions carry war risk (2026) | Phase 0 |
 | EXT-15 | Email sending domain with SPF, DKIM, DMARC; reputation warm-up | invitations, export notices | days to weeks | Phase 1 |
 | EXT-16 | Public URLs for privacy policy, terms, support | store listings, disclosures | low | Phase 10 |
 | EXT-17 | Legal review: data protection law in each operating country (for Pakistan, verify the status of personal data protection legislation at launch), employee-monitoring and labour rules, guard disclosure text in each language, retention defaults, data residency | lawful operation | weeks | before production data |
 | EXT-18 | Expo Application Services plan and build quotas; signing credentials management | builds | low | Phase 0B |
 | EXT-19 | Customer-side readiness: QR labels printed and installed, guard phones meeting minimum OS (D-20), guard mobile data | pilot | per customer | pilot |
+| EXT-20 | Google Play monitoring-tool declaration (`isMonitoringTool`), persistent-notification rule and listing disclosure; Play Protect shows guards a monitoring-app notice | enterprise employee-monitoring policy | reviewed with the app; confirm whether the notification must show outside shifts | before first Play track release |
+| EXT-21 | Apple guideline 5.1.5: location-based APIs must not be used to provide emergency services | SOS must be described as alerting the company's control room (app copy, listing, review notes) | rejection risk | Phase 8, Phase 10 |
+| EXT-22 | Reviewer access without a Pakistani SMS | Apple 2.1(a) requires a working demo account; reviewers cannot receive +92 SMS | pre-issued demo enrollment code in the review notes (PROD §17) | before the first review |
+| EXT-23 | iOS distribution route for a B2B app | Apple Business custom apps don't list Pakistan; use public or unlisted App Store distribution, both reviewed (D-25) | low | Phase 10 |
+| EXT-24 | Private GitHub repository | CI (ARCH §19.3) runs on GitHub Actions; until it exists, `pnpm verify` runs locally only | low | Phase 0 |
 
 ### 20.2 Platform constraints that shape the design
 
@@ -1039,17 +1106,18 @@ Things outside the codebase that can block or reshape the product late. Phase 0 
 | EXT-32 | Android manufacturers (Xiaomi, Oppo/Realme, Vivo, Samsung, Huawei, Transsion brands) kill background apps beyond stock Android | guided setup, readiness check, device matrix, visible gaps |
 | EXT-33 | Play policy restricts `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` to qualifying use cases | open the settings screen instead unless the policy is confirmed to allow it |
 | EXT-34 | Play policy restricts `SEND_SMS` / `READ_SMS` to default SMS apps | phone opens the SMS composer; never sends in background |
-| EXT-35 | Android 14+ restricts full-screen intents to calling/alarm apps (Play declaration) | do not plan full-screen SOS takeover on supervisor phones without verification |
+| EXT-35 | Android 14+ restricts full-screen intents to calling/alarm apps (Play declaration) | not used: there is no native supervisor app (D-04) |
 | EXT-36 | Exact alarms are restricted on recent Android | failsafes checked on callbacks, not alarms |
 | EXT-37 | Android 11+ revokes permissions of apps unused for months | readiness item; detect and prompt |
 | EXT-38 | iOS: user force-quit stops background location until reopened | stale detection + interruption report |
-| EXT-39 | iOS/Android silent, Do Not Disturb and Focus suppress ordinary notifications; iOS time-sensitive needs the capability and user consent; Critical Alerts need an entitlement | priority channels, setup test, SMS escalation, dashboard alarm, staffing (PROD §11.5) |
+| EXT-39 | iOS/Android silent, Do Not Disturb and Focus suppress ordinary notifications, web push and SMS alike; iOS web push needs the dashboard installed to the home screen (16.4+) | SMS to duty officers from the first second, setup test, dashboard alarm, a staffed control room (PROD §11.5) |
 | EXT-40 | Browsers block audio until user interaction | "Enable alarm sound" control and warning |
 | EXT-41 | Serverless platforms cannot host long-lived SSE streams, listeners or workers | long-lived processes for API and workers |
 | EXT-42 | Transaction-mode connection poolers break session `SET` and `LISTEN` | `SET LOCAL` per transaction; dedicated listener connection |
 | EXT-43 | PostgreSQL unique indexes on partitioned tables must include the partition key | separate ingest-key table when partitioning (ARCH §6.5) |
-| EXT-44 | Expo Go cannot run background location; over-the-air updates cannot change native configuration | development builds; OTA policy (ARCH §19.7) |
+| EXT-44 | Expo Go cannot run background location; over-the-air updates cannot change native configuration; Expo SDK 55+ supports only the New Architecture | development builds; OTA policy (ARCH §19.7); every native module must support the New Architecture |
 | EXT-45 | Store policies on location, data safety and target API level change yearly | re-verify at each submission |
+| EXT-46 | Since 1 Mar 2026 Play counts partial wake locks held by foreground services in its wake-lock vitals (over 2 h a day with the screen off in more than 5% of sessions → battery warning on the listing, less discovery) | heartbeats wake on location callbacks, never on a held wake lock (§8.4); Phase 0B checks each candidate library |
 
 ---
 
@@ -1068,7 +1136,7 @@ Adversarial and security tests are specified in SEC §18. This section covers th
 
 ### 21.2 Load and performance
 
-Simulate 2,000 active guards (mix of moving points every 30 s and stationary every 5 min, heartbeats every 60 s) for 1 h; a reconnection storm (500 devices each uploading a 60-minute backlog within 2 min); 200 SSE dashboard connections. Must meet ARCH §18.3 with no data loss and database CPU < 70%.
+Simulate 2,000 active guards, 1,000 of them in one organization (mix of moving points every 30 s and stationary every 5 min, heartbeats every 60 s) for 1 h; a reconnection storm (1,000 devices, a whole pilot-sized organization, each uploading a 60-minute backlog within 2 min); 500 SSE dashboard connections. Must meet ARCH §18.3 with no data loss and database CPU < 70%.
 
 ### 21.3 Real-device matrix (humans execute; results in `docs/testing/device-matrix.md`)
 
@@ -1091,16 +1159,16 @@ Every phase delivers: schema + migrations, backend, frontend (web and/or mobile)
 
 | Phase | Scope | Read | Exit tests |
 |---|---|---|---|
-| **0 Architecture** (no feature code) | repo skeleton, tooling, CI skeleton with real lint, `CLAUDE.md`, architecture doc with flows and ERD, `THREAT_MODEL.md`, permission map and route-policy mechanism, API conventions, error catalog, environments, `EXTERNAL_DEPENDENCIES.md` with long-lead items started, decisions presented; RLS proof-of-concept test showing a cross-tenant read blocked under `app_runtime` | all three docs | RLS PoC; CI runs |
-| **0B Tracking spike** (parallel with 1; throwaway code; real devices) | minimal dev build per D-07 candidate: start/stop tracking, SQLite outbox, upload to a throwaway endpoint, device status, monotonic time, mock flag; 12-h soaks on ≥ 4 matrix devices; battery and data measured | ARCH §8, §20, §21.3 | recommendation for D-07 and sampling defaults approved |
-| **1 Identity + tenancy** | identity provider, users, operator provisioning CLI, organizations, members, invitations, permissions, request context, RLS + composite-FK pattern, route registry + meta-test, audit service, settings service, `/me`, dashboard shell with sign-in and organization switch | PROD §3–4; ARCH §4–6; SEC §2, §4–6, §17 | ADV-T01, T06, T09, A02, A05, A06, A07, A09, W03 |
-| **2 Guards + sites** | guards, guard invitations, mobile shell (sign-in, disclosure + consent, device registration, diagnostics), i18n setup, sites with map pin and geofence, checkpoints, QR generation / print / rotate, patrol route configuration | PROD §4–5, §7.1–7.3; ARCH §5, §11.1, §17 | ADV-T04, T05, A01, A10, Q05 |
-| **3 Shifts** | CRUD, bulk create, state machine, online start/end, manual start / force-end / extend / reopen / cancel, late/missed/auto-end detectors, shift events, guard shift list, dashboard shift pages | PROD §6; ARCH §7, §16 | ADV-SH01–SH05, A03, T07, TM01, TM03 |
-| **4 Mobile location subsystem** | chosen library, readiness check, permission flows, outbox and lanes, sync endpoint, idempotency, capture-time estimation, live state, heartbeats, device status, offline start/end, failsafes | PROD §6.5–6.6, §7.4–7.6, §8; ARCH §8–9 | ADV-L01–L12, O01–O08, A08, P01, U02, U03; device-matrix subset (human) |
-| **5 Geofence + alerts** | geofence evaluator, freshness detectors, alert engine (catalog, dedupe, auto-resolve, reopen suppression), push notifications, supervisor mode alerts, basic alert UI | PROD §8.3–8.4, §12–13; ARCH §10, §13.2–13.4 | ADV-G01–G06, AL01–AL04 |
-| **6 Live operations dashboard** | SSE, snapshot, live map, exception home with coverage, guard detail, location history viewer with audit | PROD §14; ARCH §14 | ADV-T02, A04, W01, P02, U01 |
+| **0 Architecture** (no feature code) | repo skeleton, tooling, CI skeleton with real lint, `CLAUDE.md`, architecture doc with flows and ERD, `THREAT_MODEL.md`, permission map and route-policy mechanism, API conventions, error catalog, environments, `EXTERNAL_DEPENDENCIES.md` with long-lead items started, decisions presented and recorded in `docs/DECISIONS.md`; RLS proof-of-concept test showing a cross-tenant read blocked under `app_runtime`; CI mechanisms ADV-X01–X08 from day one | all three docs | RLS PoC; CI runs; ADV-X01, X02, X07 |
+| **0B Tracking spike** (parallel with 1; throwaway code; real devices) | minimal dev build per D-07 candidate: start/stop tracking, SQLite outbox, upload to a throwaway endpoint, device status, monotonic time, mock flag; 12-h soaks on ≥ 4 matrix devices, including the pilot customer's guards' phones; battery and data measured at 60, 120 and 180 s heartbeats; server-side delivery latency after swipe-away; wake locks; New Architecture support | ARCH §8, §20, §21.3 | recommendation for D-07, heartbeat and sampling defaults approved |
+| **1 Identity + tenancy** | identity provider for dashboard users, our mobile session service (D-30), users, operator provisioning CLI, organizations (with their cell's region), members, invitations, permissions, request context, RLS + composite-FK pattern, route registry + meta-test, audit service, settings service, `/me`, dashboard shell with sign-in and organization switch | PROD §3–4; ARCH §4–6; SEC §2, §4–6, §17 | ADV-T01, T06, T09, A02, A05, A06, A07, A09, W03, X03, X04 |
+| **2 Guards + sites** | guards (including bulk CSV import), guard enrollment by invitation SMS (D-02) and new-phone codes (D-31), mobile shell (enrollment, disclosure + consent, diagnostics), i18n setup (Urdu + English guard app), sites with map pin and geofence, checkpoints, QR generation / print / rotate, patrol route configuration | PROD §4–5, §7.1–7.3; ARCH §5, §11.1, §17 | ADV-T04, T05, A01, A10, A11, A12, Q05 |
+| **3 Shifts** | CRUD, bulk create, state machine, online start/end, manual start / force-end / extend / reopen / cancel, late/missed/auto-end detectors, shift events, guard shift list, dashboard shift pages; guard shift notifications ship with push in Phase 5 | PROD §6; ARCH §7, §16 | ADV-SH01–SH06, A03, T07, TM01, TM03 |
+| **4 Mobile location subsystem** | chosen library, readiness check, permission flows, outbox and lanes, sync endpoint, idempotency, per-item quarantine, capture-time estimation, live state, heartbeats, device status, offline start/end, failsafes; a minimal live view (snapshot polling, tracking health and location age) and the attendance report, then **Pilot 0** once tracking is proven (D-34); first Play closed-testing submission (EXT-04, EXT-05, EXT-20) | PROD §6.5–6.6, §7.4–7.6, §8; ARCH §8–9 | ADV-L01–L12, O01–O09, A08, P01, P05, U02, U03, U04, X05, X06; device-matrix subset on the pilot's phones (human) |
+| **5 Geofence + alerts** | geofence evaluator, freshness detectors, alert engine (catalog, dedupe, auto-resolve, reopen suppression), push notifications to guards (including shift notifications), web push to dashboard users and a phone-friendly alerts view for duty officers (D-04), tracking-health UI (D-36), basic alert UI | PROD §8.3–8.4, §12–13; ARCH §10, §13.2–13.4 | ADV-G01–G06, AL01–AL05 |
+| **6 Live operations dashboard** | SSE, snapshot, live map on Google Maps (D-12; tested with 1,000 markers, also on phones), exception home with coverage, guard detail, location history viewer with audit | PROD §14; ARCH §14 | ADV-T02, A04, W01, P02, U01 |
 | **7 Patrols** | run generation, scans online/offline, verification, run closer, patrol UI on mobile and web | PROD §9; ARCH §11 | ADV-Q01–Q09, T08 |
-| **8 Incidents + SOS** | incidents with attachments, SOS end to end, escalation ladder, SMS, dashboard alarm, drill mode, synthetic canary | PROD §10–11; ARCH §12–13 | ADV-S01–S10, F01–F05, T10 |
+| **8 Incidents + SOS** | incidents with attachments, SOS end to end (with display receipts), escalation ladder, SMS, dashboard alarm, SOS acknowledgement from duty officers' phones (web), drill mode, synthetic canary; SOS is turned on for pilot guards only after these exit tests pass | PROD §10–11; ARCH §12–13 | ADV-S01–S11, F01–F05, T10 |
 | **9 Reports + exports** | all reports, background CSV exports, CSV safety, retention job with evidence preservation | PROD §15–16; SEC §16 | ADV-T03, W02, P03, P04, TM02 |
 | **10 Hardening + launch** | full adversarial suite, full device matrix, load tests, restore drill, Fable audit and fixes, privacy and legal documents, store submissions, production deployment, runbooks verified | everything | PROD §18 Definition of Done |
 
@@ -1118,22 +1186,24 @@ Dependencies: 0 → (0B ∥ 1) → 2 → 3 → 4 (needs 0B) → 5 → 6 → 7 �
 
 ## Appendix A — Technical decisions
 
-Status of all items: **OPEN** until the product owner approves.
+Status: **OPEN** unless marked APPROVED or REJECTED; `docs/DECISIONS.md` holds the reasoning.
 
 | ID | Question | Options | Recommendation | Needed by |
 |---|---|---|---|---|
-| D-01 | Identity provider | Clerk · Auth0 · other mature provider | Clerk (identity only), after verifying phone OTP delivery and pricing in the launch country (EXT-11) | Phase 1 |
+| D-01 | Identity provider | Clerk · Auth0 · other mature provider | **Scope APPROVED 2026-10-08:** dashboard users only; guards enroll per D-02. Provider: Clerk recommended; confirm its MFA options before Phase 1 | Phase 1 |
 | D-07 | Background location implementation | expo-location · Transistorsoft · custom native | decide on Phase 0B evidence | Phase 4 |
-| D-08 | SMS in V1 | yes (SOS escalation, invitations) · no | yes; provider chosen for verified delivery in the launch country (EXT-10) | Phase 1 / 8 |
-| D-09 | Realtime transport | SSE · WebSocket | SSE | Phase 6 |
-| D-10 | Database access and migrations | Kysely · Drizzle | either; must allow explicit transactions with `SET LOCAL` and SQL-first migrations | Phase 0 |
+| D-08 | SMS in V1 | yes (SOS escalation, invitations) · no | **APPROVED 2026-10-08:** yes, for guard invitations and new-phone codes (D-02) and SOS escalation, through a Pakistani aggregator (EXT-10) | Phase 2 / 8 |
+| D-09 | Realtime transport | SSE · WebSocket | **APPROVED 2026-10-08:** SSE, keeping the replay buffer and per-organization sequence, assigned after commit (§14) | Phase 6 |
+| D-10 | Database access and migrations | Kysely · Drizzle | **APPROVED 2026-10-08:** Kysely, plain SQL migrations, `kysely-codegen` types | Phase 0 |
 | D-11 | Jobs, pub/sub, rate-limit store | PostgreSQL only (pg-boss, LISTEN/NOTIFY, per-instance token buckets) · Redis (BullMQ, pub/sub, shared limits) | PostgreSQL only for V1 | Phase 0 |
-| D-12 | Map provider | Google Maps · Mapbox | evaluate data quality in launch cities and cost | Phase 2 |
-| D-13 | Hosting region and data residency | — | region close to users that satisfies any residency obligation from legal review | Phase 0 |
+| D-12 | Map provider | Google Maps · Mapbox | **APPROVED 2026-10-08:** Google Maps Platform (owner preference); confirm pricing and terms before Phase 2 | Phase 2 |
+| D-13 | Hosting region and data residency | cells (one deployment per region) · two regions at launch · one region for everyone | **APPROVED 2026-10-08:** cells, launching with one; each organization's region chosen at provisioning; the first cell runs on AWS in Frankfurt (D-37) | Phase 0 |
 | D-19 | Organization provisioning and operator access | operator CLI · self-serve | operator CLI; documented break-glass (SEC §4.6) | Phase 1 |
 | D-20 | Minimum OS versions | — | from launch-market device data and library support (e.g., Android 9/10+, iOS 16+); verify | Phase 0B |
-| D-23 | V1 scale target | — | A-05 | Phase 0 |
-| D-26 | Push delivery path | direct FCM/APNs · Expo push service | direct FCM/APNs (one fewer third party on the SOS path) | Phase 5 |
+| D-23 | V1 scale target | — | A-05; the pilot organization alone has about 1,000 guards | Phase 0 |
+| D-26 | Push delivery path | direct FCM/APNs · Expo push service | direct FCM/APNs for the guard app (one fewer third party); Web Push (VAPID) for the dashboard (D-04) | Phase 5 |
+| D-32 | Realtime reconnection | snapshot only · replay buffer + per-organization sequence | **REJECTED 2026-10-08** (snapshot only): the replay buffer and sequence are kept, with the sequence assigned after commit | Phase 6 |
+| D-37 | Cloud provider for the first cell | AWS · Google Cloud · Azure · smaller providers | **DECIDED 2026-10-08** (the owner delegated: "any cloud service … secure"): AWS eu-central-1, Frankfurt, with backups in eu-west-1, Ireland, and the security baseline in §19.8; Supabase and Firebase were compared and not chosen (`docs/DECISIONS.md`) | Phase 0 |
 
 ---
 
@@ -1156,14 +1226,14 @@ Status of all items: **OPEN** until the product owner approves.
 | LOCATION_FIX_REQUIRED | 422 | no fresh fix attached |
 | STARTED_OFF_SITE_BLOCKED | 422 | start outside geofence when policy is BLOCK |
 | OUTSIDE_SHIFT_WINDOW | 422 | location captured outside the shift window |
-| TIMESTAMP_IN_FUTURE | 422 | capture time after receipt beyond tolerance |
 | TIMESTAMP_TOO_OLD | 422 | beyond maximum offline age |
 | DEVICE_NOT_REGISTERED | 403 | missing or unknown `X-Device-Id` |
 | DEVICE_REVOKED | 403 | device revoked |
 | INVALID_QR | 422 | unknown, rotated, archived or foreign QR |
 | LAST_OWNER | 409 | would leave the organization without an owner |
 | SELF_ROLE_CHANGE | 403 | attempt to change own role or status |
-| INVITATION_EXPIRED | 410 | invitation expired, used or revoked |
+| INVITATION_EXPIRED | 410 | invitation or enrollment code expired, used or revoked |
+| ENROLLMENT_CODE_INVALID | 422 | wrong enrollment code, or the code doesn't match the phone number |
 | ATTACHMENT_TOO_LARGE | 413 | over size limit |
 | ATTACHMENT_TYPE_NOT_ALLOWED | 415 | content does not match an allowed type |
 | EXPORT_RANGE_TOO_LARGE | 422 | export range > 92 days |
