@@ -1,9 +1,16 @@
 {
   "extends": "expo/tsconfig.base",
+  "//": "allowImportingTsExtensions: the shared contracts (packages/contracts) import their files with .ts extensions, as Node's type stripping requires; the app follows the same convention.",
   "compilerOptions": {
     "strict": true,
-    "noUncheckedIndexedAccess": true
+    "noUncheckedIndexedAccess": true,
+    "noImplicitOverride": true,
+    "noFallthroughCasesInSwitch": true,
+    "allowImportingTsExtensions": true,
+    "verbatimModuleSyntax": true,
+    "erasableSyntaxOnly": true,
+    "forceConsistentCasingInFileNames": true
   },
   "include": ["**/*.ts", "**/*.tsx"],
-  "exclude": ["node_modules", ".expo", "android", "ios"]
+  "exclude": ["node_modules", ".expo", "android", "ios", "dist"]
 }

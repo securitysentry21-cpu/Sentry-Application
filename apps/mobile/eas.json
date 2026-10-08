@@ -1,0 +1,22 @@
+{
+  "cli": {
+    "appVersionSource": "local"
+  },
+  "build": {
+    "development": {
+      "distribution": "internal",
+      "env": { "APP_VARIANT": "development" },
+      "android": { "buildType": "apk", "gradleCommand": ":app:assembleDebug" },
+      "ios": { "buildConfiguration": "Debug" }
+    },
+    "staging": {
+      "distribution": "internal",
+      "env": { "APP_VARIANT": "staging" },
+      "android": { "buildType": "apk" }
+    },
+    "production": {
+      "env": { "APP_VARIANT": "production" },
+      "android": { "buildType": "app-bundle" }
+    }
+  }
+}

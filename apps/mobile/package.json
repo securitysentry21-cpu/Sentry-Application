@@ -1,20 +1,36 @@
 {
   "name": "@sentryops/mobile",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "private": true,
-  "description": "Guard app (Expo, guards only). Phase 0 skeleton: compiles and lints; tracking arrives with Phase 0B and Phase 4.",
+  "type": "module",
+  "description": "Guard app (Expo SDK 57, guards only): enrollment, consent, shifts, shift-bound tracking with a durable outbox, incidents, and the SOS client (feature-flagged off for the pilot).",
   "main": "index.ts",
   "scripts": {
     "start": "expo start",
-    "android": "expo start --android",
-    "ios": "expo start --ios",
-    "typecheck": "tsc -p tsconfig.json"
+    "android": "expo run:android",
+    "ios": "expo run:ios",
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run"
   },
   "dependencies": {
+    "@noble/curves": "2.4.0",
+    "@noble/hashes": "2.4.0",
+    "@sentryops/contracts": "workspace:*",
     "expo": "57.0.27",
+    "expo-battery": "57.0.3",
+    "expo-camera": "57.0.6",
+    "expo-constants": "57.0.21",
+    "expo-crypto": "57.0.3",
+    "expo-location": "57.0.20",
+    "expo-network": "57.0.2",
+    "expo-secure-store": "57.0.4",
+    "expo-sqlite": "57.0.4",
     "expo-status-bar": "57.0.1",
+    "expo-task-manager": "57.0.21",
     "react": "19.2.3",
-    "react-native": "0.86.3"
+    "react-native": "0.86.3",
+    "react-native-safe-area-context": "5.7.0",
+    "zod": "4.6.5"
   },
   "devDependencies": {
     "@types/react": "~19.2.2"

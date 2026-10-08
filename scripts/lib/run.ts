@@ -29,7 +29,9 @@ export function runNode(
   return new Promise((resolve) => {
     const child = spawn(process.execPath, args, {
       cwd: options.cwd ?? ROOT,
-      env: { ...process.env, FORCE_COLOR: '0', ...options.env },
+      // Colour codes break the output matching (negative controls). Vitest turns colour on when
+      // FORCE_COLOR is set at all, on Windows and under CI; only NO_COLOR turns it off.
+      env: { ...process.env, FORCE_COLOR: undefined, NO_COLOR: '1', ...options.env },
       stdio: ['ignore', 'pipe', 'pipe'],
     });
     let output = '';
