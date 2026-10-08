@@ -30,6 +30,25 @@ erDiagram
     timestamp_with_time_zone used_at
     timestamp_with_time_zone created_at
   }
+  checkpoints {
+    uuid id PK
+    uuid organization_id
+    uuid site_id
+    text name
+    text description
+    double_precision latitude
+    double_precision longitude
+    integer verification_radius_meters
+    bytea qr_token_hash
+    integer qr_token_version
+    timestamp_with_time_zone qr_rotated_at
+    text status
+    integer version
+    timestamp_with_time_zone created_at
+    timestamp_with_time_zone updated_at
+    uuid created_by_user_id
+    uuid updated_by_user_id
+  }
   dashboard_sessions {
     uuid id PK
     uuid user_id
@@ -42,6 +61,41 @@ erDiagram
     text revoked_reason
     inet ip_address
     text user_agent
+  }
+  guard_devices {
+    uuid id PK
+    uuid organization_id
+    uuid guard_id
+    uuid installation_id
+    bytea public_key
+    text key_algorithm
+    text platform
+    text manufacturer
+    text model
+    text os_version
+    text app_version
+    text status
+    text revoked_reason
+    timestamp_with_time_zone revoked_at
+    uuid revoked_by_user_id
+    timestamp_with_time_zone last_seen_at
+    timestamp_with_time_zone created_at
+    timestamp_with_time_zone updated_at
+  }
+  guards {
+    uuid id PK
+    uuid organization_id
+    uuid user_id
+    text employee_number
+    text display_name
+    text phone
+    text status
+    text preferred_locale
+    integer version
+    timestamp_with_time_zone created_at
+    timestamp_with_time_zone updated_at
+    uuid created_by_user_id
+    uuid updated_by_user_id
   }
   invitations {
     uuid id PK
@@ -60,6 +114,23 @@ erDiagram
     timestamp_with_time_zone revoked_at
     uuid revoked_by_user_id
     uuid created_by_user_id
+    timestamp_with_time_zone created_at
+  }
+  mobile_sessions {
+    uuid id PK
+    uuid organization_id
+    uuid guard_id
+    uuid device_id
+    uuid family_id
+    bytea access_token_hash
+    timestamp_with_time_zone access_expires_at
+    bytea refresh_token_hash
+    timestamp_with_time_zone expires_at
+    timestamp_with_time_zone issued_at
+    timestamp_with_time_zone last_used_at
+    timestamp_with_time_zone rotated_at
+    timestamp_with_time_zone revoked_at
+    text revoked_reason
     timestamp_with_time_zone created_at
   }
   organization_members {
@@ -97,6 +168,40 @@ erDiagram
     text checksum
     timestamp_with_time_zone applied_at
   }
+  sites {
+    uuid id PK
+    uuid organization_id
+    text name
+    text client_name
+    text address_line_1
+    text address_line_2
+    text city
+    text country
+    text timezone
+    text boundary_kind
+    double_precision latitude
+    double_precision longitude
+    integer geofence_radius_meters
+    jsonb polygon
+    text status
+    text notes
+    integer version
+    timestamp_with_time_zone created_at
+    timestamp_with_time_zone updated_at
+    uuid created_by_user_id
+    uuid updated_by_user_id
+  }
+  tracking_consents {
+    uuid id PK
+    uuid organization_id
+    uuid guard_id
+    uuid user_id
+    uuid device_id
+    text disclosure_version
+    text locale
+    timestamp_with_time_zone accepted_at
+    timestamp_with_time_zone created_at
+  }
   users {
     uuid id PK
     text auth_provider_user_id
@@ -110,13 +215,35 @@ erDiagram
   }
   users ||--o{ audit_logs : "audit_logs_actor_user_id_fkey"
   organizations ||--o{ audit_logs : "audit_logs_organization_id_fkey"
+  users ||--o{ checkpoints : "checkpoints_created_by_user_id_fkey"
+  organizations ||--o{ checkpoints : "checkpoints_organization_id_fkey"
+  sites ||--o{ checkpoints : "checkpoints_organization_id_site_id_fkey"
+  users ||--o{ checkpoints : "checkpoints_updated_by_user_id_fkey"
   users ||--o{ dashboard_sessions : "dashboard_sessions_user_id_fkey"
+  organizations ||--o{ guard_devices : "guard_devices_organization_id_fkey"
+  guards ||--o{ guard_devices : "guard_devices_organization_id_guard_id_fkey"
+  users ||--o{ guard_devices : "guard_devices_revoked_by_user_id_fkey"
+  users ||--o{ guards : "guards_created_by_user_id_fkey"
+  organizations ||--o{ guards : "guards_organization_id_fkey"
+  users ||--o{ guards : "guards_updated_by_user_id_fkey"
+  users ||--o{ guards : "guards_user_id_fkey"
   users ||--o{ invitations : "invitations_accepted_by_user_id_fkey"
   users ||--o{ invitations : "invitations_created_by_user_id_fkey"
+  guards ||--o{ invitations : "invitations_guard_fk"
   organizations ||--o{ invitations : "invitations_organization_id_fkey"
   users ||--o{ invitations : "invitations_revoked_by_user_id_fkey"
+  guard_devices ||--o{ mobile_sessions : "mobile_sessions_organization_id_device_id_fkey"
+  organizations ||--o{ mobile_sessions : "mobile_sessions_organization_id_fkey"
+  guards ||--o{ mobile_sessions : "mobile_sessions_organization_id_guard_id_fkey"
   organizations ||--o{ organization_members : "organization_members_organization_id_fkey"
   users ||--o{ organization_members : "organization_members_user_id_fkey"
   organizations ||--o{ organization_settings : "organization_settings_organization_id_fkey"
   users ||--o{ organization_settings : "organization_settings_updated_by_user_id_fkey"
+  users ||--o{ sites : "sites_created_by_user_id_fkey"
+  organizations ||--o{ sites : "sites_organization_id_fkey"
+  users ||--o{ sites : "sites_updated_by_user_id_fkey"
+  guard_devices ||--o{ tracking_consents : "tracking_consents_organization_id_device_id_fkey"
+  organizations ||--o{ tracking_consents : "tracking_consents_organization_id_fkey"
+  guards ||--o{ tracking_consents : "tracking_consents_organization_id_guard_id_fkey"
+  users ||--o{ tracking_consents : "tracking_consents_user_id_fkey"
 ```

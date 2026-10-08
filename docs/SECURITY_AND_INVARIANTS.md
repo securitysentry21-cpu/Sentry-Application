@@ -192,7 +192,7 @@ Limits are keyed by device, user, phone number or organization — not only by I
 
 | Class | Default |
 |---|---|
-| Enrollment-code redemption | 5 attempts per code; 10 per phone number per hour; 20 per IP per hour |
+| Enrollment-code redemption | 5 attempts per code; 10 per phone number per hour; 120 per IP per hour (an onboarding session puts many guards behind one Wi-Fi address; each code is also bound to the guard's number) |
 | Enrollment-code issue and resend | 3 per guard per day |
 | Sign-in attempts | provider defaults + 10 per account per 15 min |
 | Sync batches | 60 per device per min sustained, burst 120 |

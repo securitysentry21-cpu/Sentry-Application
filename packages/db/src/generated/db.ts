@@ -51,6 +51,26 @@ export interface AuthStates {
   used_at: Timestamp | null;
 }
 
+export interface Checkpoints {
+  created_at: Generated<Timestamp>;
+  created_by_user_id: string | null;
+  description: string | null;
+  id: string;
+  latitude: number | null;
+  longitude: number | null;
+  name: string;
+  organization_id: string;
+  qr_rotated_at: Timestamp | null;
+  qr_token_hash: Buffer;
+  qr_token_version: Generated<number>;
+  site_id: string;
+  status: Generated<string>;
+  updated_at: Generated<Timestamp>;
+  updated_by_user_id: string | null;
+  verification_radius_meters: Generated<number>;
+  version: Generated<number>;
+}
+
 export interface DashboardSessions {
   absolute_expires_at: Timestamp;
   created_at: Generated<Timestamp>;
@@ -63,6 +83,43 @@ export interface DashboardSessions {
   token_hash: Buffer;
   user_agent: string | null;
   user_id: string;
+}
+
+export interface GuardDevices {
+  app_version: string | null;
+  created_at: Generated<Timestamp>;
+  guard_id: string;
+  id: string;
+  installation_id: string;
+  key_algorithm: string;
+  last_seen_at: Timestamp | null;
+  manufacturer: string | null;
+  model: string | null;
+  organization_id: string;
+  os_version: string | null;
+  platform: string;
+  public_key: Buffer;
+  revoked_at: Timestamp | null;
+  revoked_by_user_id: string | null;
+  revoked_reason: string | null;
+  status: Generated<string>;
+  updated_at: Generated<Timestamp>;
+}
+
+export interface Guards {
+  created_at: Generated<Timestamp>;
+  created_by_user_id: string | null;
+  display_name: string;
+  employee_number: string;
+  id: string;
+  organization_id: string;
+  phone: string;
+  preferred_locale: Generated<string>;
+  status: Generated<string>;
+  updated_at: Generated<Timestamp>;
+  updated_by_user_id: string | null;
+  user_id: string | null;
+  version: Generated<number>;
 }
 
 export interface Invitations {
@@ -83,6 +140,24 @@ export interface Invitations {
   revoked_by_user_id: string | null;
   role: string | null;
   token_hash: Buffer;
+}
+
+export interface MobileSessions {
+  access_expires_at: Timestamp;
+  access_token_hash: Buffer;
+  created_at: Generated<Timestamp>;
+  device_id: string;
+  expires_at: Timestamp;
+  family_id: string;
+  guard_id: string;
+  id: string;
+  issued_at: Timestamp;
+  last_used_at: Timestamp | null;
+  organization_id: string;
+  refresh_token_hash: Buffer;
+  revoked_at: Timestamp | null;
+  revoked_reason: string | null;
+  rotated_at: Timestamp | null;
 }
 
 export interface OrganizationMembers {
@@ -124,6 +199,42 @@ export interface SchemaMigrations {
   version: string;
 }
 
+export interface Sites {
+  address_line_1: string | null;
+  address_line_2: string | null;
+  boundary_kind: string;
+  city: string | null;
+  client_name: string | null;
+  country: Generated<string>;
+  created_at: Generated<Timestamp>;
+  created_by_user_id: string | null;
+  geofence_radius_meters: number | null;
+  id: string;
+  latitude: number;
+  longitude: number;
+  name: string;
+  notes: string | null;
+  organization_id: string;
+  polygon: Json | null;
+  status: Generated<string>;
+  timezone: string;
+  updated_at: Generated<Timestamp>;
+  updated_by_user_id: string | null;
+  version: Generated<number>;
+}
+
+export interface TrackingConsents {
+  accepted_at: Timestamp;
+  created_at: Generated<Timestamp>;
+  device_id: string;
+  disclosure_version: string;
+  guard_id: string;
+  id: string;
+  locale: string;
+  organization_id: string;
+  user_id: string | null;
+}
+
 export interface Users {
   auth_provider_user_id: string | null;
   created_at: Generated<Timestamp>;
@@ -139,11 +250,17 @@ export interface Users {
 export interface DB {
   audit_logs: AuditLogs;
   auth_states: AuthStates;
+  checkpoints: Checkpoints;
   dashboard_sessions: DashboardSessions;
+  guard_devices: GuardDevices;
+  guards: Guards;
   invitations: Invitations;
+  mobile_sessions: MobileSessions;
   organization_members: OrganizationMembers;
   organization_settings: OrganizationSettings;
   organizations: Organizations;
   schema_migrations: SchemaMigrations;
+  sites: Sites;
+  tracking_consents: TrackingConsents;
   users: Users;
 }

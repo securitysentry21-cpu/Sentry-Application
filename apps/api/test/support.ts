@@ -1,7 +1,7 @@
 // Shared test kit: a real app over a fresh test database, signed in through the development
 // sign-in, so tests exercise the same request pipeline (CSRF, session, organization, permission)
 // as the dashboard does.
-import { randomUUID } from 'node:crypto';
+import { generateKeyPairSync, randomInt, randomUUID } from 'node:crypto';
 
 import { createPool, type Pool } from '@sentryops/db';
 import { createTestDatabase, type TestDatabase } from '@sentryops/db/test-support';
@@ -28,6 +28,13 @@ export function testConfig(databaseUrl: string, overrides: Partial<Config> = {})
     PUBLIC_ORIGIN: 'http://127.0.0.1:3000',
     DEV_AUTH: true,
     TRUST_PROXY: false,
+    QR_TOKEN_SECRET: 'test-only-qr-secret-0123456789abcdef',
+    MOBILE_MIN_VERSION: '0.0.0',
+    MOBILE_RECOMMENDED_VERSION: '0.0.0',
+    MOBILE_REVOKED_VERSIONS: [],
+    DISCLOSURE_VERSION: '2026-10-08',
+    FEATURE_SOS: false,
+    ALLOW_FOREIGN_GUARD_PHONES: false,
     ...overrides,
   };
 }
@@ -154,3 +161,102 @@ export function call(
 
 export const errorCode = (res: { json: () => unknown }) =>
   (res.json() as { error?: { code?: string } }).error?.code;
+
+// ── Guards and their phones ─────────────────────────────────────────────────────────────────
+
+export type EnrolledPhone = {
+  readonly guardId: string;
+  readonly deviceId: string;
+  readonly installationId: string;
+  accessToken: string;
+  refreshToken: string;
+};
+
+/** A guard created through the API as `cookie` (an admin) in `orgId`. */
+export async function createGuard(
+  app: FastifyInstance,
+  cookie: string,
+  orgId: string,
+  guard: { employeeNumber: string; displayName: string; phone: string },
+): Promise<string> {
+  const res = await call(app, { method: 'POST', url: '/api/v1/guards', cookie, org: orgId, body: guard });
+  if (res.statusCode !== 201) throw new Error(`create guard failed: ${res.statusCode} ${res.body}`);
+  return res.json<{ id: string }>().id;
+}
+
+export function devicePublicKey(): string {
+  const { publicKey } = generateKeyPairSync('ec', { namedCurve: 'prime256v1' });
+  return publicKey.export({ format: 'der', type: 'spki' }).toString('base64');
+}
+
+/** Issues a code from the dashboard and redeems it the way the guard app does. */
+export async function enrollPhone(
+  app: FastifyInstance,
+  cookie: string,
+  orgId: string,
+  guardId: string,
+  phone: string,
+  installationId: string = randomUUID(),
+): Promise<EnrolledPhone> {
+  const issued = await call(app, {
+    method: 'POST',
+    url: `/api/v1/guards/${guardId}/enrollment-codes`,
+    cookie,
+    org: orgId,
+  });
+  if (issued.statusCode !== 201) throw new Error(`issue code failed: ${issued.statusCode} ${issued.body}`);
+  const { code } = issued.json<{ code: string }>();
+  const redeemed = await redeem(app, { code, phone, installationId });
+  if (redeemed.statusCode !== 200) throw new Error(`redeem failed: ${redeemed.statusCode} ${redeemed.body}`);
+  const body = redeemed.json<{ deviceId: string; session: { accessToken: string; refreshToken: string } }>();
+  return {
+    guardId,
+    deviceId: body.deviceId,
+    installationId,
+    accessToken: body.session.accessToken,
+    refreshToken: body.session.refreshToken,
+  };
+}
+
+export function redeem(
+  app: FastifyInstance,
+  input: { code: string; phone: string; installationId?: string; publicKey?: string },
+) {
+  return app.inject({
+    method: 'POST',
+    url: '/api/v1/enrollments/redeem',
+    // Each test phone comes from its own address, so per-IP limits don't couple unrelated tests.
+    remoteAddress: `10.${randomInt(256)}.${randomInt(256)}.${randomInt(1, 255)}`,
+    headers: { 'content-type': 'application/json' },
+    payload: {
+      code: input.code,
+      phone: input.phone,
+      installationId: input.installationId ?? randomUUID(),
+      publicKey: input.publicKey ?? devicePublicKey(),
+      keyAlgorithm: 'ECDSA_P256_SHA256',
+      platform: 'ANDROID',
+      manufacturer: 'Test',
+      model: 'Phone',
+      osVersion: '14',
+      appVersion: '0.1.0',
+    },
+  });
+}
+
+/** A request the way the guard app sends it: Bearer token and X-Device-Id, no cookie or CSRF. */
+export function asPhone(
+  app: FastifyInstance,
+  phone: Pick<EnrolledPhone, 'accessToken' | 'deviceId'>,
+  options: { method: InjectOptions['method']; url: string; body?: unknown; deviceId?: string },
+) {
+  return app.inject({
+    method: options.method,
+    url: options.url,
+    headers: {
+      authorization: `Bearer ${phone.accessToken}`,
+      'x-device-id': options.deviceId ?? phone.deviceId,
+      ...(options.body === undefined ? {} : { 'content-type': 'application/json' }),
+    },
+    ...(options.body === undefined ? {} : { payload: options.body as Record<string, unknown> }),
+  });
+}

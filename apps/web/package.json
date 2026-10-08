@@ -12,11 +12,15 @@
   },
   "dependencies": {
     "@sentryops/contracts": "workspace:*",
+    "@sentryops/domain": "workspace:*",
+    "maplibre-gl": "6.13.0",
     "next": "16.4.0",
+    "qrcode-generator": "2.0.4",
     "react": "19.2.3",
     "react-dom": "19.2.3"
   },
   "devDependencies": {
+    "@types/geojson": "7946.0.16",
     "@types/react": "~19.2.2",
     "@types/react-dom": "~19.2.2"
   }

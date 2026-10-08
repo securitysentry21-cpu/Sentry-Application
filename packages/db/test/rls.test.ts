@@ -85,6 +85,41 @@ beforeAll(async () => {
          values ($1, $2, 'SYSTEM', 'SETTINGS_CHANGED', 'organization')`,
         [randomUUID(), org],
       );
+      // Phase 2 tables.
+      const guard = randomUUID();
+      const device = randomUUID();
+      const siteRow = randomUUID();
+      await m.query(
+        `insert into guards (id, organization_id, employee_number, display_name, phone)
+         values ($1, $2, 'G-1', 'Guard', $3)`,
+        [guard, org, `+9230012345${org === ORG_A ? '01' : '02'}`],
+      );
+      await m.query(
+        `insert into guard_devices (id, organization_id, guard_id, installation_id, public_key, key_algorithm, platform)
+         values ($1, $2, $3, $4, gen_random_bytes(91), 'ECDSA_P256_SHA256', 'ANDROID')`,
+        [device, org, guard, randomUUID()],
+      );
+      await m.query(
+        `insert into mobile_sessions (id, organization_id, guard_id, device_id, family_id, access_token_hash,
+           access_expires_at, refresh_token_hash, expires_at, issued_at)
+         values ($1, $2, $3, $4, $5, gen_random_bytes(32), now(), gen_random_bytes(32), now(), now())`,
+        [randomUUID(), org, guard, device, randomUUID()],
+      );
+      await m.query(
+        `insert into tracking_consents (id, organization_id, guard_id, device_id, disclosure_version, locale, accepted_at)
+         values ($1, $2, $3, $4, '1', 'en', now())`,
+        [randomUUID(), org, guard, device],
+      );
+      await m.query(
+        `insert into sites (id, organization_id, name, timezone, boundary_kind, latitude, longitude, geofence_radius_meters)
+         values ($1, $2, 'Gate', 'Asia/Karachi', 'CIRCLE', 31.5, 74.3, 100)`,
+        [siteRow, org],
+      );
+      await m.query(
+        `insert into checkpoints (id, organization_id, site_id, name, qr_token_hash)
+         values ($1, $2, $3, 'North gate', gen_random_bytes(32))`,
+        [randomUUID(), org, siteRow],
+      );
     }
   });
   runtime = new pg.Pool({ connectionString: db.urls.app_runtime, max: 2 });

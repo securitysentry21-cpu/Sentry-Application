@@ -73,6 +73,31 @@ export async function createUser(
   return toUser(row);
 }
 
+/** The user record for a guard's phone number (guards have no provider account, D-02). */
+export async function ensurePhoneUser(
+  db: Database,
+  input: { id: string; phone: string; name: string; locale: 'en' | 'ur'; now: Date },
+): Promise<string> {
+  await db
+    .insertInto('users')
+    .values({
+      id: input.id,
+      phone: input.phone,
+      name: input.name,
+      locale: input.locale,
+      created_at: input.now,
+      updated_at: input.now,
+    })
+    .onConflict((oc) => oc.column('phone').doNothing())
+    .execute();
+  const row = await db
+    .selectFrom('users')
+    .select('id')
+    .where('phone', '=', input.phone)
+    .executeTakeFirstOrThrow();
+  return row.id;
+}
+
 /** Links an existing user (found by verified email) to the provider subject on first sign-in. */
 export async function linkSubject(db: Database, userId: string, subject: string, now: Date): Promise<void> {
   await db

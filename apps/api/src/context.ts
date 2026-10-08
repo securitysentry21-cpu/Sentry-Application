@@ -5,10 +5,13 @@
 import { ROLE_PERMISSIONS, type Permission, type Role, type RoutePolicy } from '@sentryops/contracts';
 import type { FastifyRequest } from 'fastify';
 
+import { withTenantTransaction } from '@sentryops/db';
+
 import { readSessionCookie } from './cookies.ts';
 import type { AppDeps } from './deps.ts';
 import { AppError, forbidden } from './errors.ts';
 import type { AuditActor } from './repositories/audit.ts';
+import { loadSession, sessionIdByAccess, touchDevice } from './repositories/guards.ts';
 import { userMemberships } from './repositories/memberships.ts';
 import { resolveSession } from './repositories/sessions.ts';
 
@@ -22,10 +25,22 @@ export type UserActor = {
   readonly email: string | null;
 };
 
+/** A guard's phone, authenticated by our device-bound session (D-30). */
+export type GuardActor = {
+  readonly kind: 'guard';
+  readonly userId: string | null;
+  readonly guardId: string;
+  readonly deviceId: string;
+  readonly sessionId: string;
+  readonly name: string;
+  readonly preferredLocale: 'en' | 'ur';
+};
+
 export type OrgContext = {
   readonly id: string;
   readonly name: string;
   readonly role: Role;
+  /** The dashboard member seat; empty for guards, who act through their guard record. */
   readonly memberId: string;
   readonly permissions: ReadonlySet<Permission>;
 };
@@ -34,11 +49,70 @@ export type RequestContext = {
   readonly requestId: string;
   readonly ip: string | null;
   readonly userAgent: string | null;
-  readonly actor: UserActor | null;
+  readonly actor: UserActor | GuardActor | null;
   readonly org: OrgContext | null;
 };
 
 const unauthenticated = () => new AppError('UNAUTHENTICATED', 'Please sign in.');
+const ACCESS_TOKEN = /^sa_[A-Za-z0-9_-]{43}$/;
+
+/**
+ * The guard app's path: a Bearer access token → its session → the guard, the device and the
+ * organization. Every request is checked against X-Device-Id and the device's current status, so a
+ * revoked phone is refused on its next request (SEC §5, ADV-A08).
+ */
+async function resolveGuard(
+  request: FastifyRequest,
+  policy: RoutePolicy,
+  deps: AppDeps,
+  base: Pick<RequestContext, 'requestId' | 'ip' | 'userAgent'>,
+  token: string,
+): Promise<RequestContext> {
+  if (!ACCESS_TOKEN.test(token)) throw unauthenticated();
+  const found = await sessionIdByAccess(deps.db, token);
+  if (!found) throw unauthenticated();
+  const now = deps.clock.now();
+  const session = await withTenantTransaction(deps.db, found.organization_id, async (trx) => {
+    const row = await loadSession(trx, found.organization_id, found.id);
+    if (row && row.device_status === 'ACTIVE')
+      await touchDevice(trx, found.organization_id, row.device_id, now);
+    return row;
+  });
+  if (!session) throw unauthenticated();
+  if (request.headers['x-device-id'] !== session.device_id) {
+    throw new AppError('DEVICE_NOT_REGISTERED', 'This phone is not registered for this session.');
+  }
+  if (session.device_status !== 'ACTIVE') {
+    throw new AppError('DEVICE_REVOKED', 'This phone was signed out by your organization.');
+  }
+  if (session.revoked_at || session.access_expires_at <= now) throw unauthenticated();
+  if (session.guard_status !== 'ACTIVE') throw unauthenticated();
+  if (session.organization_status === 'SUSPENDED') {
+    throw new AppError('ORG_SUSPENDED', 'This organization is suspended.');
+  }
+  if (session.organization_status !== 'ACTIVE') throw forbidden();
+  const permissions = ROLE_PERMISSIONS.GUARD;
+  if (policy.access.kind === 'permission' && !permissions.has(policy.access.permission)) throw forbidden();
+  return {
+    ...base,
+    actor: {
+      kind: 'guard',
+      userId: session.user_id,
+      guardId: session.guard_id,
+      deviceId: session.device_id,
+      sessionId: session.id,
+      name: session.display_name,
+      preferredLocale: session.preferred_locale === 'ur' ? 'ur' : 'en',
+    },
+    org: {
+      id: found.organization_id,
+      name: session.organization_name,
+      role: 'GUARD',
+      memberId: '',
+      permissions,
+    },
+  };
+}
 
 export async function resolveContext(
   request: FastifyRequest,
@@ -52,6 +126,11 @@ export async function resolveContext(
   };
   if (policy.access.kind === 'public') {
     return { ...base, actor: null, org: null };
+  }
+
+  const authorization = request.headers.authorization;
+  if (typeof authorization === 'string' && authorization.startsWith('Bearer ')) {
+    return resolveGuard(request, policy, deps, base, authorization.slice('Bearer '.length).trim());
   }
 
   const token = readSessionCookie(request, deps.config);
@@ -105,8 +184,15 @@ export async function resolveContext(
   };
 }
 
+/** The dashboard user. Guard sessions never reach dashboard handlers through this. */
 export function userOf(ctx: RequestContext): UserActor {
-  if (!ctx.actor) throw unauthenticated();
+  if (!ctx.actor || ctx.actor.kind !== 'user') throw unauthenticated();
+  return ctx.actor;
+}
+
+/** The guard behind a guard-app request. */
+export function guardOf(ctx: RequestContext): GuardActor {
+  if (!ctx.actor || ctx.actor.kind !== 'guard') throw forbidden();
   return ctx.actor;
 }
 

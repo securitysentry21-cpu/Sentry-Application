@@ -16,9 +16,10 @@ export const LIMITS: Readonly<Partial<Record<RateLimitClass, Readonly<Record<str
   signin: { account: { max: 10, windowMs: 15 * MINUTE }, ip: { max: 60, windowMs: 15 * MINUTE } },
   invitation: { organization: { max: 1000, windowMs: 24 * 60 * MINUTE } },
   enrollment: {
-    code: { max: 5, windowMs: 24 * 60 * MINUTE },
+    // Per code: 5 attempts, counted durably on the code itself (invitations.attempts).
     phone: { max: 10, windowMs: 60 * MINUTE },
-    ip: { max: 20, windowMs: 60 * MINUTE },
+    // An onboarding session puts a room of guards behind one Wi-Fi address (round 6, SEC §9).
+    ip: { max: 120, windowMs: 60 * MINUTE },
   },
   sync: { device: { max: 120, windowMs: MINUTE } },
   scan: { guard: { max: 60, windowMs: MINUTE } },

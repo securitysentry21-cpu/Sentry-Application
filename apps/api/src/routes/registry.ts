@@ -85,7 +85,10 @@ export function mountRoutes(app: FastifyInstance, routes: readonly RouteDefiniti
         checkCsrf(request, deps.config);
         const ctx = await resolveContext(request, route.policy, deps);
         if (route.policy.rateLimit === 'default') {
-          deps.rateLimiter.hit('default', 'user', ctx.actor?.userId ?? ctx.ip ?? 'unknown');
+          // Guards by device, never by IP: carriers put many guards behind one address (SEC §9).
+          const key =
+            ctx.actor?.kind === 'guard' ? `device:${ctx.actor.deviceId}` : (ctx.actor?.userId ?? ctx.ip);
+          deps.rateLimiter.hit('default', 'user', key ?? 'unknown');
         }
         let params: unknown = request.params;
         if (route.params) {

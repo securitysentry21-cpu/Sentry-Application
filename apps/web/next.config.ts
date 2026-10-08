@@ -20,7 +20,7 @@ const config: NextConfig = {
   // `next dev` otherwise writes its own AGENTS.md into the app. Agent instructions for this
   // repository live in CLAUDE.md, under the owner's control.
   agentRules: false,
-  transpilePackages: ['@sentryops/contracts'],
+  transpilePackages: ['@sentryops/contracts', '@sentryops/domain'],
   headers() {
     return Promise.resolve([{ source: '/:path*', headers: securityHeaders }]);
   },

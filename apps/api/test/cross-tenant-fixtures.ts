@@ -44,4 +44,49 @@ export const CROSS_TENANT_FIXTURES: Readonly<Record<string, Coverage>> = {
   'GET /api/v1/settings': T09,
   'PATCH /api/v1/settings': T09,
   'GET /api/v1/audit-logs': T09,
+
+  // Phase 2
+  'GET /api/v1/guards': T01,
+  'POST /api/v1/guards': T09,
+  'POST /api/v1/guards/import': T09,
+  'GET /api/v1/guards/:id': T01,
+  'PATCH /api/v1/guards/:id': T01,
+  'POST /api/v1/guards/:id/terminate': T01,
+  'POST /api/v1/guards/:id/enrollment-codes': T01,
+  'GET /api/v1/guards/:id/devices': T01,
+  'POST /api/v1/devices/:id/revoke': T01,
+  'POST /api/v1/enrollments/redeem': {
+    covered: 'test',
+    test: 'enrollment.test.ts › ADV-A11/A12: the code and phone number decide the organization and guard',
+  },
+  'POST /api/v1/sessions/refresh': {
+    covered: 'test',
+    test: 'enrollment.test.ts › the refresh token decides the session; reuse revokes the family',
+  },
+  'GET /api/v1/mobile/config': {
+    covered: 'test',
+    test: "enrollment.test.ts › ADV-A01 (the guard's own data only)",
+  },
+  'POST /api/v1/tracking-consents': {
+    covered: 'test',
+    test: 'enrollment.test.ts › consent is tied to the session',
+  },
+  'GET /api/v1/sites': T01,
+  'POST /api/v1/sites': T09,
+  'GET /api/v1/sites/:id': T01,
+  'PATCH /api/v1/sites/:id': T01,
+  'GET /api/v1/sites/:id/checkpoints': T01,
+  'POST /api/v1/sites/:id/checkpoints': {
+    covered: 'test',
+    test: 'sites.test.ts › ADV-T04 and tenancy.test.ts › ADV-T01',
+  },
+  'GET /api/v1/sites/:id/checkpoints/print-sheet': {
+    covered: 'test',
+    test: 'sites.test.ts › ADV-T05 and tenancy.test.ts › ADV-T01',
+  },
+  'PATCH /api/v1/checkpoints/:id': T01,
+  'POST /api/v1/checkpoints/:id/rotate-qr': {
+    covered: 'test',
+    test: 'sites.test.ts › ADV-T05 and tenancy.test.ts › ADV-T01',
+  },
 };

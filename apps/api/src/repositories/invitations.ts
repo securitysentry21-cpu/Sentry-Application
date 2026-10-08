@@ -146,6 +146,102 @@ export async function lockMemberInvitation(trx: Database, organizationId: string
     .executeTakeFirst();
 }
 
+// ── Guard enrollment and new-phone codes (D-02, D-31) ───────────────────────────────────────
+
+export async function createEnrollmentCode(
+  trx: Database,
+  input: {
+    id: string;
+    organizationId: string;
+    purpose: 'GUARD_ENROLLMENT' | 'NEW_DEVICE';
+    guardId: string;
+    phone: string;
+    codeHash: Buffer;
+    linkToken: string;
+    createdByUserId: string;
+    now: Date;
+  },
+): Promise<Date> {
+  const expiresAt = new Date(input.now.getTime() + INVITATION_TTL_MS);
+  await trx
+    .insertInto('invitations')
+    .values({
+      id: input.id,
+      organization_id: input.organizationId,
+      purpose: input.purpose,
+      role: 'GUARD',
+      guard_id: input.guardId,
+      phone: input.phone,
+      token_hash: sha256(input.linkToken),
+      code_hash: input.codeHash,
+      expires_at: expiresAt,
+      created_by_user_id: input.createdByUserId,
+      created_at: input.now,
+    })
+    .execute();
+  return expiresAt;
+}
+
+/** Earlier unused codes stop working when a new one is issued: only the latest is valid. */
+export async function revokePendingCodes(
+  trx: Database,
+  organizationId: string,
+  guardId: string,
+  userId: string,
+  now: Date,
+): Promise<void> {
+  await trx
+    .updateTable('invitations')
+    .set({ revoked_at: now, revoked_by_user_id: userId })
+    .where('organization_id', '=', organizationId)
+    .where('guard_id', '=', guardId)
+    .where('purpose', 'in', ['GUARD_ENROLLMENT', 'NEW_DEVICE'])
+    .where('accepted_at', 'is', null)
+    .where('revoked_at', 'is', null)
+    .execute();
+}
+
+export async function codesIssuedSince(trx: Database, organizationId: string, guardId: string, since: Date) {
+  const row = await trx
+    .selectFrom('invitations')
+    .select((eb) => eb.fn.countAll<string>().as('n'))
+    .where('organization_id', '=', organizationId)
+    .where('guard_id', '=', guardId)
+    .where('purpose', 'in', ['GUARD_ENROLLMENT', 'NEW_DEVICE'])
+    .where('created_at', '>=', since)
+    .executeTakeFirst();
+  return Number(row?.n ?? 0);
+}
+
+export async function enrollmentOrganizationByCode(
+  db: Database,
+  codeHash: Buffer,
+): Promise<{ id: string; organizationId: string } | null> {
+  const { rows } = await sql<{ id: string; organization_id: string }>`
+    select * from app.enrollment_by_code(${codeHash})`.execute(db);
+  const row = rows[0];
+  return row ? { id: row.id, organizationId: row.organization_id } : null;
+}
+
+export async function lockEnrollmentCode(trx: Database, organizationId: string, id: string) {
+  return trx
+    .selectFrom('invitations')
+    .select(['id', 'purpose', 'guard_id', 'phone', 'attempts', 'expires_at', 'accepted_at', 'revoked_at'])
+    .where('organization_id', '=', organizationId)
+    .where('id', '=', id)
+    .forUpdate()
+    .executeTakeFirst();
+}
+
+export async function countEnrollmentAttempt(trx: Database, organizationId: string, id: string) {
+  await trx
+    .updateTable('invitations')
+    .set((eb) => ({ attempts: eb('attempts', '+', 1) }))
+    .where('organization_id', '=', organizationId)
+    .where('id', '=', id)
+    .execute();
+}
+
 export async function markInvitationAccepted(
   trx: Database,
   organizationId: string,

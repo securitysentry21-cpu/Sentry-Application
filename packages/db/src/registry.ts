@@ -54,4 +54,12 @@ export const TABLES: TableRegistry = {
     kind: 'global',
     reason: 'ten-minute OIDC sign-in state, from before any user or organization is known',
   },
+
+  // Phase 2: guards, devices, sessions, sites.
+  guards: { kind: 'tenant' },
+  guard_devices: { kind: 'tenant' },
+  mobile_sessions: { kind: 'tenant' },
+  tracking_consents: { kind: 'tenant-append-only' },
+  sites: { kind: 'tenant' },
+  checkpoints: { kind: 'tenant' },
 };
