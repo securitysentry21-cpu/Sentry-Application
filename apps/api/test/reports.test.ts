@@ -216,6 +216,23 @@ describe('attendance report (PROD §6.8)', () => {
       org: org.id,
     });
     expect(errorCode(long)).toBe('EXPORT_RANGE_TOO_LARGE');
+    // Impossible dates can't slip past the limit by rolling into later months.
+    for (const to of ['2026-13-45', '2026-02-30', '2026-04-31']) {
+      const bad = await call(t.app, {
+        method: 'GET',
+        url: `/api/v1/reports/attendance/export?from=2026-01-01&to=${to}`,
+        cookie: admin,
+        org: org.id,
+      });
+      expect(errorCode(bad), to).toBe('VALIDATION_FAILED');
+    }
+    const backwards = await call(t.app, {
+      method: 'GET',
+      url: '/api/v1/reports/attendance?from=2026-10-07&to=2026-10-05',
+      cookie: admin,
+      org: org.id,
+    });
+    expect(errorCode(backwards)).toBe('VALIDATION_FAILED');
     const disp = await call(t.app, {
       method: 'GET',
       url: '/api/v1/reports/attendance?from=2026-10-05&to=2026-10-05',

@@ -6,7 +6,14 @@ import { SHIFT_STATUSES } from './mobile.ts';
 
 const uuid = z.uuid();
 const instant = z.iso.datetime({ offset: true });
-const localDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'expected YYYY-MM-DD');
+/** A real calendar date: "2026-02-30" or "2026-13-45" would otherwise roll into another month. */
+const localDate = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/, 'expected YYYY-MM-DD')
+  .refine((v) => {
+    const d = new Date(`${v}T00:00:00Z`);
+    return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === v;
+  }, 'not a calendar date');
 
 /** PROD §15.2: at most 92 days per report or export. */
 export const REPORT_MAX_DAYS = 92;

@@ -31,7 +31,8 @@ type Query = z.infer<typeof attendanceQuerySchema>;
 async function attendanceReport(deps: AppDeps, ctx: RequestContext, q: Query) {
   const org = orgOf(ctx);
   const days = Math.round((Date.parse(`${q.to}T00:00:00Z`) - Date.parse(`${q.from}T00:00:00Z`)) / DAY_MS) + 1;
-  if (days < 1) throw new AppError('VALIDATION_FAILED', '"to" must not be before "from".');
+  if (!Number.isFinite(days) || days < 1)
+    throw new AppError('VALIDATION_FAILED', '"to" must not be before "from".');
   if (days > REPORT_MAX_DAYS) {
     throw new AppError('EXPORT_RANGE_TOO_LARGE', `At most ${REPORT_MAX_DAYS} days per report.`);
   }
