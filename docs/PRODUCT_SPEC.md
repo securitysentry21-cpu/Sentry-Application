@@ -557,6 +557,7 @@ Rules:
 - **A last-known location is never presented as a live location** (INV-09). Marker colour follows tracking health; the marker is solid only while the location is CURRENT; every marker carries its age as text.
 - A stationary guard with a healthy phone normally reads "LIVE · last update 8 s ago" together with "Last known location · 4 min ago". That is the honest state: the phone only knows where it is when it takes a fix.
 - Thresholds are settings, validated against the sampling settings so a healthy phone can never trip them:
+  - `tracking.stationary_fix_interval_s ≥ tracking.max_interval_s` and `sync.upload_interval_s ≤ sync.heartbeat_interval_s` (the rules below assume both; added under delegation, round 6)
   - `freshness.health_live_max_s ≥ sync.heartbeat_interval_s + 30`
   - `freshness.offline_after_s ≥ 3 × sync.heartbeat_interval_s`
   - `freshness.location_current_max_s ≥ tracking.max_interval_s + sync.upload_interval_s + 30`
@@ -961,10 +962,10 @@ All values are per-organization settings unless marked *system*. Changing a sett
 | tracking.moving_distance_filter_m | 20 | 10–100 |
 | tracking.min_interval_s | 15 | 5–60 |
 | tracking.max_interval_s | 60 | 30–300 |
-| tracking.stationary_fix_interval_s | 300 | 60–900 |
+| tracking.stationary_fix_interval_s | 300 | 60–900; ≥ tracking.max_interval_s |
 | tracking.sos_interval_s | 10 | 5–30 |
 | tracking.sos_max_hours | 4 | 1–12 |
-| sync.upload_interval_s | 60 | 15–300 |
+| sync.upload_interval_s | 60 | 15–300; ≤ heartbeat interval |
 | sync.heartbeat_interval_s | 60 | 30–300; provisional, Phase 0B sets the default (60–180) |
 | sync.max_offline_age_hours | 168 | *system*; older data rejected |
 | freshness.health_live_max_s | 90 | ≥ heartbeat interval + 30 |

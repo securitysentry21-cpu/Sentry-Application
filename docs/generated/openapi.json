@@ -10,6 +10,2161 @@
     }
   ],
   "paths": {
+    "/api/v1/alerts": {
+      "get": {
+        "summary": "Alerts, newest first: active (open or acknowledged), closed, or all.",
+        "x-policy": {
+          "access": {
+            "kind": "permission",
+            "permission": "alerts.read"
+          },
+          "ownership": "organization",
+          "rateLimit": "default",
+          "audit": null
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "type": "object",
+                  "properties": {
+                    "alerts": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                          },
+                          "type": {
+                            "type": "string",
+                            "enum": [
+                              "SOS_ACTIVATED",
+                              "INCIDENT_CRITICAL",
+                              "INCIDENT_HIGH",
+                              "GUARD_LEFT_SITE",
+                              "TRACKING_DISABLED",
+                              "DEVICE_OFFLINE",
+                              "LOCATION_STALE",
+                              "SHIFT_NOT_STARTED",
+                              "SHIFT_MISSED",
+                              "CHECKPOINT_MISSED",
+                              "SUSPICIOUS_LOCATION",
+                              "STARTED_OFF_SITE",
+                              "SHIFT_OVERRUN",
+                              "LOW_BATTERY",
+                              "DEVICE_CHANGED"
+                            ]
+                          },
+                          "severity": {
+                            "type": "string",
+                            "enum": [
+                              "LOW",
+                              "MEDIUM",
+                              "HIGH",
+                              "CRITICAL"
+                            ]
+                          },
+                          "status": {
+                            "type": "string",
+                            "enum": [
+                              "OPEN",
+                              "ACKNOWLEDGED",
+                              "RESOLVED",
+                              "DISMISSED"
+                            ]
+                          },
+                          "summary": {
+                            "type": "string"
+                          },
+                          "guard": {
+                            "anyOf": [
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "id": {
+                                    "type": "string",
+                                    "format": "uuid",
+                                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                                  },
+                                  "displayName": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "id",
+                                  "displayName"
+                                ],
+                                "additionalProperties": false
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "site": {
+                            "anyOf": [
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "id": {
+                                    "type": "string",
+                                    "format": "uuid",
+                                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                                  },
+                                  "name": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "id",
+                                  "name"
+                                ],
+                                "additionalProperties": false
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "shiftId": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "format": "uuid",
+                                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "details": {
+                            "type": "object",
+                            "propertyNames": {
+                              "type": "string"
+                            },
+                            "additionalProperties": {}
+                          },
+                          "openedAt": {
+                            "type": "string",
+                            "format": "date-time",
+                            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                          },
+                          "lastTriggeredAt": {
+                            "type": "string",
+                            "format": "date-time",
+                            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                          },
+                          "triggerCount": {
+                            "type": "integer",
+                            "minimum": -9007199254740991,
+                            "maximum": 9007199254740991
+                          },
+                          "acknowledgedAt": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "format": "date-time",
+                                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "acknowledgedBy": {
+                            "anyOf": [
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "id": {
+                                    "type": "string",
+                                    "format": "uuid",
+                                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                                  },
+                                  "name": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "id",
+                                  "name"
+                                ],
+                                "additionalProperties": false
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "resolvedAt": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "format": "date-time",
+                                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "resolutionType": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "enum": [
+                                  "MANUAL",
+                                  "CONDITION_CLEARED",
+                                  "SHIFT_ENDED",
+                                  "SUPERSEDED"
+                                ]
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "resolutionNote": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "dismissedAt": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "format": "date-time",
+                                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "dismissReason": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "detectedLate": {
+                            "type": "boolean"
+                          },
+                          "dismissible": {
+                            "type": "boolean"
+                          },
+                          "version": {
+                            "type": "integer",
+                            "minimum": -9007199254740991,
+                            "maximum": 9007199254740991
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "type",
+                          "severity",
+                          "status",
+                          "summary",
+                          "guard",
+                          "site",
+                          "shiftId",
+                          "details",
+                          "openedAt",
+                          "lastTriggeredAt",
+                          "triggerCount",
+                          "acknowledgedAt",
+                          "acknowledgedBy",
+                          "resolvedAt",
+                          "resolutionType",
+                          "resolutionNote",
+                          "dismissedAt",
+                          "dismissReason",
+                          "detectedLate",
+                          "dismissible",
+                          "version"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "alerts"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/alerts/:id": {
+      "get": {
+        "summary": "One alert with its history.",
+        "x-policy": {
+          "access": {
+            "kind": "permission",
+            "permission": "alerts.read"
+          },
+          "ownership": "organization",
+          "rateLimit": "default",
+          "audit": null
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "type": "object",
+                  "properties": {
+                    "alert": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "format": "uuid",
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                        },
+                        "type": {
+                          "type": "string",
+                          "enum": [
+                            "SOS_ACTIVATED",
+                            "INCIDENT_CRITICAL",
+                            "INCIDENT_HIGH",
+                            "GUARD_LEFT_SITE",
+                            "TRACKING_DISABLED",
+                            "DEVICE_OFFLINE",
+                            "LOCATION_STALE",
+                            "SHIFT_NOT_STARTED",
+                            "SHIFT_MISSED",
+                            "CHECKPOINT_MISSED",
+                            "SUSPICIOUS_LOCATION",
+                            "STARTED_OFF_SITE",
+                            "SHIFT_OVERRUN",
+                            "LOW_BATTERY",
+                            "DEVICE_CHANGED"
+                          ]
+                        },
+                        "severity": {
+                          "type": "string",
+                          "enum": [
+                            "LOW",
+                            "MEDIUM",
+                            "HIGH",
+                            "CRITICAL"
+                          ]
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "OPEN",
+                            "ACKNOWLEDGED",
+                            "RESOLVED",
+                            "DISMISSED"
+                          ]
+                        },
+                        "summary": {
+                          "type": "string"
+                        },
+                        "guard": {
+                          "anyOf": [
+                            {
+                              "type": "object",
+                              "properties": {
+                                "id": {
+                                  "type": "string",
+                                  "format": "uuid",
+                                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                                },
+                                "displayName": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "id",
+                                "displayName"
+                              ],
+                              "additionalProperties": false
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "site": {
+                          "anyOf": [
+                            {
+                              "type": "object",
+                              "properties": {
+                                "id": {
+                                  "type": "string",
+                                  "format": "uuid",
+                                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                                },
+                                "name": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "id",
+                                "name"
+                              ],
+                              "additionalProperties": false
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "shiftId": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "format": "uuid",
+                              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "details": {
+                          "type": "object",
+                          "propertyNames": {
+                            "type": "string"
+                          },
+                          "additionalProperties": {}
+                        },
+                        "openedAt": {
+                          "type": "string",
+                          "format": "date-time",
+                          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                        },
+                        "lastTriggeredAt": {
+                          "type": "string",
+                          "format": "date-time",
+                          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                        },
+                        "triggerCount": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        },
+                        "acknowledgedAt": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "format": "date-time",
+                              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "acknowledgedBy": {
+                          "anyOf": [
+                            {
+                              "type": "object",
+                              "properties": {
+                                "id": {
+                                  "type": "string",
+                                  "format": "uuid",
+                                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                                },
+                                "name": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "id",
+                                "name"
+                              ],
+                              "additionalProperties": false
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "resolvedAt": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "format": "date-time",
+                              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "resolutionType": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "enum": [
+                                "MANUAL",
+                                "CONDITION_CLEARED",
+                                "SHIFT_ENDED",
+                                "SUPERSEDED"
+                              ]
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "resolutionNote": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "dismissedAt": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "format": "date-time",
+                              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "dismissReason": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "detectedLate": {
+                          "type": "boolean"
+                        },
+                        "dismissible": {
+                          "type": "boolean"
+                        },
+                        "version": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "type",
+                        "severity",
+                        "status",
+                        "summary",
+                        "guard",
+                        "site",
+                        "shiftId",
+                        "details",
+                        "openedAt",
+                        "lastTriggeredAt",
+                        "triggerCount",
+                        "acknowledgedAt",
+                        "acknowledgedBy",
+                        "resolvedAt",
+                        "resolutionType",
+                        "resolutionNote",
+                        "dismissedAt",
+                        "dismissReason",
+                        "detectedLate",
+                        "dismissible",
+                        "version"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "events": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                          },
+                          "type": {
+                            "type": "string"
+                          },
+                          "actorType": {
+                            "type": "string",
+                            "enum": [
+                              "USER",
+                              "SYSTEM"
+                            ]
+                          },
+                          "actorUserId": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "format": "uuid",
+                                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "note": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "payload": {
+                            "type": "object",
+                            "propertyNames": {
+                              "type": "string"
+                            },
+                            "additionalProperties": {}
+                          },
+                          "createdAt": {
+                            "type": "string",
+                            "format": "date-time",
+                            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "type",
+                          "actorType",
+                          "actorUserId",
+                          "note",
+                          "payload",
+                          "createdAt"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "alert",
+                    "events"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "VALIDATION_FAILED",
+                            "UNAUTHENTICATED",
+                            "FORBIDDEN",
+                            "NOT_FOUND",
+                            "ORG_CONTEXT_REQUIRED",
+                            "ORG_SUSPENDED",
+                            "VERSION_CONFLICT",
+                            "SHIFT_INVALID_TRANSITION",
+                            "ALERT_INVALID_TRANSITION",
+                            "SHIFT_OVERLAP",
+                            "SHIFT_NOT_ACTIVE",
+                            "SHIFT_OUTSIDE_START_WINDOW",
+                            "TRACKING_PERMISSION_REQUIRED",
+                            "LOCATION_FIX_REQUIRED",
+                            "STARTED_OFF_SITE_BLOCKED",
+                            "OUTSIDE_SHIFT_WINDOW",
+                            "TIMESTAMP_TOO_OLD",
+                            "DEVICE_NOT_REGISTERED",
+                            "DEVICE_REVOKED",
+                            "INVALID_QR",
+                            "LAST_OWNER",
+                            "SELF_ROLE_CHANGE",
+                            "INVITATION_EXPIRED",
+                            "ENROLLMENT_CODE_INVALID",
+                            "ATTACHMENT_TOO_LARGE",
+                            "ATTACHMENT_TYPE_NOT_ALLOWED",
+                            "EXPORT_RANGE_TOO_LARGE",
+                            "APP_VERSION_UNSUPPORTED",
+                            "RATE_LIMITED",
+                            "INTERNAL_ERROR",
+                            "NOT_READY"
+                          ]
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "requestId": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "path": {
+                                "type": "string"
+                              },
+                              "issue": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "path",
+                              "issue"
+                            ],
+                            "additionalProperties": false
+                          }
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message",
+                        "requestId"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/alerts/:id/acknowledge": {
+      "post": {
+        "summary": "Acknowledges an alert. Idempotent: a second acknowledgement shows who was first.",
+        "x-policy": {
+          "access": {
+            "kind": "permission",
+            "permission": "alerts.acknowledge"
+          },
+          "ownership": "organization",
+          "rateLimit": "default",
+          "audit": "ALERT_ACKNOWLEDGED"
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "type": "object",
+                  "properties": {
+                    "alert": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "format": "uuid",
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                        },
+                        "type": {
+                          "type": "string",
+                          "enum": [
+                            "SOS_ACTIVATED",
+                            "INCIDENT_CRITICAL",
+                            "INCIDENT_HIGH",
+                            "GUARD_LEFT_SITE",
+                            "TRACKING_DISABLED",
+                            "DEVICE_OFFLINE",
+                            "LOCATION_STALE",
+                            "SHIFT_NOT_STARTED",
+                            "SHIFT_MISSED",
+                            "CHECKPOINT_MISSED",
+                            "SUSPICIOUS_LOCATION",
+                            "STARTED_OFF_SITE",
+                            "SHIFT_OVERRUN",
+                            "LOW_BATTERY",
+                            "DEVICE_CHANGED"
+                          ]
+                        },
+                        "severity": {
+                          "type": "string",
+                          "enum": [
+                            "LOW",
+                            "MEDIUM",
+                            "HIGH",
+                            "CRITICAL"
+                          ]
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "OPEN",
+                            "ACKNOWLEDGED",
+                            "RESOLVED",
+                            "DISMISSED"
+                          ]
+                        },
+                        "summary": {
+                          "type": "string"
+                        },
+                        "guard": {
+                          "anyOf": [
+                            {
+                              "type": "object",
+                              "properties": {
+                                "id": {
+                                  "type": "string",
+                                  "format": "uuid",
+                                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                                },
+                                "displayName": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "id",
+                                "displayName"
+                              ],
+                              "additionalProperties": false
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "site": {
+                          "anyOf": [
+                            {
+                              "type": "object",
+                              "properties": {
+                                "id": {
+                                  "type": "string",
+                                  "format": "uuid",
+                                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                                },
+                                "name": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "id",
+                                "name"
+                              ],
+                              "additionalProperties": false
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "shiftId": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "format": "uuid",
+                              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "details": {
+                          "type": "object",
+                          "propertyNames": {
+                            "type": "string"
+                          },
+                          "additionalProperties": {}
+                        },
+                        "openedAt": {
+                          "type": "string",
+                          "format": "date-time",
+                          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                        },
+                        "lastTriggeredAt": {
+                          "type": "string",
+                          "format": "date-time",
+                          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                        },
+                        "triggerCount": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        },
+                        "acknowledgedAt": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "format": "date-time",
+                              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "acknowledgedBy": {
+                          "anyOf": [
+                            {
+                              "type": "object",
+                              "properties": {
+                                "id": {
+                                  "type": "string",
+                                  "format": "uuid",
+                                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                                },
+                                "name": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "id",
+                                "name"
+                              ],
+                              "additionalProperties": false
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "resolvedAt": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "format": "date-time",
+                              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "resolutionType": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "enum": [
+                                "MANUAL",
+                                "CONDITION_CLEARED",
+                                "SHIFT_ENDED",
+                                "SUPERSEDED"
+                              ]
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "resolutionNote": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "dismissedAt": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "format": "date-time",
+                              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "dismissReason": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "detectedLate": {
+                          "type": "boolean"
+                        },
+                        "dismissible": {
+                          "type": "boolean"
+                        },
+                        "version": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "type",
+                        "severity",
+                        "status",
+                        "summary",
+                        "guard",
+                        "site",
+                        "shiftId",
+                        "details",
+                        "openedAt",
+                        "lastTriggeredAt",
+                        "triggerCount",
+                        "acknowledgedAt",
+                        "acknowledgedBy",
+                        "resolvedAt",
+                        "resolutionType",
+                        "resolutionNote",
+                        "dismissedAt",
+                        "dismissReason",
+                        "detectedLate",
+                        "dismissible",
+                        "version"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "alert"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "VALIDATION_FAILED",
+                            "UNAUTHENTICATED",
+                            "FORBIDDEN",
+                            "NOT_FOUND",
+                            "ORG_CONTEXT_REQUIRED",
+                            "ORG_SUSPENDED",
+                            "VERSION_CONFLICT",
+                            "SHIFT_INVALID_TRANSITION",
+                            "ALERT_INVALID_TRANSITION",
+                            "SHIFT_OVERLAP",
+                            "SHIFT_NOT_ACTIVE",
+                            "SHIFT_OUTSIDE_START_WINDOW",
+                            "TRACKING_PERMISSION_REQUIRED",
+                            "LOCATION_FIX_REQUIRED",
+                            "STARTED_OFF_SITE_BLOCKED",
+                            "OUTSIDE_SHIFT_WINDOW",
+                            "TIMESTAMP_TOO_OLD",
+                            "DEVICE_NOT_REGISTERED",
+                            "DEVICE_REVOKED",
+                            "INVALID_QR",
+                            "LAST_OWNER",
+                            "SELF_ROLE_CHANGE",
+                            "INVITATION_EXPIRED",
+                            "ENROLLMENT_CODE_INVALID",
+                            "ATTACHMENT_TOO_LARGE",
+                            "ATTACHMENT_TYPE_NOT_ALLOWED",
+                            "EXPORT_RANGE_TOO_LARGE",
+                            "APP_VERSION_UNSUPPORTED",
+                            "RATE_LIMITED",
+                            "INTERNAL_ERROR",
+                            "NOT_READY"
+                          ]
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "requestId": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "path": {
+                                "type": "string"
+                              },
+                              "issue": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "path",
+                              "issue"
+                            ],
+                            "additionalProperties": false
+                          }
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message",
+                        "requestId"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "VALIDATION_FAILED",
+                            "UNAUTHENTICATED",
+                            "FORBIDDEN",
+                            "NOT_FOUND",
+                            "ORG_CONTEXT_REQUIRED",
+                            "ORG_SUSPENDED",
+                            "VERSION_CONFLICT",
+                            "SHIFT_INVALID_TRANSITION",
+                            "ALERT_INVALID_TRANSITION",
+                            "SHIFT_OVERLAP",
+                            "SHIFT_NOT_ACTIVE",
+                            "SHIFT_OUTSIDE_START_WINDOW",
+                            "TRACKING_PERMISSION_REQUIRED",
+                            "LOCATION_FIX_REQUIRED",
+                            "STARTED_OFF_SITE_BLOCKED",
+                            "OUTSIDE_SHIFT_WINDOW",
+                            "TIMESTAMP_TOO_OLD",
+                            "DEVICE_NOT_REGISTERED",
+                            "DEVICE_REVOKED",
+                            "INVALID_QR",
+                            "LAST_OWNER",
+                            "SELF_ROLE_CHANGE",
+                            "INVITATION_EXPIRED",
+                            "ENROLLMENT_CODE_INVALID",
+                            "ATTACHMENT_TOO_LARGE",
+                            "ATTACHMENT_TYPE_NOT_ALLOWED",
+                            "EXPORT_RANGE_TOO_LARGE",
+                            "APP_VERSION_UNSUPPORTED",
+                            "RATE_LIMITED",
+                            "INTERNAL_ERROR",
+                            "NOT_READY"
+                          ]
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "requestId": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "path": {
+                                "type": "string"
+                              },
+                              "issue": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "path",
+                              "issue"
+                            ],
+                            "additionalProperties": false
+                          }
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message",
+                        "requestId"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/alerts/:id/dismiss": {
+      "post": {
+        "summary": "Dismisses an alert with a reason. SOS and critical incident alerts cannot be dismissed.",
+        "x-policy": {
+          "access": {
+            "kind": "permission",
+            "permission": "alerts.resolve"
+          },
+          "ownership": "organization",
+          "rateLimit": "default",
+          "audit": "ALERT_DISMISSED"
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "type": "object",
+                  "properties": {
+                    "alert": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "format": "uuid",
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                        },
+                        "type": {
+                          "type": "string",
+                          "enum": [
+                            "SOS_ACTIVATED",
+                            "INCIDENT_CRITICAL",
+                            "INCIDENT_HIGH",
+                            "GUARD_LEFT_SITE",
+                            "TRACKING_DISABLED",
+                            "DEVICE_OFFLINE",
+                            "LOCATION_STALE",
+                            "SHIFT_NOT_STARTED",
+                            "SHIFT_MISSED",
+                            "CHECKPOINT_MISSED",
+                            "SUSPICIOUS_LOCATION",
+                            "STARTED_OFF_SITE",
+                            "SHIFT_OVERRUN",
+                            "LOW_BATTERY",
+                            "DEVICE_CHANGED"
+                          ]
+                        },
+                        "severity": {
+                          "type": "string",
+                          "enum": [
+                            "LOW",
+                            "MEDIUM",
+                            "HIGH",
+                            "CRITICAL"
+                          ]
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "OPEN",
+                            "ACKNOWLEDGED",
+                            "RESOLVED",
+                            "DISMISSED"
+                          ]
+                        },
+                        "summary": {
+                          "type": "string"
+                        },
+                        "guard": {
+                          "anyOf": [
+                            {
+                              "type": "object",
+                              "properties": {
+                                "id": {
+                                  "type": "string",
+                                  "format": "uuid",
+                                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                                },
+                                "displayName": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "id",
+                                "displayName"
+                              ],
+                              "additionalProperties": false
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "site": {
+                          "anyOf": [
+                            {
+                              "type": "object",
+                              "properties": {
+                                "id": {
+                                  "type": "string",
+                                  "format": "uuid",
+                                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                                },
+                                "name": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "id",
+                                "name"
+                              ],
+                              "additionalProperties": false
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "shiftId": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "format": "uuid",
+                              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "details": {
+                          "type": "object",
+                          "propertyNames": {
+                            "type": "string"
+                          },
+                          "additionalProperties": {}
+                        },
+                        "openedAt": {
+                          "type": "string",
+                          "format": "date-time",
+                          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                        },
+                        "lastTriggeredAt": {
+                          "type": "string",
+                          "format": "date-time",
+                          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                        },
+                        "triggerCount": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        },
+                        "acknowledgedAt": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "format": "date-time",
+                              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "acknowledgedBy": {
+                          "anyOf": [
+                            {
+                              "type": "object",
+                              "properties": {
+                                "id": {
+                                  "type": "string",
+                                  "format": "uuid",
+                                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                                },
+                                "name": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "id",
+                                "name"
+                              ],
+                              "additionalProperties": false
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "resolvedAt": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "format": "date-time",
+                              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "resolutionType": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "enum": [
+                                "MANUAL",
+                                "CONDITION_CLEARED",
+                                "SHIFT_ENDED",
+                                "SUPERSEDED"
+                              ]
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "resolutionNote": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "dismissedAt": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "format": "date-time",
+                              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "dismissReason": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "detectedLate": {
+                          "type": "boolean"
+                        },
+                        "dismissible": {
+                          "type": "boolean"
+                        },
+                        "version": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "type",
+                        "severity",
+                        "status",
+                        "summary",
+                        "guard",
+                        "site",
+                        "shiftId",
+                        "details",
+                        "openedAt",
+                        "lastTriggeredAt",
+                        "triggerCount",
+                        "acknowledgedAt",
+                        "acknowledgedBy",
+                        "resolvedAt",
+                        "resolutionType",
+                        "resolutionNote",
+                        "dismissedAt",
+                        "dismissReason",
+                        "detectedLate",
+                        "dismissible",
+                        "version"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "alert"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "VALIDATION_FAILED",
+                            "UNAUTHENTICATED",
+                            "FORBIDDEN",
+                            "NOT_FOUND",
+                            "ORG_CONTEXT_REQUIRED",
+                            "ORG_SUSPENDED",
+                            "VERSION_CONFLICT",
+                            "SHIFT_INVALID_TRANSITION",
+                            "ALERT_INVALID_TRANSITION",
+                            "SHIFT_OVERLAP",
+                            "SHIFT_NOT_ACTIVE",
+                            "SHIFT_OUTSIDE_START_WINDOW",
+                            "TRACKING_PERMISSION_REQUIRED",
+                            "LOCATION_FIX_REQUIRED",
+                            "STARTED_OFF_SITE_BLOCKED",
+                            "OUTSIDE_SHIFT_WINDOW",
+                            "TIMESTAMP_TOO_OLD",
+                            "DEVICE_NOT_REGISTERED",
+                            "DEVICE_REVOKED",
+                            "INVALID_QR",
+                            "LAST_OWNER",
+                            "SELF_ROLE_CHANGE",
+                            "INVITATION_EXPIRED",
+                            "ENROLLMENT_CODE_INVALID",
+                            "ATTACHMENT_TOO_LARGE",
+                            "ATTACHMENT_TYPE_NOT_ALLOWED",
+                            "EXPORT_RANGE_TOO_LARGE",
+                            "APP_VERSION_UNSUPPORTED",
+                            "RATE_LIMITED",
+                            "INTERNAL_ERROR",
+                            "NOT_READY"
+                          ]
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "requestId": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "path": {
+                                "type": "string"
+                              },
+                              "issue": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "path",
+                              "issue"
+                            ],
+                            "additionalProperties": false
+                          }
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message",
+                        "requestId"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "VALIDATION_FAILED",
+                            "UNAUTHENTICATED",
+                            "FORBIDDEN",
+                            "NOT_FOUND",
+                            "ORG_CONTEXT_REQUIRED",
+                            "ORG_SUSPENDED",
+                            "VERSION_CONFLICT",
+                            "SHIFT_INVALID_TRANSITION",
+                            "ALERT_INVALID_TRANSITION",
+                            "SHIFT_OVERLAP",
+                            "SHIFT_NOT_ACTIVE",
+                            "SHIFT_OUTSIDE_START_WINDOW",
+                            "TRACKING_PERMISSION_REQUIRED",
+                            "LOCATION_FIX_REQUIRED",
+                            "STARTED_OFF_SITE_BLOCKED",
+                            "OUTSIDE_SHIFT_WINDOW",
+                            "TIMESTAMP_TOO_OLD",
+                            "DEVICE_NOT_REGISTERED",
+                            "DEVICE_REVOKED",
+                            "INVALID_QR",
+                            "LAST_OWNER",
+                            "SELF_ROLE_CHANGE",
+                            "INVITATION_EXPIRED",
+                            "ENROLLMENT_CODE_INVALID",
+                            "ATTACHMENT_TOO_LARGE",
+                            "ATTACHMENT_TYPE_NOT_ALLOWED",
+                            "EXPORT_RANGE_TOO_LARGE",
+                            "APP_VERSION_UNSUPPORTED",
+                            "RATE_LIMITED",
+                            "INTERNAL_ERROR",
+                            "NOT_READY"
+                          ]
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "requestId": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "path": {
+                                "type": "string"
+                              },
+                              "issue": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "path",
+                              "issue"
+                            ],
+                            "additionalProperties": false
+                          }
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message",
+                        "requestId"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/alerts/:id/resolve": {
+      "post": {
+        "summary": "Resolves an alert, with an optional note.",
+        "x-policy": {
+          "access": {
+            "kind": "permission",
+            "permission": "alerts.resolve"
+          },
+          "ownership": "organization",
+          "rateLimit": "default",
+          "audit": "ALERT_RESOLVED"
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "type": "object",
+                  "properties": {
+                    "alert": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "format": "uuid",
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                        },
+                        "type": {
+                          "type": "string",
+                          "enum": [
+                            "SOS_ACTIVATED",
+                            "INCIDENT_CRITICAL",
+                            "INCIDENT_HIGH",
+                            "GUARD_LEFT_SITE",
+                            "TRACKING_DISABLED",
+                            "DEVICE_OFFLINE",
+                            "LOCATION_STALE",
+                            "SHIFT_NOT_STARTED",
+                            "SHIFT_MISSED",
+                            "CHECKPOINT_MISSED",
+                            "SUSPICIOUS_LOCATION",
+                            "STARTED_OFF_SITE",
+                            "SHIFT_OVERRUN",
+                            "LOW_BATTERY",
+                            "DEVICE_CHANGED"
+                          ]
+                        },
+                        "severity": {
+                          "type": "string",
+                          "enum": [
+                            "LOW",
+                            "MEDIUM",
+                            "HIGH",
+                            "CRITICAL"
+                          ]
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "OPEN",
+                            "ACKNOWLEDGED",
+                            "RESOLVED",
+                            "DISMISSED"
+                          ]
+                        },
+                        "summary": {
+                          "type": "string"
+                        },
+                        "guard": {
+                          "anyOf": [
+                            {
+                              "type": "object",
+                              "properties": {
+                                "id": {
+                                  "type": "string",
+                                  "format": "uuid",
+                                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                                },
+                                "displayName": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "id",
+                                "displayName"
+                              ],
+                              "additionalProperties": false
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "site": {
+                          "anyOf": [
+                            {
+                              "type": "object",
+                              "properties": {
+                                "id": {
+                                  "type": "string",
+                                  "format": "uuid",
+                                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                                },
+                                "name": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "id",
+                                "name"
+                              ],
+                              "additionalProperties": false
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "shiftId": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "format": "uuid",
+                              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "details": {
+                          "type": "object",
+                          "propertyNames": {
+                            "type": "string"
+                          },
+                          "additionalProperties": {}
+                        },
+                        "openedAt": {
+                          "type": "string",
+                          "format": "date-time",
+                          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                        },
+                        "lastTriggeredAt": {
+                          "type": "string",
+                          "format": "date-time",
+                          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                        },
+                        "triggerCount": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        },
+                        "acknowledgedAt": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "format": "date-time",
+                              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "acknowledgedBy": {
+                          "anyOf": [
+                            {
+                              "type": "object",
+                              "properties": {
+                                "id": {
+                                  "type": "string",
+                                  "format": "uuid",
+                                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                                },
+                                "name": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "id",
+                                "name"
+                              ],
+                              "additionalProperties": false
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "resolvedAt": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "format": "date-time",
+                              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "resolutionType": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "enum": [
+                                "MANUAL",
+                                "CONDITION_CLEARED",
+                                "SHIFT_ENDED",
+                                "SUPERSEDED"
+                              ]
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "resolutionNote": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "dismissedAt": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "format": "date-time",
+                              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "dismissReason": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "detectedLate": {
+                          "type": "boolean"
+                        },
+                        "dismissible": {
+                          "type": "boolean"
+                        },
+                        "version": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "type",
+                        "severity",
+                        "status",
+                        "summary",
+                        "guard",
+                        "site",
+                        "shiftId",
+                        "details",
+                        "openedAt",
+                        "lastTriggeredAt",
+                        "triggerCount",
+                        "acknowledgedAt",
+                        "acknowledgedBy",
+                        "resolvedAt",
+                        "resolutionType",
+                        "resolutionNote",
+                        "dismissedAt",
+                        "dismissReason",
+                        "detectedLate",
+                        "dismissible",
+                        "version"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "alert"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "VALIDATION_FAILED",
+                            "UNAUTHENTICATED",
+                            "FORBIDDEN",
+                            "NOT_FOUND",
+                            "ORG_CONTEXT_REQUIRED",
+                            "ORG_SUSPENDED",
+                            "VERSION_CONFLICT",
+                            "SHIFT_INVALID_TRANSITION",
+                            "ALERT_INVALID_TRANSITION",
+                            "SHIFT_OVERLAP",
+                            "SHIFT_NOT_ACTIVE",
+                            "SHIFT_OUTSIDE_START_WINDOW",
+                            "TRACKING_PERMISSION_REQUIRED",
+                            "LOCATION_FIX_REQUIRED",
+                            "STARTED_OFF_SITE_BLOCKED",
+                            "OUTSIDE_SHIFT_WINDOW",
+                            "TIMESTAMP_TOO_OLD",
+                            "DEVICE_NOT_REGISTERED",
+                            "DEVICE_REVOKED",
+                            "INVALID_QR",
+                            "LAST_OWNER",
+                            "SELF_ROLE_CHANGE",
+                            "INVITATION_EXPIRED",
+                            "ENROLLMENT_CODE_INVALID",
+                            "ATTACHMENT_TOO_LARGE",
+                            "ATTACHMENT_TYPE_NOT_ALLOWED",
+                            "EXPORT_RANGE_TOO_LARGE",
+                            "APP_VERSION_UNSUPPORTED",
+                            "RATE_LIMITED",
+                            "INTERNAL_ERROR",
+                            "NOT_READY"
+                          ]
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "requestId": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "path": {
+                                "type": "string"
+                              },
+                              "issue": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "path",
+                              "issue"
+                            ],
+                            "additionalProperties": false
+                          }
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message",
+                        "requestId"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "VALIDATION_FAILED",
+                            "UNAUTHENTICATED",
+                            "FORBIDDEN",
+                            "NOT_FOUND",
+                            "ORG_CONTEXT_REQUIRED",
+                            "ORG_SUSPENDED",
+                            "VERSION_CONFLICT",
+                            "SHIFT_INVALID_TRANSITION",
+                            "ALERT_INVALID_TRANSITION",
+                            "SHIFT_OVERLAP",
+                            "SHIFT_NOT_ACTIVE",
+                            "SHIFT_OUTSIDE_START_WINDOW",
+                            "TRACKING_PERMISSION_REQUIRED",
+                            "LOCATION_FIX_REQUIRED",
+                            "STARTED_OFF_SITE_BLOCKED",
+                            "OUTSIDE_SHIFT_WINDOW",
+                            "TIMESTAMP_TOO_OLD",
+                            "DEVICE_NOT_REGISTERED",
+                            "DEVICE_REVOKED",
+                            "INVALID_QR",
+                            "LAST_OWNER",
+                            "SELF_ROLE_CHANGE",
+                            "INVITATION_EXPIRED",
+                            "ENROLLMENT_CODE_INVALID",
+                            "ATTACHMENT_TOO_LARGE",
+                            "ATTACHMENT_TYPE_NOT_ALLOWED",
+                            "EXPORT_RANGE_TOO_LARGE",
+                            "APP_VERSION_UNSUPPORTED",
+                            "RATE_LIMITED",
+                            "INTERNAL_ERROR",
+                            "NOT_READY"
+                          ]
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "requestId": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "path": {
+                                "type": "string"
+                              },
+                              "issue": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "path",
+                              "issue"
+                            ],
+                            "additionalProperties": false
+                          }
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message",
+                        "requestId"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/audit-logs": {
       "get": {
         "summary": "The organization's audit log, newest first.",
@@ -264,6 +2419,7 @@
                             "ORG_SUSPENDED",
                             "VERSION_CONFLICT",
                             "SHIFT_INVALID_TRANSITION",
+                            "ALERT_INVALID_TRANSITION",
                             "SHIFT_OVERLAP",
                             "SHIFT_NOT_ACTIVE",
                             "SHIFT_OUTSIDE_START_WINDOW",
@@ -378,6 +2534,7 @@
                             "ORG_SUSPENDED",
                             "VERSION_CONFLICT",
                             "SHIFT_INVALID_TRANSITION",
+                            "ALERT_INVALID_TRANSITION",
                             "SHIFT_OVERLAP",
                             "SHIFT_NOT_ACTIVE",
                             "SHIFT_OUTSIDE_START_WINDOW",
@@ -660,6 +2817,7 @@
                             "ORG_SUSPENDED",
                             "VERSION_CONFLICT",
                             "SHIFT_INVALID_TRANSITION",
+                            "ALERT_INVALID_TRANSITION",
                             "SHIFT_OVERLAP",
                             "SHIFT_NOT_ACTIVE",
                             "SHIFT_OUTSIDE_START_WINDOW",
@@ -748,6 +2906,7 @@
                             "ORG_SUSPENDED",
                             "VERSION_CONFLICT",
                             "SHIFT_INVALID_TRANSITION",
+                            "ALERT_INVALID_TRANSITION",
                             "SHIFT_OVERLAP",
                             "SHIFT_NOT_ACTIVE",
                             "SHIFT_OUTSIDE_START_WINDOW",
@@ -955,6 +3114,7 @@
                             "ORG_SUSPENDED",
                             "VERSION_CONFLICT",
                             "SHIFT_INVALID_TRANSITION",
+                            "ALERT_INVALID_TRANSITION",
                             "SHIFT_OVERLAP",
                             "SHIFT_NOT_ACTIVE",
                             "SHIFT_OUTSIDE_START_WINDOW",
@@ -1413,6 +3573,7 @@
                             "ORG_SUSPENDED",
                             "VERSION_CONFLICT",
                             "SHIFT_INVALID_TRANSITION",
+                            "ALERT_INVALID_TRANSITION",
                             "SHIFT_OVERLAP",
                             "SHIFT_NOT_ACTIVE",
                             "SHIFT_OUTSIDE_START_WINDOW",
@@ -1613,6 +3774,7 @@
                             "ORG_SUSPENDED",
                             "VERSION_CONFLICT",
                             "SHIFT_INVALID_TRANSITION",
+                            "ALERT_INVALID_TRANSITION",
                             "SHIFT_OVERLAP",
                             "SHIFT_NOT_ACTIVE",
                             "SHIFT_OUTSIDE_START_WINDOW",
@@ -1701,6 +3863,7 @@
                             "ORG_SUSPENDED",
                             "VERSION_CONFLICT",
                             "SHIFT_INVALID_TRANSITION",
+                            "ALERT_INVALID_TRANSITION",
                             "SHIFT_OVERLAP",
                             "SHIFT_NOT_ACTIVE",
                             "SHIFT_OUTSIDE_START_WINDOW",
@@ -1979,6 +4142,7 @@
                             "ORG_SUSPENDED",
                             "VERSION_CONFLICT",
                             "SHIFT_INVALID_TRANSITION",
+                            "ALERT_INVALID_TRANSITION",
                             "SHIFT_OVERLAP",
                             "SHIFT_NOT_ACTIVE",
                             "SHIFT_OUTSIDE_START_WINDOW",
@@ -2157,6 +4321,7 @@
                             "ORG_SUSPENDED",
                             "VERSION_CONFLICT",
                             "SHIFT_INVALID_TRANSITION",
+                            "ALERT_INVALID_TRANSITION",
                             "SHIFT_OVERLAP",
                             "SHIFT_NOT_ACTIVE",
                             "SHIFT_OUTSIDE_START_WINDOW",
@@ -2333,6 +4498,7 @@
                             "ORG_SUSPENDED",
                             "VERSION_CONFLICT",
                             "SHIFT_INVALID_TRANSITION",
+                            "ALERT_INVALID_TRANSITION",
                             "SHIFT_OVERLAP",
                             "SHIFT_NOT_ACTIVE",
                             "SHIFT_OUTSIDE_START_WINDOW",
@@ -2421,6 +4587,7 @@
                             "ORG_SUSPENDED",
                             "VERSION_CONFLICT",
                             "SHIFT_INVALID_TRANSITION",
+                            "ALERT_INVALID_TRANSITION",
                             "SHIFT_OVERLAP",
                             "SHIFT_NOT_ACTIVE",
                             "SHIFT_OUTSIDE_START_WINDOW",
@@ -2652,6 +4819,7 @@
                             "ORG_SUSPENDED",
                             "VERSION_CONFLICT",
                             "SHIFT_INVALID_TRANSITION",
+                            "ALERT_INVALID_TRANSITION",
                             "SHIFT_OVERLAP",
                             "SHIFT_NOT_ACTIVE",
                             "SHIFT_OUTSIDE_START_WINDOW",
@@ -2794,6 +4962,7 @@
                             "ORG_SUSPENDED",
                             "VERSION_CONFLICT",
                             "SHIFT_INVALID_TRANSITION",
+                            "ALERT_INVALID_TRANSITION",
                             "SHIFT_OVERLAP",
                             "SHIFT_NOT_ACTIVE",
                             "SHIFT_OUTSIDE_START_WINDOW",
@@ -2882,6 +5051,7 @@
                             "ORG_SUSPENDED",
                             "VERSION_CONFLICT",
                             "SHIFT_INVALID_TRANSITION",
+                            "ALERT_INVALID_TRANSITION",
                             "SHIFT_OVERLAP",
                             "SHIFT_NOT_ACTIVE",
                             "SHIFT_OUTSIDE_START_WINDOW",
@@ -3060,6 +5230,7 @@
                             "ORG_SUSPENDED",
                             "VERSION_CONFLICT",
                             "SHIFT_INVALID_TRANSITION",
+                            "ALERT_INVALID_TRANSITION",
                             "SHIFT_OVERLAP",
                             "SHIFT_NOT_ACTIVE",
                             "SHIFT_OUTSIDE_START_WINDOW",
@@ -3449,6 +5620,7 @@
                             "ORG_SUSPENDED",
                             "VERSION_CONFLICT",
                             "SHIFT_INVALID_TRANSITION",
+                            "ALERT_INVALID_TRANSITION",
                             "SHIFT_OVERLAP",
                             "SHIFT_NOT_ACTIVE",
                             "SHIFT_OUTSIDE_START_WINDOW",
@@ -3618,6 +5790,7 @@
                             "ORG_SUSPENDED",
                             "VERSION_CONFLICT",
                             "SHIFT_INVALID_TRANSITION",
+                            "ALERT_INVALID_TRANSITION",
                             "SHIFT_OVERLAP",
                             "SHIFT_NOT_ACTIVE",
                             "SHIFT_OUTSIDE_START_WINDOW",
@@ -3706,6 +5879,7 @@
                             "ORG_SUSPENDED",
                             "VERSION_CONFLICT",
                             "SHIFT_INVALID_TRANSITION",
+                            "ALERT_INVALID_TRANSITION",
                             "SHIFT_OVERLAP",
                             "SHIFT_NOT_ACTIVE",
                             "SHIFT_OUTSIDE_START_WINDOW",
@@ -3845,6 +6019,7 @@
                             "ORG_SUSPENDED",
                             "VERSION_CONFLICT",
                             "SHIFT_INVALID_TRANSITION",
+                            "ALERT_INVALID_TRANSITION",
                             "SHIFT_OVERLAP",
                             "SHIFT_NOT_ACTIVE",
                             "SHIFT_OUTSIDE_START_WINDOW",
@@ -3933,6 +6108,7 @@
                             "ORG_SUSPENDED",
                             "VERSION_CONFLICT",
                             "SHIFT_INVALID_TRANSITION",
+                            "ALERT_INVALID_TRANSITION",
                             "SHIFT_OVERLAP",
                             "SHIFT_NOT_ACTIVE",
                             "SHIFT_OUTSIDE_START_WINDOW",
@@ -4619,6 +6795,7 @@
                             "ORG_SUSPENDED",
                             "VERSION_CONFLICT",
                             "SHIFT_INVALID_TRANSITION",
+                            "ALERT_INVALID_TRANSITION",
                             "SHIFT_OVERLAP",
                             "SHIFT_NOT_ACTIVE",
                             "SHIFT_OUTSIDE_START_WINDOW",
@@ -4707,6 +6884,7 @@
                             "ORG_SUSPENDED",
                             "VERSION_CONFLICT",
                             "SHIFT_INVALID_TRANSITION",
+                            "ALERT_INVALID_TRANSITION",
                             "SHIFT_OVERLAP",
                             "SHIFT_NOT_ACTIVE",
                             "SHIFT_OUTSIDE_START_WINDOW",
@@ -4795,6 +6973,7 @@
                             "ORG_SUSPENDED",
                             "VERSION_CONFLICT",
                             "SHIFT_INVALID_TRANSITION",
+                            "ALERT_INVALID_TRANSITION",
                             "SHIFT_OVERLAP",
                             "SHIFT_NOT_ACTIVE",
                             "SHIFT_OUTSIDE_START_WINDOW",
@@ -5150,6 +7329,7 @@
                             "ORG_SUSPENDED",
                             "VERSION_CONFLICT",
                             "SHIFT_INVALID_TRANSITION",
+                            "ALERT_INVALID_TRANSITION",
                             "SHIFT_OVERLAP",
                             "SHIFT_NOT_ACTIVE",
                             "SHIFT_OUTSIDE_START_WINDOW",
@@ -5298,6 +7478,7 @@
                             "ORG_SUSPENDED",
                             "VERSION_CONFLICT",
                             "SHIFT_INVALID_TRANSITION",
+                            "ALERT_INVALID_TRANSITION",
                             "SHIFT_OVERLAP",
                             "SHIFT_NOT_ACTIVE",
                             "SHIFT_OUTSIDE_START_WINDOW",
@@ -5490,6 +7671,7 @@
                             "ORG_SUSPENDED",
                             "VERSION_CONFLICT",
                             "SHIFT_INVALID_TRANSITION",
+                            "ALERT_INVALID_TRANSITION",
                             "SHIFT_OVERLAP",
                             "SHIFT_NOT_ACTIVE",
                             "SHIFT_OUTSIDE_START_WINDOW",
@@ -5578,6 +7760,7 @@
                             "ORG_SUSPENDED",
                             "VERSION_CONFLICT",
                             "SHIFT_INVALID_TRANSITION",
+                            "ALERT_INVALID_TRANSITION",
                             "SHIFT_OVERLAP",
                             "SHIFT_NOT_ACTIVE",
                             "SHIFT_OUTSIDE_START_WINDOW",
@@ -6124,6 +8307,7 @@
                             "ORG_SUSPENDED",
                             "VERSION_CONFLICT",
                             "SHIFT_INVALID_TRANSITION",
+                            "ALERT_INVALID_TRANSITION",
                             "SHIFT_OVERLAP",
                             "SHIFT_NOT_ACTIVE",
                             "SHIFT_OUTSIDE_START_WINDOW",
@@ -6212,6 +8396,7 @@
                             "ORG_SUSPENDED",
                             "VERSION_CONFLICT",
                             "SHIFT_INVALID_TRANSITION",
+                            "ALERT_INVALID_TRANSITION",
                             "SHIFT_OVERLAP",
                             "SHIFT_NOT_ACTIVE",
                             "SHIFT_OUTSIDE_START_WINDOW",
@@ -6524,6 +8709,7 @@
                             "ORG_SUSPENDED",
                             "VERSION_CONFLICT",
                             "SHIFT_INVALID_TRANSITION",
+                            "ALERT_INVALID_TRANSITION",
                             "SHIFT_OVERLAP",
                             "SHIFT_NOT_ACTIVE",
                             "SHIFT_OUTSIDE_START_WINDOW",
@@ -6834,6 +9020,7 @@
                             "ORG_SUSPENDED",
                             "VERSION_CONFLICT",
                             "SHIFT_INVALID_TRANSITION",
+                            "ALERT_INVALID_TRANSITION",
                             "SHIFT_OVERLAP",
                             "SHIFT_NOT_ACTIVE",
                             "SHIFT_OUTSIDE_START_WINDOW",
@@ -6922,6 +9109,7 @@
                             "ORG_SUSPENDED",
                             "VERSION_CONFLICT",
                             "SHIFT_INVALID_TRANSITION",
+                            "ALERT_INVALID_TRANSITION",
                             "SHIFT_OVERLAP",
                             "SHIFT_NOT_ACTIVE",
                             "SHIFT_OUTSIDE_START_WINDOW",
@@ -7234,6 +9422,7 @@
                             "ORG_SUSPENDED",
                             "VERSION_CONFLICT",
                             "SHIFT_INVALID_TRANSITION",
+                            "ALERT_INVALID_TRANSITION",
                             "SHIFT_OVERLAP",
                             "SHIFT_NOT_ACTIVE",
                             "SHIFT_OUTSIDE_START_WINDOW",
@@ -7528,6 +9717,7 @@
                             "ORG_SUSPENDED",
                             "VERSION_CONFLICT",
                             "SHIFT_INVALID_TRANSITION",
+                            "ALERT_INVALID_TRANSITION",
                             "SHIFT_OVERLAP",
                             "SHIFT_NOT_ACTIVE",
                             "SHIFT_OUTSIDE_START_WINDOW",
@@ -7616,6 +9806,7 @@
                             "ORG_SUSPENDED",
                             "VERSION_CONFLICT",
                             "SHIFT_INVALID_TRANSITION",
+                            "ALERT_INVALID_TRANSITION",
                             "SHIFT_OVERLAP",
                             "SHIFT_NOT_ACTIVE",
                             "SHIFT_OUTSIDE_START_WINDOW",
@@ -7928,6 +10119,7 @@
                             "ORG_SUSPENDED",
                             "VERSION_CONFLICT",
                             "SHIFT_INVALID_TRANSITION",
+                            "ALERT_INVALID_TRANSITION",
                             "SHIFT_OVERLAP",
                             "SHIFT_NOT_ACTIVE",
                             "SHIFT_OUTSIDE_START_WINDOW",
@@ -8240,6 +10432,7 @@
                             "ORG_SUSPENDED",
                             "VERSION_CONFLICT",
                             "SHIFT_INVALID_TRANSITION",
+                            "ALERT_INVALID_TRANSITION",
                             "SHIFT_OVERLAP",
                             "SHIFT_NOT_ACTIVE",
                             "SHIFT_OUTSIDE_START_WINDOW",
@@ -8552,6 +10745,7 @@
                             "ORG_SUSPENDED",
                             "VERSION_CONFLICT",
                             "SHIFT_INVALID_TRANSITION",
+                            "ALERT_INVALID_TRANSITION",
                             "SHIFT_OVERLAP",
                             "SHIFT_NOT_ACTIVE",
                             "SHIFT_OUTSIDE_START_WINDOW",
@@ -8864,6 +11058,7 @@
                             "ORG_SUSPENDED",
                             "VERSION_CONFLICT",
                             "SHIFT_INVALID_TRANSITION",
+                            "ALERT_INVALID_TRANSITION",
                             "SHIFT_OVERLAP",
                             "SHIFT_NOT_ACTIVE",
                             "SHIFT_OUTSIDE_START_WINDOW",
@@ -9158,6 +11353,7 @@
                             "ORG_SUSPENDED",
                             "VERSION_CONFLICT",
                             "SHIFT_INVALID_TRANSITION",
+                            "ALERT_INVALID_TRANSITION",
                             "SHIFT_OVERLAP",
                             "SHIFT_NOT_ACTIVE",
                             "SHIFT_OUTSIDE_START_WINDOW",
@@ -9246,6 +11442,7 @@
                             "ORG_SUSPENDED",
                             "VERSION_CONFLICT",
                             "SHIFT_INVALID_TRANSITION",
+                            "ALERT_INVALID_TRANSITION",
                             "SHIFT_OVERLAP",
                             "SHIFT_NOT_ACTIVE",
                             "SHIFT_OUTSIDE_START_WINDOW",
@@ -9334,6 +11531,7 @@
                             "ORG_SUSPENDED",
                             "VERSION_CONFLICT",
                             "SHIFT_INVALID_TRANSITION",
+                            "ALERT_INVALID_TRANSITION",
                             "SHIFT_OVERLAP",
                             "SHIFT_NOT_ACTIVE",
                             "SHIFT_OUTSIDE_START_WINDOW",
@@ -9495,6 +11693,7 @@
                             "ORG_SUSPENDED",
                             "VERSION_CONFLICT",
                             "SHIFT_INVALID_TRANSITION",
+                            "ALERT_INVALID_TRANSITION",
                             "SHIFT_OVERLAP",
                             "SHIFT_NOT_ACTIVE",
                             "SHIFT_OUTSIDE_START_WINDOW",
@@ -10017,6 +12216,7 @@
                             "ORG_SUSPENDED",
                             "VERSION_CONFLICT",
                             "SHIFT_INVALID_TRANSITION",
+                            "ALERT_INVALID_TRANSITION",
                             "SHIFT_OVERLAP",
                             "SHIFT_NOT_ACTIVE",
                             "SHIFT_OUTSIDE_START_WINDOW",
@@ -10317,6 +12517,7 @@
                             "ORG_SUSPENDED",
                             "VERSION_CONFLICT",
                             "SHIFT_INVALID_TRANSITION",
+                            "ALERT_INVALID_TRANSITION",
                             "SHIFT_OVERLAP",
                             "SHIFT_NOT_ACTIVE",
                             "SHIFT_OUTSIDE_START_WINDOW",
@@ -10615,6 +12816,7 @@
                             "ORG_SUSPENDED",
                             "VERSION_CONFLICT",
                             "SHIFT_INVALID_TRANSITION",
+                            "ALERT_INVALID_TRANSITION",
                             "SHIFT_OVERLAP",
                             "SHIFT_NOT_ACTIVE",
                             "SHIFT_OUTSIDE_START_WINDOW",
@@ -10703,6 +12905,7 @@
                             "ORG_SUSPENDED",
                             "VERSION_CONFLICT",
                             "SHIFT_INVALID_TRANSITION",
+                            "ALERT_INVALID_TRANSITION",
                             "SHIFT_OVERLAP",
                             "SHIFT_NOT_ACTIVE",
                             "SHIFT_OUTSIDE_START_WINDOW",
@@ -10922,6 +13125,7 @@
                             "ORG_SUSPENDED",
                             "VERSION_CONFLICT",
                             "SHIFT_INVALID_TRANSITION",
+                            "ALERT_INVALID_TRANSITION",
                             "SHIFT_OVERLAP",
                             "SHIFT_NOT_ACTIVE",
                             "SHIFT_OUTSIDE_START_WINDOW",
@@ -11127,6 +13331,7 @@
                             "ORG_SUSPENDED",
                             "VERSION_CONFLICT",
                             "SHIFT_INVALID_TRANSITION",
+                            "ALERT_INVALID_TRANSITION",
                             "SHIFT_OVERLAP",
                             "SHIFT_NOT_ACTIVE",
                             "SHIFT_OUTSIDE_START_WINDOW",
@@ -11298,6 +13503,7 @@
                             "ORG_SUSPENDED",
                             "VERSION_CONFLICT",
                             "SHIFT_INVALID_TRANSITION",
+                            "ALERT_INVALID_TRANSITION",
                             "SHIFT_OVERLAP",
                             "SHIFT_NOT_ACTIVE",
                             "SHIFT_OUTSIDE_START_WINDOW",
@@ -11422,6 +13628,7 @@
                               "ORG_SUSPENDED",
                               "VERSION_CONFLICT",
                               "SHIFT_INVALID_TRANSITION",
+                              "ALERT_INVALID_TRANSITION",
                               "SHIFT_OVERLAP",
                               "SHIFT_NOT_ACTIVE",
                               "SHIFT_OUTSIDE_START_WINDOW",
@@ -11521,6 +13728,7 @@
                             "ORG_SUSPENDED",
                             "VERSION_CONFLICT",
                             "SHIFT_INVALID_TRANSITION",
+                            "ALERT_INVALID_TRANSITION",
                             "SHIFT_OVERLAP",
                             "SHIFT_NOT_ACTIVE",
                             "SHIFT_OUTSIDE_START_WINDOW",
@@ -11645,6 +13853,7 @@
                             "ORG_SUSPENDED",
                             "VERSION_CONFLICT",
                             "SHIFT_INVALID_TRANSITION",
+                            "ALERT_INVALID_TRANSITION",
                             "SHIFT_OVERLAP",
                             "SHIFT_NOT_ACTIVE",
                             "SHIFT_OUTSIDE_START_WINDOW",
@@ -11735,6 +13944,7 @@
                   "ORG_SUSPENDED",
                   "VERSION_CONFLICT",
                   "SHIFT_INVALID_TRANSITION",
+                  "ALERT_INVALID_TRANSITION",
                   "SHIFT_OVERLAP",
                   "SHIFT_NOT_ACTIVE",
                   "SHIFT_OUTSIDE_START_WINDOW",

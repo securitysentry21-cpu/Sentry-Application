@@ -25,12 +25,13 @@ async function seedB(sql: string, params: unknown[]): Promise<void> {
   await asOwner(t.db, (c) => c.query(sql, params));
 }
 
-const B: { guard: string; device: string; site: string; checkpoint: string; shift: string } = {
+const B: { guard: string; device: string; site: string; checkpoint: string; shift: string; alert: string } = {
   guard: randomUUID(),
   device: randomUUID(),
   site: randomUUID(),
   checkpoint: randomUUID(),
   shift: randomUUID(),
+  alert: randomUUID(),
 };
 
 async function seedBResources(): Promise<void> {
@@ -56,6 +57,12 @@ async function seedBResources(): Promise<void> {
     `insert into shifts (id, organization_id, guard_id, site_id, starts_at, ends_at, start_deadline_at)
      values ($1, $2, $3, $4, now() + interval '1 hour', now() + interval '9 hours', now() + interval '3 hours')`,
     [B.shift, orgB.id, B.guard, B.site],
+  );
+  await seedB(
+    `insert into alerts (id, organization_id, type, severity, dedupe_key, summary, guard_id, site_id, shift_id,
+       opened_at, last_triggered_at)
+     values ($1, $2, 'DEVICE_OFFLINE', 'MEDIUM', $3, 'Device offline', $4, $5, $6, now(), now())`,
+    [B.alert, orgB.id, `offline:${B.shift}`, B.guard, B.site, B.shift],
   );
 }
 
@@ -103,6 +110,10 @@ const CROSS_TENANT_RESOURCES: Record<string, Probe> = {
     body: { endsAt: '2030-01-01T00:00:00.000Z' },
   },
   'POST /api/v1/shifts/:id/reopen': { id: fixed(() => B.shift), body: { reason: 'x' } },
+  'GET /api/v1/alerts/:id': { id: fixed(() => B.alert) },
+  'POST /api/v1/alerts/:id/acknowledge': { id: fixed(() => B.alert) },
+  'POST /api/v1/alerts/:id/resolve': { id: fixed(() => B.alert), body: { note: 'x' } },
+  'POST /api/v1/alerts/:id/dismiss': { id: fixed(() => B.alert), body: { reason: 'x' } },
   'POST /api/v1/shifts/:id/start': { guardOnly: 'shifts.test.ts › ADV-A03' },
   'POST /api/v1/shifts/:id/end': { guardOnly: 'shifts.test.ts › ADV-A03' },
 };

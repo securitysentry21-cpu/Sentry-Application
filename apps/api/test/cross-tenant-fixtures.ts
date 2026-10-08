@@ -121,4 +121,14 @@ export const CROSS_TENANT_FIXTURES: Readonly<Record<string, Coverage>> = {
     covered: 'test',
     test: 'sites.test.ts › ADV-T05 and tenancy.test.ts › ADV-T01',
   },
+
+  // Phase 5
+  'GET /api/v1/alerts': {
+    covered: 'test',
+    test: "alerts.test.ts: the list never holds another organization's alerts",
+  },
+  'GET /api/v1/alerts/:id': T01,
+  'POST /api/v1/alerts/:id/acknowledge': T01,
+  'POST /api/v1/alerts/:id/resolve': T01,
+  'POST /api/v1/alerts/:id/dismiss': T01,
 };

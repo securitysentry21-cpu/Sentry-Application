@@ -154,6 +154,18 @@ beforeAll(async () => {
          values ($1, $2, $3, $4, 'x', '{}', 'INTERNAL_ERROR')`,
         [randomUUID(), org, device, randomUUID()],
       );
+      // Phase 5 tables.
+      const alert = randomUUID();
+      await m.query(
+        `insert into alerts (id, organization_id, type, severity, dedupe_key, summary, guard_id, site_id, shift_id,
+           opened_at, last_triggered_at)
+         values ($1, $2, 'DEVICE_OFFLINE', 'MEDIUM', $3, 'Device offline', $4, $5, $6, now(), now())`,
+        [alert, org, `offline:${shift}`, guard, siteRow, shift],
+      );
+      await m.query(
+        `insert into alert_events (id, organization_id, alert_id, type, actor_type) values ($1, $2, $3, 'OPENED', 'SYSTEM')`,
+        [randomUUID(), org, alert],
+      );
     }
   });
   runtime = new pg.Pool({ connectionString: db.urls.app_runtime, max: 2 });

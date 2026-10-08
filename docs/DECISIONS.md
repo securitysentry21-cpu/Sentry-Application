@@ -104,6 +104,34 @@ Made as a co-founder would make them, while the owner was away. Each is reversib
 - **No SMS aggregator yet.** Guard enrollment codes are shown in the dashboard, as a code and a QR code, for the supervisor to hand to the guard in person. SMS goes behind an `SmsProvider` interface and switches on when EXT-10 is done. Member invitations work the same way: the dashboard shows the invitation link to send by hand until an email provider is chosen.
 - **Device key (ARCH §5.3).** The P-256 key pair is generated on the phone and the private key is kept in the secure store (Keychain or Android Keystore-encrypted storage). It is not yet generated inside the Secure Enclave or Keystore hardware, which needs a native module; revisit with Phase 0B.
 
+## Phase 5 · alerts and geofence · agent-decided 2026-10-08 (round 6 delegation)
+
+Gaps in the spec that Phase 5 had to fill. Each is the simplest option that keeps the stated rules; review and veto in the diff.
+
+- **Two settings rules added.** `tracking.stationary_fix_interval_s ≥ tracking.max_interval_s`, and `sync.upload_interval_s ≤ sync.heartbeat_interval_s`. PROD §8.3 promises that thresholds are validated so a healthy phone never trips them. The property test (ADV-AL05) found two settings that broke that promise, though each passed the existing rules:
+  - a stationary interval shorter than the moving interval made a healthy moving phone look stale;
+  - an upload interval longer than the heartbeat made it look offline between uploads.
+- **The geofence evaluator runs with each sync batch,** in the same transaction, after the points are stored, rather than as a separate outbox worker. Evaluation is immediate and adds no new moving parts. A failure is caught and the batch still commits; the watermark doesn't move, so the next batch evaluates the same points again.
+- **Late data (PROD §8.4).** A departure and its return that arrive in the same delivery (an offline backlog) are recorded as shift events marked `detectedAfterSync`, with no live alert. If the backlog ends with the guard still outside, the alert opens and is marked `detected_late`.
+- **Condition alerts and the people who close them.** Detectors re-check conditions every 60 s. If a person resolves or dismisses a condition alert while the condition still holds, it stays closed for that episode. The episode starts at:
+  - DEVICE_OFFLINE: the last contact;
+  - LOCATION_STALE: the last fix;
+  - TRACKING_DISABLED and LOW_BATTERY: the last good device report;
+  - SHIFT_NOT_STARTED: the scheduled start;
+  - SHIFT_OVERRUN: the scheduled end.
+
+  A new episode raises a new alert.
+- **Reopening within the suppression window** (PROD §12.3) restores ACKNOWLEDGED if the alert had been acknowledged, so a flapping condition doesn't keep re-alarming a dispatcher who is already on it.
+- **"Two consecutive detector runs" for LOCATION_STALE** means the fix was already older than the threshold one run interval ago (age > threshold + 60 s). It is stateless, and the same as two runs when the worker runs every minute.
+- **Freshness alerts resolve on the next detector run** (within 60 s), not in the sync request that restores contact.
+- **New error code `ALERT_INVALID_TRANSITION` (409),** added to ARCH Appendix B. It covers resolving or dismissing an alert that is already closed, and dismissing an SOS or critical incident.
+- **Alert actors reference `users`,** as `audit_logs` and `shift_events` do. A manual resolve also records the acknowledgement if nobody had acknowledged.
+- **Sync, from the guard-app build's findings:**
+  - When a batch's SHIFT_START is quarantined, the rest of that shift's items in the batch get RETRY, instead of being judged against a shift that hasn't started (and lost).
+  - The sync reply lists every shift the batch mentions, heartbeats and device reports included, so the phone always learns the server's state (ARCH §8.8).
+- **Mock locations and implausible jumps** open SUSPICIOUS_LOCATION (MEDIUM, never auto-resolves). One alert per shift; repeats count on it.
+- **Not built in Phase 5:** web push, push to guards, the escalation ladder and notification deliveries (Phase 8, with SOS); CHECKPOINT_MISSED (Phase 7); INCIDENT_* (Phase 8); DEVICE_CHANGED.
+
 ## Index
 
 | ID | Decision | Status |

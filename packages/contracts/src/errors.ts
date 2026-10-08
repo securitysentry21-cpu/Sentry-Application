@@ -10,6 +10,10 @@ export const ERROR_CODES = {
   ORG_SUSPENDED: { http: 403, meaning: 'organization suspended (SOS still accepted)' },
   VERSION_CONFLICT: { http: 409, meaning: 'optimistic concurrency failure' },
   SHIFT_INVALID_TRANSITION: { http: 409, meaning: 'transition not allowed from current state' },
+  ALERT_INVALID_TRANSITION: {
+    http: 409,
+    meaning: 'alert already closed, or SOS / critical incident dismissed instead of resolved',
+  },
   SHIFT_OVERLAP: { http: 409, meaning: 'guard already has a shift in that period' },
   SHIFT_NOT_ACTIVE: { http: 409, meaning: 'operation needs an ACTIVE shift' },
   SHIFT_OUTSIDE_START_WINDOW: { http: 422, meaning: 'too early or after the start deadline' },

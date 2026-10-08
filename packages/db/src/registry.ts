@@ -72,4 +72,8 @@ export const TABLES: TableRegistry = {
   device_status_events: { kind: 'tenant-append-only' },
   shift_live_state: { kind: 'tenant' },
   quarantined_items: { kind: 'tenant-append-only' },
+
+  // Phase 5: alerts.
+  alerts: { kind: 'tenant' },
+  alert_events: { kind: 'tenant-append-only' },
 };

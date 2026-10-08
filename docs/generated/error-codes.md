@@ -12,6 +12,7 @@
 | `ORG_SUSPENDED` | 403 | organization suspended (SOS still accepted) |
 | `VERSION_CONFLICT` | 409 | optimistic concurrency failure |
 | `SHIFT_INVALID_TRANSITION` | 409 | transition not allowed from current state |
+| `ALERT_INVALID_TRANSITION` | 409 | alert already closed, or SOS / critical incident dismissed instead of resolved |
 | `SHIFT_OVERLAP` | 409 | guard already has a shift in that period |
 | `SHIFT_NOT_ACTIVE` | 409 | operation needs an ACTIVE shift |
 | `SHIFT_OUTSIDE_START_WINDOW` | 422 | too early or after the start deadline |

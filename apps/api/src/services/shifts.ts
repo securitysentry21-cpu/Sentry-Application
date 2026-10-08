@@ -15,6 +15,7 @@ import {
 } from '@sentryops/domain';
 
 import type { AppDeps } from '../deps.ts';
+import { onShiftChanged } from './alerts.ts';
 import { uuidv7 } from '../ids.ts';
 import { numberSetting, organizationSettings } from '../repositories/organizations.ts';
 import {
@@ -238,6 +239,7 @@ export async function guardStart(
     },
   });
   const updated = await getShift(trx, guard.organizationId, shift.id);
+  if (updated) await onShiftChanged(trx, deps, guard.organizationId, updated);
   return { status: 'ACCEPTED', shift: updated ?? shift };
 }
 
@@ -298,6 +300,7 @@ export async function guardEnd(
     payload: { offline: input.offline },
   });
   const updated = await getShift(trx, guard.organizationId, shift.id);
+  if (updated) await onShiftChanged(trx, deps, guard.organizationId, updated);
   return { status: 'ACCEPTED', shift: updated ?? shift };
 }
 
@@ -340,6 +343,8 @@ export async function systemTransition(
     clientRecordedAt: null,
     payload: {},
   });
+  const updated = await getShift(trx, organizationId, shift.id);
+  if (updated) await onShiftChanged(trx, deps, organizationId, updated);
   return true;
 }
 
@@ -374,5 +379,7 @@ export async function endShiftsForDisabledGuard(
       clientRecordedAt: null,
       payload: { reason: 'guard access revoked' },
     });
+    const updated = await getShift(trx, organizationId, shift.id);
+    if (updated) await onShiftChanged(trx, deps, organizationId, updated);
   }
 }

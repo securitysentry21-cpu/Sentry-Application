@@ -1,5 +1,7 @@
+export * from './alerts.ts';
 export * from './clock.ts';
 export * from './geo.ts';
+export * from './geofence.ts';
 export * from './members.ts';
 export * from './shifts.ts';
 export * from './time.ts';

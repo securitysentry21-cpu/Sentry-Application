@@ -19,10 +19,10 @@ Defaults and scope of every organization setting (PROD Appendix B). "Dashboard" 
 | `tracking.moving_distance_filter_m` | `20` | organization | no | 10–100 |
 | `tracking.min_interval_s` | `15` | organization | no | 5–60 |
 | `tracking.max_interval_s` | `60` | organization | no | 30–300 |
-| `tracking.stationary_fix_interval_s` | `300` | organization | no | 60–900 |
+| `tracking.stationary_fix_interval_s` | `300` | organization | no | 60–900; ≥ tracking.max_interval_s |
 | `tracking.sos_interval_s` | `10` | organization | no | 5–30 |
 | `tracking.sos_max_hours` | `4` | organization | no | 1–12 |
-| `sync.upload_interval_s` | `60` | organization | no | 15–300 |
+| `sync.upload_interval_s` | `60` | organization | no | 15–300; ≤ heartbeat interval |
 | `sync.heartbeat_interval_s` | `60` | organization | no | 30–300; provisional, Phase 0B sets the default |
 | `sync.max_offline_age_hours` | `168` | system | no | older data rejected |
 | `freshness.health_live_max_s` | `90` | organization | no | ≥ heartbeat interval + 30 |

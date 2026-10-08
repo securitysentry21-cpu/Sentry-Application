@@ -22,3 +22,18 @@ export async function dueShifts(
      limit ${limit}`.execute(sweep);
   return rows;
 }
+
+/** Organizations with shifts the alert detectors look at: active, or scheduled and already due. */
+export async function organizationsWithLiveShifts(
+  sweep: Database,
+  now: Date,
+  limit: number,
+): Promise<string[]> {
+  const { rows } = await sql<{ organization_id: string }>`
+    select distinct organization_id
+      from shifts
+     where status = 'ACTIVE' or (status = 'SCHEDULED' and starts_at <= ${now})
+     order by organization_id
+     limit ${limit}`.execute(sweep);
+  return rows.map((r) => r.organization_id);
+}

@@ -5,6 +5,48 @@ Regenerate with `UPDATE_GENERATED=1 pnpm test --project db`.
 
 ```mermaid
 erDiagram
+  alert_events {
+    uuid id PK
+    uuid organization_id
+    uuid alert_id
+    text type
+    text actor_type
+    uuid actor_user_id
+    text note
+    jsonb payload
+    timestamp_with_time_zone created_at
+  }
+  alerts {
+    uuid id PK
+    uuid organization_id
+    text type
+    text severity
+    text status
+    text dedupe_key
+    text summary
+    uuid guard_id
+    uuid site_id
+    uuid shift_id
+    jsonb details
+    timestamp_with_time_zone opened_at
+    timestamp_with_time_zone last_triggered_at
+    integer trigger_count
+    uuid acknowledged_by
+    timestamp_with_time_zone acknowledged_at
+    uuid resolved_by
+    timestamp_with_time_zone resolved_at
+    text resolution_type
+    text resolution_note
+    uuid dismissed_by
+    timestamp_with_time_zone dismissed_at
+    text dismiss_reason
+    integer escalation_level
+    timestamp_with_time_zone next_escalation_at
+    boolean detected_late
+    integer version
+    timestamp_with_time_zone created_at
+    timestamp_with_time_zone updated_at
+  }
   audit_logs {
     uuid id PK
     uuid organization_id
@@ -265,6 +307,10 @@ erDiagram
     timestamp_with_time_zone oldest_pending_at
     timestamp_with_time_zone device_report_at
     timestamp_with_time_zone updated_at
+    timestamp_with_time_zone geofence_outside_since
+    integer geofence_outside_points
+    integer geofence_inside_streak
+    timestamp_with_time_zone geofence_watermark_at
   }
   shifts {
     uuid id PK
@@ -342,6 +388,16 @@ erDiagram
     timestamp_with_time_zone created_at
     timestamp_with_time_zone updated_at
   }
+  users ||--o{ alert_events : "alert_events_actor_user_id_fkey"
+  alerts ||--o{ alert_events : "alert_events_organization_id_alert_id_fkey"
+  organizations ||--o{ alert_events : "alert_events_organization_id_fkey"
+  users ||--o{ alerts : "alerts_acknowledged_by_fkey"
+  users ||--o{ alerts : "alerts_dismissed_by_fkey"
+  organizations ||--o{ alerts : "alerts_organization_id_fkey"
+  guards ||--o{ alerts : "alerts_organization_id_guard_id_fkey"
+  shifts ||--o{ alerts : "alerts_organization_id_shift_id_fkey"
+  sites ||--o{ alerts : "alerts_organization_id_site_id_fkey"
+  users ||--o{ alerts : "alerts_resolved_by_fkey"
   users ||--o{ audit_logs : "audit_logs_actor_user_id_fkey"
   organizations ||--o{ audit_logs : "audit_logs_organization_id_fkey"
   users ||--o{ checkpoints : "checkpoints_created_by_user_id_fkey"

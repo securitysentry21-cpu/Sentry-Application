@@ -1,12 +1,13 @@
-// The background worker (ARCH §16): shift detectors now; the outbox dispatcher, geofence evaluator
-// and alert engine join it in later phases. Runs as two connections — system_worker for the
-// cross-organization sweep, app_runtime for every change — and refuses any other role (D-33).
+// The background worker (ARCH §16): shift detectors and alert detectors (the geofence evaluator
+// runs with each sync batch); the outbox dispatcher and escalation join it in later phases. Runs as
+// two connections — system_worker for the cross-organization sweep, app_runtime for every change —
+// and refuses any other role (D-33).
 import { createKysely, createPool, verifyRuntimeRole } from '@sentryops/db';
 import { z } from 'zod';
 
 import { loadConfig } from './config.ts';
 import { createDeps } from './server.ts';
-import { runShiftDetectors } from './workers/detectors.ts';
+import { runAlertDetectors, runShiftDetectors } from './workers/detectors.ts';
 
 const env = z.object({
   SWEEP_DATABASE_URL: z.string().min(1),
@@ -26,6 +27,7 @@ async function tick(): Promise<void> {
   try {
     const result = await runShiftDetectors(deps);
     if (result.changed > 0) console.log(JSON.stringify({ msg: 'shift detectors', ...result }));
+    await runAlertDetectors(deps);
   } catch (error) {
     console.error(
       JSON.stringify({

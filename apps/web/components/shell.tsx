@@ -16,6 +16,7 @@ type NavItem = { href: string; label: string; permission?: Permission };
 const OPERATIONS: NavItem[] = [
   { href: '/dashboard', label: 'Overview' },
   { href: '/live', label: 'Live map', permission: 'live.read' },
+  { href: '/alerts', label: 'Alerts', permission: 'alerts.read' },
   { href: '/shifts', label: 'Shifts', permission: 'shifts.read' },
   { href: '/guards', label: 'Guards', permission: 'guards.read' },
   { href: '/sites', label: 'Sites', permission: 'sites.read' },
@@ -37,6 +38,7 @@ const BUILT = new Set([
   '/sites',
   '/shifts',
   '/live',
+  '/alerts',
 ]);
 
 export function AppShell({ children }: { children: ReactNode }) {

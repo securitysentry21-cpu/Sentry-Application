@@ -47,6 +47,7 @@ import {
   shiftDto,
   type GuardOutcome,
 } from '../services/shifts.ts';
+import { onShiftChanged } from '../services/alerts.ts';
 import { defineRoute } from './registry.ts';
 
 const READ = { kind: 'permission', permission: 'shifts.read' } as const;
@@ -138,6 +139,7 @@ async function supervise(
     });
     const updated = await getShift(trx, org.id, shift.id);
     if (!updated) throw notFound();
+    await onShiftChanged(trx, deps, org.id, updated);
     return shiftDto(updated);
   });
 }

@@ -12,7 +12,7 @@ import {
   type SyncItemStatus,
 } from '@sentryops/contracts';
 import { withTenantTransaction, type Database } from '@sentryops/db';
-import { estimateCapture, haversineM, inShiftWindow } from '@sentryops/domain';
+import { alertKey, estimateCapture, haversineM, inShiftWindow } from '@sentryops/domain';
 
 import type { AppDeps } from '../deps.ts';
 import { uuidv7 } from '../ids.ts';
@@ -30,6 +30,8 @@ import {
   savepoint,
   storedPoint,
 } from '../repositories/tracking.ts';
+import { deviceReportAlerts, raiseAlert, reopenSuppressionMs } from './alerts.ts';
+import { evaluateGeofence } from './geofence.ts';
 import { guardEnd, guardStart, type GuardOutcome, type GuardRef } from './shifts.ts';
 
 type Result = { clientEventId: string; status: SyncItemStatus; code?: ErrorCode };
@@ -48,6 +50,10 @@ export async function processBatch(
 ): Promise<SyncBatchResponse> {
   const receivedAt = deps.clock.now();
   const touchedShifts = new Set<string>();
+  // Shifts whose start in this batch was quarantined: their later items wait (RETRY) instead of
+  // being judged against a shift that hasn't started, which would reject and lose them.
+  const heldShifts = new Set<string>();
+  const pointShifts = new Set<string>();
   const results: Result[] = [];
   await withTenantTransaction(deps.db, guard.organizationId, async (trx) => {
     const settings = await organizationSettings(trx, guard.organizationId);
@@ -64,6 +70,13 @@ export async function processBatch(
         continue;
       }
       const item = parsed.data;
+      const shiftId = 'shiftId' in item && item.shiftId ? item.shiftId : null;
+      // Every shift the batch mentions comes back with its server state (ARCH §8.8).
+      if (shiftId) touchedShifts.add(shiftId);
+      if (shiftId && heldShifts.has(shiftId)) {
+        results.push({ clientEventId: item.clientEventId, status: 'RETRY' });
+        continue;
+      }
       const name = `item_${index}`;
       await savepoint(trx, name);
       try {
@@ -71,11 +84,10 @@ export async function processBatch(
           receivedAt,
           maxAgeMs,
           usableAccuracyM,
+          settings,
         });
         await releaseSavepoint(trx, name);
-        if (item.type !== 'HEARTBEAT' && item.type !== 'DEVICE_STATUS' && 'shiftId' in item && item.shiftId) {
-          touchedShifts.add(item.shiftId);
-        }
+        if (item.type === 'LOCATION' && result.status === 'ACCEPTED') pointShifts.add(item.shiftId);
         results.push({ clientEventId: item.clientEventId, ...result });
       } catch {
         // Unexpected: keep the item for operator replay; the phone may delete it (ARCH §9.3).
@@ -90,6 +102,22 @@ export async function processBatch(
           errorCode: 'INTERNAL_ERROR',
         });
         results.push({ clientEventId: item.clientEventId, status: 'QUARANTINED' });
+        if (item.type === 'SHIFT_START') heldShifts.add(item.shiftId);
+      }
+    }
+    // Geofence (ARCH §10): after the points are stored, in capture order, once per shift. A failure
+    // here is logged and retried with the next batch (the watermark didn't move); it never fails
+    // the batch.
+    for (const shiftId of pointShifts) {
+      const name = `geofence_${shiftId.replaceAll('-', '')}`;
+      await savepoint(trx, name);
+      try {
+        const shift = await getShift(trx, guard.organizationId, shiftId);
+        if (shift) await evaluateGeofence(trx, deps, guard.organizationId, shift, settings);
+        await releaseSavepoint(trx, name);
+      } catch {
+        await rollbackToSavepoint(trx, name);
+        deps.metrics.increment('geofence_evaluation_failed');
       }
     }
   });
@@ -107,7 +135,12 @@ export async function processBatch(
   return { serverTime: deps.clock.now().toISOString(), results, shifts };
 }
 
-type Limits = { receivedAt: Date; maxAgeMs: number; usableAccuracyM: number };
+type Limits = {
+  receivedAt: Date;
+  maxAgeMs: number;
+  usableAccuracyM: number;
+  settings: Record<string, unknown>;
+};
 
 function fromOutcome(outcome: GuardOutcome): Omit<Result, 'clientEventId'> {
   if (outcome.status === 'REJECTED') return { status: 'REJECTED', code: outcome.code };
@@ -250,6 +283,25 @@ async function processItem(
         );
       }
       await advanceLiveContact(trx, key, limits.receivedAt);
+      // Stored with its flags either way; a person decides what it means (PROD §8.5, ADV-L11).
+      const suspicious = ['MOCK_LOCATION', 'IMPLAUSIBLE_SPEED'].filter((f) => flags.has(f));
+      if (suspicious.length > 0) {
+        await raiseAlert(
+          trx,
+          deps,
+          guard.organizationId,
+          {
+            type: 'SUSPICIOUS_LOCATION',
+            dedupeKey: alertKey.suspicious(shift.id),
+            summary: `Suspicious location: ${shift.guardName} (${shift.siteName})`,
+            guardId: guard.guardId,
+            siteId: shift.siteId,
+            shiftId: shift.id,
+            details: { flags: suspicious, capturedAt: estimate.capturedAt.toISOString() },
+          },
+          reopenSuppressionMs(limits.settings),
+        );
+      }
       return { status: 'ACCEPTED' };
     }
     case 'HEARTBEAT': {
@@ -289,6 +341,7 @@ async function processItem(
       });
       if (!inserted) return { status: 'DUPLICATE' };
       if (shift?.status === 'ACTIVE') {
+        await deviceReportAlerts(trx, deps, guard.organizationId, shift, item.status, limits.settings);
         await advanceLiveContact(
           trx,
           {

@@ -1,3 +1,4 @@
+import { alertRoutes } from './alerts.ts';
 import { auditLogRoutes } from './audit-logs.ts';
 import { authRoutes } from './auth.ts';
 import { enrollmentRoutes } from './enrollment.ts';
@@ -28,4 +29,5 @@ export const ROUTES: readonly RouteDefinition[] = [
   ...siteRoutes,
   ...shiftRoutes,
   ...syncRoutes,
+  ...alertRoutes,
 ];

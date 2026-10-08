@@ -67,10 +67,10 @@ export const SETTINGS = {
   'tracking.moving_distance_filter_m': s(int(10, 100), 20, '10–100'),
   'tracking.min_interval_s': s(int(5, 60), 15, '5–60'),
   'tracking.max_interval_s': s(int(30, 300), 60, '30–300'),
-  'tracking.stationary_fix_interval_s': s(int(60, 900), 300, '60–900'),
+  'tracking.stationary_fix_interval_s': s(int(60, 900), 300, '60–900; ≥ tracking.max_interval_s'),
   'tracking.sos_interval_s': s(int(5, 30), 10, '5–30'),
   'tracking.sos_max_hours': s(int(1, 12), 4, '1–12'),
-  'sync.upload_interval_s': s(int(15, 300), 60, '15–300'),
+  'sync.upload_interval_s': s(int(15, 300), 60, '15–300; ≤ heartbeat interval'),
   'sync.heartbeat_interval_s': s(int(30, 300), 60, '30–300; provisional, Phase 0B sets the default'),
   'sync.max_offline_age_hours': s(int(1, 720), 168, 'older data rejected', { scope: 'system' }),
   'freshness.health_live_max_s': s(int(30, 900), 90, '≥ heartbeat interval + 30'),
@@ -188,6 +188,17 @@ export const SETTING_RULES: readonly Rule[] = [
   {
     message: 'tracking.min_interval_s must be ≤ tracking.max_interval_s',
     holds: (v) => v['tracking.min_interval_s'] <= v['tracking.max_interval_s'],
+  },
+  {
+    // A stationary phone never fixes more often than a moving one; otherwise the stale threshold,
+    // which is derived from the stationary interval, would trip for a healthy moving phone (AL05).
+    message: 'tracking.stationary_fix_interval_s must be ≥ tracking.max_interval_s',
+    holds: (v) => v['tracking.stationary_fix_interval_s'] >= v['tracking.max_interval_s'],
+  },
+  {
+    // Heartbeats reach the server only with an upload; the contact thresholds assume one each interval.
+    message: 'sync.upload_interval_s must be ≤ sync.heartbeat_interval_s',
+    holds: (v) => v['sync.upload_interval_s'] <= v['sync.heartbeat_interval_s'],
   },
   {
     message: 'freshness.health_live_max_s must be ≥ sync.heartbeat_interval_s + 30',

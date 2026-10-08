@@ -24,6 +24,50 @@ export type JsonValue = JsonArray | JsonObject | JsonPrimitive;
 
 export type Timestamp = ColumnType<Date, Date | string, Date | string>;
 
+export interface AlertEvents {
+  actor_type: string;
+  actor_user_id: string | null;
+  alert_id: string;
+  created_at: Generated<Timestamp>;
+  id: string;
+  note: string | null;
+  organization_id: string;
+  payload: Generated<Json>;
+  type: string;
+}
+
+export interface Alerts {
+  acknowledged_at: Timestamp | null;
+  acknowledged_by: string | null;
+  created_at: Generated<Timestamp>;
+  dedupe_key: string;
+  details: Generated<Json>;
+  detected_late: Generated<boolean>;
+  dismiss_reason: string | null;
+  dismissed_at: Timestamp | null;
+  dismissed_by: string | null;
+  escalation_level: Generated<number>;
+  guard_id: string | null;
+  id: string;
+  last_triggered_at: Timestamp;
+  next_escalation_at: Timestamp | null;
+  opened_at: Timestamp;
+  organization_id: string;
+  resolution_note: string | null;
+  resolution_type: string | null;
+  resolved_at: Timestamp | null;
+  resolved_by: string | null;
+  severity: string;
+  shift_id: string | null;
+  site_id: string | null;
+  status: Generated<string>;
+  summary: string;
+  trigger_count: Generated<number>;
+  type: string;
+  updated_at: Generated<Timestamp>;
+  version: Generated<number>;
+}
+
 export interface AuditLogs {
   action: string;
   actor_type: string;
@@ -283,7 +327,11 @@ export interface ShiftLiveState {
   app_version: string | null;
   battery_pct: number | null;
   device_report_at: Timestamp | null;
+  geofence_inside_streak: Generated<number>;
+  geofence_outside_points: Generated<number>;
+  geofence_outside_since: Timestamp | null;
   geofence_state: Generated<string>;
+  geofence_watermark_at: Timestamp | null;
   guard_id: string;
   id: string;
   is_charging: boolean | null;
@@ -383,6 +431,8 @@ export interface Users {
 }
 
 export interface DB {
+  alert_events: AlertEvents;
+  alerts: Alerts;
   audit_logs: AuditLogs;
   auth_states: AuthStates;
   checkpoints: Checkpoints;

@@ -315,3 +315,107 @@ export async function liveSnapshot(trx: Database, organizationId: string) {
     .limit(5000)
     .execute();
 }
+
+export type GeofenceRow = {
+  state: string;
+  outsideSince: Date | null;
+  outsidePoints: number;
+  insideStreak: number;
+  watermarkAt: Date | null;
+};
+
+/** The geofence evaluator's memory for a shift, locked (one evaluation per shift at a time). */
+export async function geofenceMemory(
+  trx: Database,
+  organizationId: string,
+  shiftId: string,
+): Promise<GeofenceRow | null> {
+  const row = await trx
+    .selectFrom('shift_live_state')
+    .select([
+      'geofence_state',
+      'geofence_outside_since',
+      'geofence_outside_points',
+      'geofence_inside_streak',
+      'geofence_watermark_at',
+    ])
+    .where('organization_id', '=', organizationId)
+    .where('id', '=', shiftId)
+    .forUpdate()
+    .executeTakeFirst();
+  return row
+    ? {
+        state: row.geofence_state,
+        outsideSince: row.geofence_outside_since,
+        outsidePoints: row.geofence_outside_points,
+        insideStreak: row.geofence_inside_streak,
+        watermarkAt: row.geofence_watermark_at,
+      }
+    : null;
+}
+
+export async function saveGeofenceMemory(
+  trx: Database,
+  organizationId: string,
+  shiftId: string,
+  m: GeofenceRow,
+  now: Date,
+): Promise<void> {
+  await trx
+    .updateTable('shift_live_state')
+    .set({
+      geofence_state: m.state,
+      geofence_outside_since: m.outsideSince,
+      geofence_outside_points: m.outsidePoints,
+      geofence_inside_streak: m.insideStreak,
+      geofence_watermark_at: m.watermarkAt,
+      updated_at: now,
+    })
+    .where('organization_id', '=', organizationId)
+    .where('id', '=', shiftId)
+    .execute();
+}
+
+/** A shift's points captured after the watermark, in capture order. */
+export async function pointsAfter(
+  trx: Database,
+  organizationId: string,
+  shiftId: string,
+  after: Date | null,
+  limit: number,
+) {
+  let q = trx
+    .selectFrom('location_points')
+    .select(['id', 'latitude', 'longitude', 'accuracy_m', 'captured_at'])
+    .where('organization_id', '=', organizationId)
+    .where('shift_id', '=', shiftId);
+  if (after) q = q.where('captured_at', '>', after);
+  return q.orderBy('captured_at').orderBy('id').limit(limit).execute();
+}
+
+/**
+ * When a shift's phone last reported this condition as fine. A condition alert that a person closed
+ * stays closed for the rest of that episode; an episode starts after the last good report.
+ */
+export async function lastGoodReportAt(
+  trx: Database,
+  organizationId: string,
+  shiftId: string,
+  condition: 'TRACKING' | 'BATTERY',
+): Promise<Date | null> {
+  let q = trx
+    .selectFrom('device_status_events')
+    .select((eb) => eb.fn.max('recorded_at').as('at'))
+    .where('organization_id', '=', organizationId)
+    .where('shift_id', '=', shiftId);
+  q =
+    condition === 'TRACKING'
+      ? q
+          .where('location_permission', '=', 'ALWAYS')
+          .where('precise_location', '=', true)
+          .where('location_services_enabled', '=', true)
+          .where('tracking_service_state', 'not in', ['STOPPED', 'PERMISSION_PROBLEM'])
+      : q.where((eb) => eb.or([eb('is_charging', '=', true), eb('battery_pct', '>', 25)]));
+  const row = await q.executeTakeFirst();
+  return row?.at ? new Date(row.at) : null;
+}

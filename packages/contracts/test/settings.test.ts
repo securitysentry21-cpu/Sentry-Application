@@ -36,6 +36,14 @@ describe('settings validation (PROD §8.3, Appendix B)', () => {
       'tracking.min_interval_s': 60,
       'tracking.max_interval_s': 30,
     },
+    'tracking.stationary_fix_interval_s must be ≥ tracking.max_interval_s': {
+      'tracking.max_interval_s': 300,
+      'tracking.stationary_fix_interval_s': 120,
+      'freshness.location_current_max_s': 400,
+    },
+    'sync.upload_interval_s must be ≤ sync.heartbeat_interval_s': {
+      'sync.upload_interval_s': 120,
+    },
     'freshness.health_live_max_s must be ≥ sync.heartbeat_interval_s + 30': {
       'sync.heartbeat_interval_s': 120,
       'freshness.health_live_max_s': 120,
