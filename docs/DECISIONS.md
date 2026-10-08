@@ -60,18 +60,65 @@ Decisions not listed here keep the status shown in the spec appendices (OPEN unl
 
 **Round 5:** guards will be both stationed at posts and on roaming patrols (Q-18). The owner then asked to start building.
 
+**Round 6** (after the Phase 0 report). The owner went away for five hours and delegated every open question: "If there is any questions for me, I want you to decide for me instead, think of this like you are co founder."
+
+| Question | Answer |
+|---|---|
+| GitHub repository | `https://github.com/securitysentry21-cpu/Sentry-Application` (public, empty) |
+| Q-13 Pilot date | In 10 days: about 2026-10-18 |
+| Q-18 Patrol beats | "I leave the patrol decision to you, I would like some sort of boundaries" → D-38 |
+| Q-19 Colony size | About 400 km² |
+| Scope | "Go ahead with all of the phases that we can build … the web app, and the framework for the mobile app" |
+
+## Decided under delegation · 2026-10-08 (round 6)
+
+Made as a co-founder would make them, while the owner was away. Each is reversible; review and veto in the diff.
+
+- **Committing.** Yes; commits are local. Commit identity: the repository account's GitHub no-reply address (`339630571+securitysentry21-cpu@users.noreply.github.com`), so neither the owner's name nor their Gmail enters a history that may become public. **Not pushed:** the repository is public, and pushing would publish the code, the threat model and the security design. Make the repository private, then push (or tell me to).
+- **D-01 · identity provider: Amazon Cognito, reached through standard OpenID Connect.** SEC §5 requires a mature provider; the application never stores passwords, so first-party password sign-in is ruled out.
+  - Cognito user pools are regional, so each cell keeps its own sign-in data. Our first cell is eu-central-1 (D-13, D-37); Clerk was recommended before AWS was chosen, and is US-hosted.
+  - Cognito sits in the AWS account we are opening anyway, which means no extra vendor and no extra contract.
+  - It does TOTP MFA and passkeys. MFA is required for every dashboard user at the pool level, which covers the Owner and Administrator MUST and the Supervisor SHOULD.
+  - It is cheap at our scale.
+
+  The API speaks plain OIDC (authorization code with PKCE), so switching providers is a configuration change. Development and tests use a built-in development sign-in, which the API refuses to enable in production.
+- **D-11 · PostgreSQL only** for jobs, pub/sub and rate-limit counters: approved.
+- **D-07 · location library.** The pilot build uses `expo-location` with `expo-task-manager` (free, maintained by Expo), behind the `LocationSource` interface. The Phase 0B soak tests on the pilot's phones decide whether to switch to Transistorsoft.
+- **D-12 revised · map: MapLibre GL JS with OpenFreeMap vector tiles** (OpenStreetMap data), behind the `MapProvider` interface, instead of Google Maps. The owner asked for "something like Google Maps".
+  - It needs no account, key or billing; we have none yet, and it can be tested today.
+  - Polygon drawing works through Terra Draw, while Google's Drawing Library has been retired.
+  - It is free at any number of dashboard map loads.
+
+  Risk: OpenFreeMap is a free service without an SLA. Before scaling past the pilot, serve our own tiles (Protomaps PMTiles on S3 and CloudFront, a few dollars a month) or move to a paid provider. There is no satellite view; it can be added later with a paid imagery provider.
+- **D-38 (Q-18) · boundaries.** A site's boundary is either a **circle** (posts and gates, 50–5,000 m) or a **polygon drawn on the map** (patrol beats: 3–200 points, at most 100 km², no self-crossing).
+  - Geofence rules treat both the same way: inside only if the fix is inside and further than its accuracy from the edge; outside only if outside by more than its accuracy; otherwise uncertain (PROD §8.4).
+  - The colony (about 400 km²) is modelled as many sites under one client, each a post or a beat.
+- **Q-19.** About 400 km² (roughly 99,000 acres, or 790,000 standard kanals). Each organization gets a default map view setting.
+- **Q-13 · pilot about 2026-10-18.**
+  - Pilot 0 needs Phases 1–4 (D-34) and human device tests.
+  - The pilot app is distributed as a directly installed Android build (EAS internal distribution), not through Play, which avoids Play's review time and the closed-testing gate.
+  - SOS stays off for pilot guards until the Phase 8 exit tests pass (ARCH §22).
+  - **Blockers only the owner can clear:** the AWS account, the legal review (EXT-17, before any real guard data), and the device census.
+- **Q-20 · app identifier** `pk.sentryops.guard`, for both Android and iOS. It can still change until the first store submission.
+- **Q-21 · dispatchers can view shifts** (view only), as built.
+- **No SMS aggregator yet.** Guard enrollment codes are shown in the dashboard, as a code and a QR code, for the supervisor to hand to the guard in person. SMS goes behind an `SmsProvider` interface and switches on when EXT-10 is done. Member invitations work the same way: the dashboard shows the invitation link to send by hand until an email provider is chosen.
+- **Device key (ARCH §5.3).** The P-256 key pair is generated on the phone and the private key is kept in the secure store (Keychain or Android Keystore-encrypted storage). It is not yet generated inside the Secure Enclave or Keystore hardware, which needs a native module; revisit with Phase 0B.
+
 ## Index
 
 | ID | Decision | Status |
 |---|---|---|
-| D-01 | The identity provider serves dashboard users only | APPROVED (scope); provider choice still a recommendation |
+| D-01 | The identity provider serves dashboard users only; provider Amazon Cognito over OIDC | APPROVED (scope); provider DECIDED under delegation, round 6 |
+| D-07 | Background location: `expo-location` for the pilot build; Phase 0B evidence decides | DECIDED under delegation, round 6 |
+| D-11 | PostgreSQL only for jobs, pub/sub and rate limits | DECIDED under delegation, round 6 |
+| D-38 | Site boundaries: circle or drawn polygon | DECIDED under delegation, round 6 |
 | D-02 | Guard sign-in: the invitation SMS enrolls the phone; popups afterwards | APPROVED |
 | D-04 | Control room and duty officers both use the web dashboard | APPROVED; revised in round 4 |
 | D-05 | One device per guard: the guard's own phone | APPROVED |
 | D-08 | SMS in V1 | APPROVED |
 | D-09 | SSE, keeping the replay buffer and per-organization sequence | APPROVED |
 | D-10 | Kysely, plain SQL migrations, generated types | APPROVED |
-| D-12 | Google Maps for the live map | APPROVED |
+| D-12 | Map provider: MapLibre GL with OpenFreeMap tiles (was Google Maps) | REVISED under delegation, round 6 |
 | D-13 | Data residency: cells, launching with one | APPROVED; first cell in D-37 |
 | D-14 | English and Urdu only, English by default; English dashboard in V1 | APPROVED |
 | D-30 | Our own device-bound mobile session | APPROVED |
