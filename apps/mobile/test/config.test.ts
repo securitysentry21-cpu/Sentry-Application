@@ -77,6 +77,17 @@ describe('server settings (ARCH §15.2)', () => {
     expect(s.sync.maxOfflineAgeHours).toBe(1);
   });
 
+  it('dials the supervisor only with a plausible E.164 number; otherwise an empty dialer', () => {
+    expect(effectiveSettings(testConfig()).support.emergencyCallNumber).toBeNull();
+    const set = (n: string | null) =>
+      effectiveSettings(testConfig({ support: { emergencyCallNumber: n } })).support.emergencyCallNumber;
+    expect(set('+923001234567')).toBe('+923001234567');
+    expect(set(null)).toBeNull();
+    // Nothing that is not a phone number ever reaches a tel: link.
+    for (const bad of ['0300 1234567', '+92;300', 'tel:+92300', '+0123456789', '+1'])
+      expect(set(bad)).toBeNull();
+  });
+
   it('gates the app version: revoked, below minimum, below recommended', () => {
     const base = testConfig({
       minSupportedVersion: '0.2.0',

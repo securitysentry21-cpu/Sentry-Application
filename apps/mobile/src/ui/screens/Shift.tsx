@@ -126,7 +126,7 @@ export function ShiftScreen({ shiftId, navigate }: { shiftId: string; navigate: 
           kind="secondary"
           icon="☎"
           label={t('shift.callSupervisor')}
-          onPress={() => void openDialer()}
+          onPress={() => void openDialer(snap.settings.support.emergencyCallNumber)}
         />
       ) : null}
 

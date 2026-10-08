@@ -33,7 +33,12 @@ export function SosScreen({ navigate }: { navigate: Navigate }) {
         </Txt>
       ) : null}
       {sos && (showCallFallback(sos, Date.now()) || sos.phase === 'FAILED') ? (
-        <Button kind="danger" icon="☎" label={t('sos.callFallback')} onPress={() => void openDialer()} />
+        <Button
+          kind="danger"
+          icon="☎"
+          label={t('sos.callFallback')}
+          onPress={() => void openDialer(snap.settings.support.emergencyCallNumber)}
+        />
       ) : null}
       <Txt kind="small" tone="muted">
         {t('sos.disclaimer')}

@@ -45,7 +45,13 @@ export function checkApiOrigin(value: string, variant: AppVariant): string {
 
 // ── Server settings ──────────────────────────────────────────────────────────────────────────
 
-export type EffectiveSettings = Pick<MobileConfig, 'tracking' | 'sync' | 'shift' | 'features'>;
+export type EffectiveSettings = Pick<MobileConfig, 'tracking' | 'sync' | 'shift' | 'features'> & {
+  /** The number "Call supervisor" dials; null opens an empty dialer. */
+  readonly support: { readonly emergencyCallNumber: string | null };
+};
+
+/** Only a plausible E.164 number is ever put in a tel: link. */
+const E164 = /^\+[1-9]\d{6,14}$/;
 
 /** PROD Appendix B defaults, used before the first GET /mobile/config. Features stay off. */
 export const DEFAULT_SETTINGS: EffectiveSettings = {
@@ -69,6 +75,7 @@ export const DEFAULT_SETTINGS: EffectiveSettings = {
     requireBackgroundPermission: 'BLOCK',
   },
   features: { sos: false, patrols: false, incidents: false },
+  support: { emergencyCallNumber: null },
 };
 
 const clamp = (value: number, min: number, max: number): number =>
@@ -101,6 +108,12 @@ export function effectiveSettings(config: MobileConfig | null): EffectiveSetting
       requireBackgroundPermission: config.shift.requireBackgroundPermission,
     },
     features: config.features,
+    support: {
+      emergencyCallNumber:
+        config.support?.emergencyCallNumber && E164.test(config.support.emergencyCallNumber)
+          ? config.support.emergencyCallNumber
+          : null,
+    },
   };
 }
 

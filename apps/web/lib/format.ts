@@ -1,3 +1,5 @@
+import type { Alert } from '@sentryops/contracts';
+
 // Times are shown in the organization's time zone (sites carry their own from Phase 2).
 export function formatDateTime(iso: string, timeZone: string): string {
   return new Intl.DateTimeFormat('en-GB', {
@@ -24,4 +26,23 @@ export const ROLE_LABELS: Record<string, string> = {
   SUPERVISOR: 'Supervisor',
   DISPATCHER: 'Dispatcher',
   GUARD: 'Guard',
+};
+
+/** Short names for alert types (PROD §12.1), for badges and lists. */
+export const ALERT_TYPE_LABEL: Record<Alert['type'], string> = {
+  SOS_ACTIVATED: 'SOS',
+  INCIDENT_CRITICAL: 'Critical incident',
+  INCIDENT_HIGH: 'High incident',
+  GUARD_LEFT_SITE: 'Left site',
+  TRACKING_DISABLED: 'Tracking disabled',
+  DEVICE_OFFLINE: 'Device offline',
+  LOCATION_STALE: 'Location stale',
+  SHIFT_NOT_STARTED: 'Shift not started',
+  SHIFT_MISSED: 'Shift missed',
+  CHECKPOINT_MISSED: 'Checkpoint missed',
+  SUSPICIOUS_LOCATION: 'Suspicious location',
+  STARTED_OFF_SITE: 'Started off site',
+  SHIFT_OVERRUN: 'Shift not ended',
+  LOW_BATTERY: 'Low battery',
+  DEVICE_CHANGED: 'Device changed',
 };

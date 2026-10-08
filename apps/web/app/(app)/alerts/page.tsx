@@ -9,7 +9,7 @@ import { useCallback, useEffect, useState } from 'react';
 
 import { PageHead } from '../../../components/shell';
 import { api, errorText } from '../../../lib/api';
-import { formatRelative } from '../../../lib/format';
+import { ALERT_TYPE_LABEL as TYPE_LABEL, formatRelative } from '../../../lib/format';
 import { useSession } from '../../../lib/session';
 
 const POLL_MS = 10_000;
@@ -22,24 +22,6 @@ const RESOLUTION_LABEL = {
   SHIFT_ENDED: 'shift ended',
   SUPERSEDED: 'superseded',
 } as const;
-
-const TYPE_LABEL: Record<Alert['type'], string> = {
-  SOS_ACTIVATED: 'SOS',
-  INCIDENT_CRITICAL: 'Critical incident',
-  INCIDENT_HIGH: 'High incident',
-  GUARD_LEFT_SITE: 'Left site',
-  TRACKING_DISABLED: 'Tracking disabled',
-  DEVICE_OFFLINE: 'Device offline',
-  LOCATION_STALE: 'Location stale',
-  SHIFT_NOT_STARTED: 'Shift not started',
-  SHIFT_MISSED: 'Shift missed',
-  CHECKPOINT_MISSED: 'Checkpoint missed',
-  SUSPICIOUS_LOCATION: 'Suspicious location',
-  STARTED_OFF_SITE: 'Started off site',
-  SHIFT_OVERRUN: 'Shift not ended',
-  LOW_BATTERY: 'Low battery',
-  DEVICE_CHANGED: 'Device changed',
-};
 
 type Acting = { id: string; kind: 'resolve' | 'dismiss' } | null;
 

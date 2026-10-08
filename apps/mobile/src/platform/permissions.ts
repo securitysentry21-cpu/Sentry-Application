@@ -41,10 +41,13 @@ export async function openLocationSettings(): Promise<void> {
   }
 }
 
-/** Opens the phone's dialer (the guard presses call). The number is not in the contract yet. */
-export async function openDialer(): Promise<void> {
+/**
+ * Opens the phone's dialer with the supervisor's number (`sos.emergency_call_number`), or empty
+ * when none is set. The guard still presses call.
+ */
+export async function openDialer(number: string | null = null): Promise<void> {
   try {
-    await Linking.openURL('tel:');
+    await Linking.openURL(number ? `tel:${number}` : 'tel:');
   } catch {
     // no dialer on this device
   }
