@@ -62,4 +62,8 @@ export const TABLES: TableRegistry = {
   tracking_consents: { kind: 'tenant-append-only' },
   sites: { kind: 'tenant' },
   checkpoints: { kind: 'tenant' },
+
+  // Phase 3: shifts.
+  shifts: { kind: 'tenant' },
+  shift_events: { kind: 'tenant-append-only' },
 };

@@ -168,6 +168,51 @@ erDiagram
     text checksum
     timestamp_with_time_zone applied_at
   }
+  shift_events {
+    uuid id PK
+    uuid organization_id
+    uuid shift_id
+    text type
+    text actor_type
+    uuid actor_user_id
+    uuid device_id
+    uuid client_event_id
+    timestamp_with_time_zone occurred_at
+    timestamp_with_time_zone client_recorded_at
+    jsonb payload
+    timestamp_with_time_zone created_at
+  }
+  shifts {
+    uuid id PK
+    uuid organization_id
+    uuid guard_id
+    uuid site_id
+    timestamp_with_time_zone starts_at
+    timestamp_with_time_zone ends_at
+    timestamp_with_time_zone start_deadline_at
+    text status
+    timestamp_with_time_zone actual_started_at
+    timestamp_with_time_zone actual_ended_at
+    text start_source
+    double_precision start_latitude
+    double_precision start_longitude
+    double_precision start_accuracy_m
+    double_precision start_distance_m
+    text start_geofence_class
+    uuid start_device_id
+    text__ start_flags
+    text end_reason
+    double_precision end_latitude
+    double_precision end_longitude
+    double_precision end_accuracy_m
+    text cancelled_reason
+    text notes
+    integer version
+    timestamp_with_time_zone created_at
+    timestamp_with_time_zone updated_at
+    uuid created_by_user_id
+    uuid updated_by_user_id
+  }
   sites {
     uuid id PK
     uuid organization_id
@@ -239,6 +284,16 @@ erDiagram
   users ||--o{ organization_members : "organization_members_user_id_fkey"
   organizations ||--o{ organization_settings : "organization_settings_organization_id_fkey"
   users ||--o{ organization_settings : "organization_settings_updated_by_user_id_fkey"
+  users ||--o{ shift_events : "shift_events_actor_user_id_fkey"
+  guard_devices ||--o{ shift_events : "shift_events_organization_id_device_id_fkey"
+  organizations ||--o{ shift_events : "shift_events_organization_id_fkey"
+  shifts ||--o{ shift_events : "shift_events_organization_id_shift_id_fkey"
+  users ||--o{ shifts : "shifts_created_by_user_id_fkey"
+  organizations ||--o{ shifts : "shifts_organization_id_fkey"
+  guards ||--o{ shifts : "shifts_organization_id_guard_id_fkey"
+  sites ||--o{ shifts : "shifts_organization_id_site_id_fkey"
+  guard_devices ||--o{ shifts : "shifts_organization_id_start_device_id_fkey"
+  users ||--o{ shifts : "shifts_updated_by_user_id_fkey"
   users ||--o{ sites : "sites_created_by_user_id_fkey"
   organizations ||--o{ sites : "sites_organization_id_fkey"
   users ||--o{ sites : "sites_updated_by_user_id_fkey"

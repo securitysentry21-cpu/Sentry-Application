@@ -199,6 +199,53 @@ export interface SchemaMigrations {
   version: string;
 }
 
+export interface ShiftEvents {
+  actor_type: string;
+  actor_user_id: string | null;
+  client_event_id: string | null;
+  client_recorded_at: Timestamp | null;
+  created_at: Generated<Timestamp>;
+  device_id: string | null;
+  id: string;
+  occurred_at: Timestamp;
+  organization_id: string;
+  payload: Generated<Json>;
+  shift_id: string;
+  type: string;
+}
+
+export interface Shifts {
+  actual_ended_at: Timestamp | null;
+  actual_started_at: Timestamp | null;
+  cancelled_reason: string | null;
+  created_at: Generated<Timestamp>;
+  created_by_user_id: string | null;
+  end_accuracy_m: number | null;
+  end_latitude: number | null;
+  end_longitude: number | null;
+  end_reason: string | null;
+  ends_at: Timestamp;
+  guard_id: string;
+  id: string;
+  notes: string | null;
+  organization_id: string;
+  site_id: string;
+  start_accuracy_m: number | null;
+  start_deadline_at: Timestamp;
+  start_device_id: string | null;
+  start_distance_m: number | null;
+  start_flags: Generated<string[]>;
+  start_geofence_class: string | null;
+  start_latitude: number | null;
+  start_longitude: number | null;
+  start_source: string | null;
+  starts_at: Timestamp;
+  status: Generated<string>;
+  updated_at: Generated<Timestamp>;
+  updated_by_user_id: string | null;
+  version: Generated<number>;
+}
+
 export interface Sites {
   address_line_1: string | null;
   address_line_2: string | null;
@@ -260,6 +307,8 @@ export interface DB {
   organization_settings: OrganizationSettings;
   organizations: Organizations;
   schema_migrations: SchemaMigrations;
+  shift_events: ShiftEvents;
+  shifts: Shifts;
   sites: Sites;
   tracking_consents: TrackingConsents;
   users: Users;

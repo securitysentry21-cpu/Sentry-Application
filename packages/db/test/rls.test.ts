@@ -120,6 +120,18 @@ beforeAll(async () => {
          values ($1, $2, $3, 'North gate', gen_random_bytes(32))`,
         [randomUUID(), org, siteRow],
       );
+      // Phase 3 tables.
+      const shift = randomUUID();
+      await m.query(
+        `insert into shifts (id, organization_id, guard_id, site_id, starts_at, ends_at, start_deadline_at)
+         values ($1, $2, $3, $4, now(), now() + interval '8 hours', now() + interval '2 hours')`,
+        [shift, org, guard, siteRow],
+      );
+      await m.query(
+        `insert into shift_events (id, organization_id, shift_id, type, actor_type, occurred_at)
+         values ($1, $2, $3, 'CREATED', 'SYSTEM', now())`,
+        [randomUUID(), org, shift],
+      );
     }
   });
   runtime = new pg.Pool({ connectionString: db.urls.app_runtime, max: 2 });

@@ -16,17 +16,21 @@ let both: string;
  * For each `:id` route: a resource in organization B and a body that passes validation, so the
  * request reaches the ownership check (a malformed body would answer 400 before it).
  */
-type Probe = { id: () => Promise<string>; body?: Record<string, unknown> };
+type Probe =
+  | { id: () => Promise<string>; body?: Record<string, unknown> }
+  /** Guard-only routes: a dashboard user is refused before any lookup; ADV-A03 covers them with a real guard. */
+  | { guardOnly: string };
 
 async function seedB(sql: string, params: unknown[]): Promise<void> {
   await asOwner(t.db, (c) => c.query(sql, params));
 }
 
-const B: { guard: string; device: string; site: string; checkpoint: string } = {
+const B: { guard: string; device: string; site: string; checkpoint: string; shift: string } = {
   guard: randomUUID(),
   device: randomUUID(),
   site: randomUUID(),
   checkpoint: randomUUID(),
+  shift: randomUUID(),
 };
 
 async function seedBResources(): Promise<void> {
@@ -47,6 +51,11 @@ async function seedBResources(): Promise<void> {
   await seedB(
     `insert into checkpoints (id, organization_id, site_id, name, qr_token_hash) values ($1, $2, $3, 'B door', $4)`,
     [B.checkpoint, orgB.id, B.site, randomBytes(32)],
+  );
+  await seedB(
+    `insert into shifts (id, organization_id, guard_id, site_id, starts_at, ends_at, start_deadline_at)
+     values ($1, $2, $3, $4, now() + interval '1 hour', now() + interval '9 hours', now() + interval '3 hours')`,
+    [B.shift, orgB.id, B.guard, B.site],
   );
 }
 
@@ -84,6 +93,18 @@ const CROSS_TENANT_RESOURCES: Record<string, Probe> = {
   'GET /api/v1/sites/:id/checkpoints/print-sheet': { id: fixed(() => B.site) },
   'PATCH /api/v1/checkpoints/:id': { id: fixed(() => B.checkpoint), body: { name: 'Changed', version: 1 } },
   'POST /api/v1/checkpoints/:id/rotate-qr': { id: fixed(() => B.checkpoint) },
+  'GET /api/v1/shifts/:id': { id: fixed(() => B.shift) },
+  'PATCH /api/v1/shifts/:id': { id: fixed(() => B.shift), body: { notes: 'x', version: 1 } },
+  'POST /api/v1/shifts/:id/cancel': { id: fixed(() => B.shift), body: { reason: 'x' } },
+  'POST /api/v1/shifts/:id/manual-start': { id: fixed(() => B.shift), body: { reason: 'x' } },
+  'POST /api/v1/shifts/:id/force-end': { id: fixed(() => B.shift), body: { reason: 'x' } },
+  'POST /api/v1/shifts/:id/extend': {
+    id: fixed(() => B.shift),
+    body: { endsAt: '2030-01-01T00:00:00.000Z' },
+  },
+  'POST /api/v1/shifts/:id/reopen': { id: fixed(() => B.shift), body: { reason: 'x' } },
+  'POST /api/v1/shifts/:id/start': { guardOnly: 'shifts.test.ts › ADV-A03' },
+  'POST /api/v1/shifts/:id/end': { guardOnly: 'shifts.test.ts › ADV-A03' },
 };
 beforeAll(async () => {
   t = await startTestApp();
@@ -147,6 +168,10 @@ describe('cross-tenant resources (SEC §4.2 rule 4)', () => {
       const probe = CROSS_TENANT_RESOURCES[key];
       expect(probe, `${key} needs a cross-tenant probe in tenancy.test.ts`).toBeDefined();
       if (!probe) continue;
+      if ('guardOnly' in probe) {
+        expect(route.policy?.ownership, key).toBe('guard-self');
+        continue;
+      }
       const id = await probe.id();
       const res = await call(t.app, {
         method: route.method as 'GET',

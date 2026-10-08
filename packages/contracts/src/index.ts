@@ -7,4 +7,5 @@ export * from './mobile.ts';
 export * from './permissions.ts';
 export * from './routes.ts';
 export * from './settings.ts';
+export * from './shifts.ts';
 export * from './sites.ts';

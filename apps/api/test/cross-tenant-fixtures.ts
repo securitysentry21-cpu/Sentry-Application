@@ -85,6 +85,33 @@ export const CROSS_TENANT_FIXTURES: Readonly<Record<string, Coverage>> = {
     test: 'sites.test.ts › ADV-T05 and tenancy.test.ts › ADV-T01',
   },
   'PATCH /api/v1/checkpoints/:id': T01,
+
+  // Phase 3
+  'GET /api/v1/shifts': T09,
+  'POST /api/v1/shifts': {
+    covered: 'test',
+    test: "tenancy.test.ts › ADV-T01 and shifts: another organization's guard or site is not found",
+  },
+  'POST /api/v1/shifts/bulk': T09,
+  'GET /api/v1/shifts/:id': T01,
+  'PATCH /api/v1/shifts/:id': T01,
+  'POST /api/v1/shifts/:id/cancel': T01,
+  'POST /api/v1/shifts/:id/manual-start': T01,
+  'POST /api/v1/shifts/:id/force-end': T01,
+  'POST /api/v1/shifts/:id/extend': T01,
+  'POST /api/v1/shifts/:id/reopen': T01,
+  'POST /api/v1/shifts/:id/start': {
+    covered: 'test',
+    test: "shifts.test.ts › ADV-A03 (another guard's shift is not found)",
+  },
+  'POST /api/v1/shifts/:id/end': {
+    covered: 'test',
+    test: "shifts.test.ts › ADV-A03 (another guard's shift is not found)",
+  },
+  'GET /api/v1/me/shifts': {
+    covered: 'test',
+    test: "shifts.test.ts › ADV-A03 (only the guard's own shifts)",
+  },
   'POST /api/v1/checkpoints/:id/rotate-qr': {
     covered: 'test',
     test: 'sites.test.ts › ADV-T05 and tenancy.test.ts › ADV-T01',

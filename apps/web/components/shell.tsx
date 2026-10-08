@@ -28,7 +28,7 @@ const ADMINISTRATION: NavItem[] = [
 ];
 
 /** Pages that exist so far; later phases add theirs here. */
-const BUILT = new Set(['/dashboard', '/members', '/settings', '/audit', '/guards', '/sites']);
+const BUILT = new Set(['/dashboard', '/members', '/settings', '/audit', '/guards', '/sites', '/shifts']);
 
 export function AppShell({ children }: { children: ReactNode }) {
   const session = useSession();

@@ -243,6 +243,20 @@ export function redeem(
   });
 }
 
+/** Rotates the phone's session the way the app does when its 15-minute access token runs out. */
+export async function refreshPhone(app: FastifyInstance, phone: EnrolledPhone): Promise<void> {
+  const res = await app.inject({
+    method: 'POST',
+    url: '/api/v1/sessions/refresh',
+    headers: { 'content-type': 'application/json' },
+    payload: { refreshToken: phone.refreshToken },
+  });
+  if (res.statusCode !== 200) throw new Error(`refresh failed: ${res.statusCode} ${res.body}`);
+  const { session } = res.json<{ session: { accessToken: string; refreshToken: string } }>();
+  phone.accessToken = session.accessToken;
+  phone.refreshToken = session.refreshToken;
+}
+
 /** A request the way the guard app sends it: Bearer token and X-Device-Id, no cookie or CSRF. */
 export function asPhone(
   app: FastifyInstance,

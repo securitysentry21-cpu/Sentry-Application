@@ -1,5 +1,28 @@
 // Organizations and their settings overrides.
+import { defaultSettings } from '@sentryops/contracts';
 import type { Database } from '@sentryops/db';
+
+/** Every setting for the organization: the defaults with its overrides on top. */
+export async function organizationSettings(
+  trx: Database,
+  organizationId: string,
+): Promise<Record<string, unknown>> {
+  const row = await trx
+    .selectFrom('organization_settings')
+    .select('overrides')
+    .where('organization_id', '=', organizationId)
+    .executeTakeFirst();
+  const merged: Record<string, unknown> = defaultSettings();
+  if (row?.overrides && typeof row.overrides === 'object') {
+    for (const [key, value] of Object.entries(row.overrides)) if (key in merged) merged[key] = value;
+  }
+  return merged;
+}
+
+export const numberSetting = (settings: Record<string, unknown>, key: string, fallback: number): number => {
+  const value = settings[key];
+  return typeof value === 'number' ? value : fallback;
+};
 
 export async function createOrganization(
   trx: Database,

@@ -9,6 +9,7 @@ import { memberRoutes } from './members.ts';
 import { mobileRoutes } from './mobile.ts';
 import type { RouteDefinition } from './registry.ts';
 import { settingsRoutes } from './settings.ts';
+import { shiftRoutes } from './shifts.ts';
 import { siteRoutes } from './sites.ts';
 
 /** Every route the API serves. A route that is not listed here cannot be mounted. */
@@ -24,4 +25,5 @@ export const ROUTES: readonly RouteDefinition[] = [
   ...enrollmentRoutes,
   ...mobileRoutes,
   ...siteRoutes,
+  ...shiftRoutes,
 ];

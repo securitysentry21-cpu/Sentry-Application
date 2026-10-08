@@ -29,6 +29,7 @@ import {
   type GuardInput,
   type GuardRow,
 } from '../repositories/guards.ts';
+import { endShiftsForDisabledGuard } from '../services/shifts.ts';
 import { defineRoute } from './registry.ts';
 
 const READ = { kind: 'permission', permission: 'guards.read' } as const;
@@ -304,6 +305,7 @@ export const guardRoutes = [
           }
           if (changes.status && changes.status !== 'ACTIVE' && guard.status === 'ACTIVE') {
             await revokeGuardSessions(trx, org.id, guard.id, 'GUARD_DISABLED', now);
+            await endShiftsForDisabledGuard(trx, deps, org.id, guard.id, actor.userId);
             await recordAudit(trx, deps.clock, org.id, auditActor(ctx), {
               action: 'GUARD_DISABLED',
               resourceType: 'guard',
@@ -364,6 +366,7 @@ export const guardRoutes = [
           });
         }
         await revokeGuardSessions(trx, org.id, guard.id, 'GUARD_DISABLED', now);
+        await endShiftsForDisabledGuard(trx, deps, org.id, guard.id, actor.userId);
         await recordAudit(trx, deps.clock, org.id, auditActor(ctx), {
           action: 'GUARD_TERMINATED',
           resourceType: 'guard',
