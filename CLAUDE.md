@@ -48,6 +48,9 @@ On this Windows machine, run pnpm unattended (`CI=true`, `--reporter=append-only
 | Every registered tenant table gets the cross-tenant read test automatically, and it fails until the seed data has rows for both organizations | `packages/db/test/rls.test.ts` via `tenantTables()` (ADV-T06) |
 | API and workers refuse to start unless connected as a runtime role (no owner, superuser or BYPASSRLS) | `verifyRuntimeRole()` (ADV-X07) |
 | Every route goes through `defineRoute()` with a policy, and has an entry in `apps/api/test/cross-tenant-fixtures.ts` | route registry, meta-test (ADV-A09) |
+| Coordinates in response schemas are tagged `GUARD_LOCATION` or `SITE_GEOMETRY`; a route returning guard coordinates declares `locationScope: 'live'` or an audit action | `packages/contracts/src/geo.ts`, `route-registry.test.ts` (ADV-X05) |
+| Only `POST /sync/batch` (`replacedDeviceDrain`) accepts a REPLACED phone, for 72 h, and only data it captured before the replacement | `context.ts`, `services/sync.ts` (ADV-A08) |
+| Alert rules are pure (`packages/domain/alerts.ts`, `geofence.ts`); the engine applies them against the partial unique index on open dedupe keys | `apps/api/src/services/alerts.ts` (ADV-AL01–AL05, G01–G06) |
 | SQL only in `packages/db` or `**/repositories/**`; time only from the injected `Clock` in domain logic and services; no `dangerouslySetInnerHTML` | ESLint rules |
 | Defaults, error codes and audit actions equal the spec tables | spec-consistency tests (ADV-X04) |
 | Generated docs and DB types match the code | `docs:check`, `db:codegen --check` |
