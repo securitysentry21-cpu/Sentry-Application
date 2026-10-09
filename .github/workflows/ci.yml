@@ -52,3 +52,30 @@ jobs:
           fetch-depth: 0
       - name: Scan the whole history for secrets (gitleaks)
         run: docker run --rm -v "$PWD:/repo" zricethezav/gitleaks:latest detect --source /repo --redact --verbose
+
+  # The server image (infra/docker/Dockerfile), built on Arm for Graviton, only for a commit on main
+  # that passed every check above. AWS access is a short-lived role from GitHub's OIDC token that can
+  # only push images (infra/terraform/production/github.tf); no AWS key is stored in GitHub.
+  # Deploying it is a separate, deliberate step: infra/scripts/release.sh <commit>.
+  image:
+    needs: [verify, secrets]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.AWS_IMAGES_ROLE_ARN != ''
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_IMAGES_ROLE_ARN }}
+          aws-region: eu-central-1
+      - id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+      - name: Build and push sentryops:${{ github.sha }}
+        env:
+          IMAGE: ${{ steps.ecr.outputs.registry }}/sentryops:${{ github.sha }}
+        run: |
+          docker build --platform linux/arm64 -f infra/docker/Dockerfile -t "$IMAGE" .
+          docker push "$IMAGE"

@@ -1,3 +1,4 @@
+import { CURRENT_DISCLOSURE_VERSION } from '@sentryops/contracts';
 import { describe, expect, it } from 'vitest';
 
 import { DISCLOSURES, disclosureFor } from '../src/core/i18n/disclosure.ts';
@@ -65,6 +66,13 @@ describe('English and Urdu (D-14)', () => {
     expect(errorMessageKey('SHIFT_OUTSIDE_START_WINDOW')).toBe('error.SHIFT_OUTSIDE_START_WINDOW');
     expect(errorMessageKey('SOMETHING_NEW')).toBe('error.default');
     expect(errorMessageKey(null)).toBe('error.default');
+  });
+
+  it('this build bundles the disclosure version the server asks guards to accept (SEC §16.3)', () => {
+    // Otherwise a guard could never accept the disclosure, and tracking could never start.
+    expect(Object.keys(DISCLOSURES)).toContain(CURRENT_DISCLOSURE_VERSION);
+    expect(disclosureFor(CURRENT_DISCLOSURE_VERSION, 'en')).not.toBeNull();
+    expect(disclosureFor(CURRENT_DISCLOSURE_VERSION, 'ur')).not.toBeNull();
   });
 
   it('every bundled tracking disclosure exists in both languages with the same structure', () => {

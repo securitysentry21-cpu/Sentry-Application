@@ -9,6 +9,8 @@ allowBuilds:
   # postinstall only re-creates symlinks inside its own native/ folder from a bundled JSON list.
   '@embedded-postgres/windows-x64': true
   '@embedded-postgres/linux-x64': true
+  # The same package for Arm Linux, where the server image is built (infra/docker/Dockerfile).
+  '@embedded-postgres/linux-arm64': true
 
 # React Native tooling expects a flat node_modules; see docs/DECISIONS.md (Phase 0 agent decisions).
 nodeLinker: hoisted

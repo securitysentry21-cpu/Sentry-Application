@@ -46,10 +46,9 @@ pnpm test            # all tests; starts its own throwaway PostgreSQL
 
 ## Before the pilot
 
-These need the owner. Details are in `docs/OPEN_QUESTIONS.md` and `docs/DECISIONS.md`.
+These need the owner; `TODO.md` tracks them. More detail is in `docs/OPEN_QUESTIONS.md` and `docs/DECISIONS.md`.
 
-1. **Make this GitHub repository private, then push.** The commits are local only, because the repository is public today.
-2. An AWS account for the first cell (eu-central-1), with Amazon Cognito for dashboard sign-in. The callback is `/api/v1/auth/callback`. Set the `OIDC_*` variables and a real `QR_TOKEN_SECRET`; the API refuses the development secret in production.
-3. A legal review of the tracking disclosure text before any real guard data is collected.
-4. An Expo account for the first Android build (directly installed, not through Play, for the pilot).
-5. The device tests on the pilot's phones (`apps/mobile/README.md`): reboot mid-shift, app killed, a 12-hour battery and data soak, and permission flows.
+1. An AWS account for the first cell (eu-central-1), with Amazon Cognito for dashboard sign-in. The callback is `/api/v1/auth/callback`. Set the `OIDC_*` variables and a real `QR_TOKEN_SECRET`; the API refuses the development secret in production.
+2. A legal review of the tracking disclosure text before any real guard data is collected.
+3. An Expo account for the first Android build (directly installed, not through Play, for the pilot).
+4. The device tests on the pilot's phones (`apps/mobile/README.md`): reboot mid-shift, app killed, a 12-hour battery and data soak, and permission flows.

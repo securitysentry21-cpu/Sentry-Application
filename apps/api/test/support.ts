@@ -1,6 +1,7 @@
 // Shared test kit: a real app over a fresh test database, signed in through the development
 // sign-in, so tests exercise the same request pipeline (CSRF, session, organization, permission)
 // as the dashboard does.
+import { CURRENT_DISCLOSURE_VERSION } from '@sentryops/contracts';
 import { generateKeyPairSync, randomInt, randomUUID } from 'node:crypto';
 
 import { createPool, type Pool } from '@sentryops/db';
@@ -32,7 +33,7 @@ export function testConfig(databaseUrl: string, overrides: Partial<Config> = {})
     MOBILE_MIN_VERSION: '0.0.0',
     MOBILE_RECOMMENDED_VERSION: '0.0.0',
     MOBILE_REVOKED_VERSIONS: [],
-    DISCLOSURE_VERSION: '2026-10-08',
+    DISCLOSURE_VERSION: CURRENT_DISCLOSURE_VERSION,
     FEATURE_SOS: false,
     ALLOW_FOREIGN_GUARD_PHONES: false,
     ...overrides,

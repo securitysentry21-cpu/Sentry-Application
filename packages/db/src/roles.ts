@@ -18,21 +18,40 @@ export const DEV_PASSWORDS: Readonly<Record<DbRole, string>> = {
 const quoteIdent = (name: string) => `"${name.replace(/"/g, '""')}"`;
 const quoteLiteral = (value: string) => `'${value.replace(/'/g, "''")}'`;
 
-/** Creates the four roles if missing and (re)sets their passwords. Needs an administrator connection. */
+/**
+ * Creates the four roles if missing and (re)sets their passwords. Needs an administrator connection:
+ * a superuser locally, RDS's master user (CREATEROLE, not a superuser) in AWS. Either way it ends by
+ * checking that no role is a superuser or bypasses row-level security (D-33).
+ */
 export async function bootstrapRoles(
   admin: pg.ClientBase,
   passwords: Readonly<Record<DbRole, string>> = DEV_PASSWORDS,
 ): Promise<void> {
-  for (const role of [MIGRATOR, ...RUNTIME_ROLES] as DbRole[]) {
+  const roles: DbRole[] = [MIGRATOR, ...RUNTIME_ROLES];
+  const { rows } = await admin.query<{ rolsuper: boolean }>(
+    'select rolsuper from pg_roles where rolname = current_user',
+  );
+  const superuser = rows[0]?.rolsuper === true;
+  for (const role of roles) {
     // Concurrent bootstraps may race; a duplicate is fine.
     await admin.query(`
       do $$ begin
         create role ${quoteIdent(role)} login nosuperuser nobypassrls nocreatedb nocreaterole;
       exception when duplicate_object then null;
       end $$`);
+    // Only a superuser may name SUPERUSER or BYPASSRLS in ALTER ROLE, even to clear them, so RDS's
+    // administrator sets the password alone; the check below covers both cases.
+    const clear = superuser ? 'nosuperuser nobypassrls ' : '';
     await admin.query(
-      `alter role ${quoteIdent(role)} login nosuperuser nobypassrls password ${quoteLiteral(passwords[role])}`,
+      `alter role ${quoteIdent(role)} login ${clear}password ${quoteLiteral(passwords[role])}`,
     );
+  }
+  const unsafe = await admin.query<{ rolname: string }>(
+    'select rolname from pg_roles where rolname = any($1) and (rolsuper or rolbypassrls) order by rolname',
+    [roles],
+  );
+  if (unsafe.rowCount) {
+    throw new Error(`refusing: superuser or BYPASSRLS on ${unsafe.rows.map((r) => r.rolname).join(', ')}`);
   }
 }
 

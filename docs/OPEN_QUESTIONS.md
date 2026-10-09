@@ -4,9 +4,7 @@ These questions are waiting for the product owner. When one is answered, record 
 
 On 2026-10-08 (round 6) the owner delegated every open question. Q-13 and Q-18–Q-21 and D-11 were decided under that delegation; `docs/DECISIONS.md` records each decision and its reason, so any of them can be reversed.
 
-| ID | Question | Why it matters | Needed by |
-|---|---|---|---|
-| — | Make the GitHub repository private (recommended), then push, or confirm it should stay public | It is public today; pushing would publish the code and the security design. Nothing has been pushed. | before the first push |
+No questions are open. (The last one, whether the repository stays public, was answered on 2026-10-08: public, and pushed.)
 
 ## Owner actions (long lead times; start now)
 

@@ -1,4 +1,5 @@
 // Guard enrollment and device-bound sessions (D-02, D-30, D-31, SEC §5).
+import { CURRENT_DISCLOSURE_VERSION } from '@sentryops/contracts';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import {
@@ -321,7 +322,7 @@ describe('device-bound sessions (D-30)', () => {
     const res = await asPhone(t.app, phone, {
       method: 'POST',
       url: '/api/v1/tracking-consents',
-      body: { disclosureVersion: '2026-10-08', locale: 'ur' },
+      body: { disclosureVersion: CURRENT_DISCLOSURE_VERSION, locale: 'ur' },
     });
     expect(res.statusCode).toBe(201);
     const { rows } = await asOwner(t.db, (c) =>

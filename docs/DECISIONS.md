@@ -74,7 +74,7 @@ Decisions not listed here keep the status shown in the spec appendices (OPEN unl
 
 Made as a co-founder would make them, while the owner was away. Each is reversible; review and veto in the diff.
 
-- **Committing.** Yes; commits are local. Commit identity: the repository account's GitHub no-reply address (`339630571+securitysentry21-cpu@users.noreply.github.com`), so neither the owner's name nor their Gmail enters a history that may become public. **Not pushed:** the repository is public, and pushing would publish the code, the threat model and the security design. Make the repository private, then push (or tell me to).
+- **Committing.** Yes; commits are local. Commit identity: the repository account's GitHub no-reply address (`339630571+securitysentry21-cpu@users.noreply.github.com`), so neither the owner's name nor their Gmail enters a history that may become public. **Pushed on 2026-10-08** to `securitysentry21-cpu/Sentry-Application`. The owner chose to keep the repository public, knowing that this publishes the code, the threat model and the security design.
 - **D-01 · identity provider: Amazon Cognito, reached through standard OpenID Connect.** SEC §5 requires a mature provider; the application never stores passwords, so first-party password sign-in is ruled out.
   - Cognito user pools are regional, so each cell keeps its own sign-in data. Our first cell is eu-central-1 (D-13, D-37); Clerk was recommended before AWS was chosen, and is US-hosted.
   - Cognito sits in the AWS account we are opening anyway, which means no extra vendor and no extra contract.
@@ -148,6 +148,31 @@ Gaps in the spec that Phase 5 had to fill. Each is the simplest option that keep
   - it needs `exports.create`, and is audited as `EXPORT_REQUESTED`.
 - **Coordinates in responses are tagged** (`GUARD_LOCATION` or `SITE_GEOMETRY` in the contract), so the ADV-X05 meta-test can tell a guard's position, which is personal data, from a site's boundary, which is configuration. An untagged coordinate fails CI.
 - **Phase status.** `status.json` stays at Phase 3. Phase 4's exit includes human device tests on the pilot's phones, ADV-O05 among them, and claiming the phase complete before they run would be false. Counting Phases 4 and 5 as due, the traceability check passes except for ADV-O05.
+
+## Infrastructure · agent-decided 2026-10-09
+
+The first cell, in Terraform (`infra/`), following ARCH §19.8. The choices the spec left open:
+
+- **A test environment on the Free plan first (owner's choice, 2026-10-09).** The owner keeps the AWS account on the Free plan, with its $100 credit, until production. A smaller `test` environment runs there: the same module with the standby database, the backup copy and WAF switched off, at about $70 a month. It is for test data and device tests only, **never real guards**: when the credit runs out, or after six months, AWS suspends the whole account immediately. Before the first real guard, the owner moves to the Paid plan and `production` is built in its own account. The Free plan rules out AWS Organizations (joining one forces the Paid plan), so the owner signs in as an IAM user with MFA, and the CLI uses `aws login`: browser sign-in, temporary credentials, no access keys.
+- **The first account is of AWS's simplified type** (AWS's "new experience", in limited release; found 2026-10-09). AWS manages its organization policies:
+  - they allow only Sydney (ap-southeast-2, chosen from the Pakistan contact address), and block GuardDuty and IAM OIDC providers;
+  - IAM users can't sign in to the console.
+
+  So the test environment runs in Sydney, without GuardDuty, and CodeBuild builds the server image inside the account instead of GitHub CI. It holds test data only, so the EU residency rule for real data (D-13) is not affected. The CLI signs in with `aws login`, as the owner's AWS Builder ID session; Terraform uses it through a `credential_process` profile. Production needs the Paid plan plus AWS's "activate advanced features", which is irreversible and unlocks Frankfurt and every service. The other route is a new account through "Sign up for AWS (advanced)".
+- **No domain until production (owner's choice).** Without a domain the test environment's address comes from CloudFront (`https://<id>.cloudfront.net`, AWS's certificate). The load balancer is internal, reached through a CloudFront VPC origin inside AWS's network. The domain is required before the first real guard, because the guard app has the server address built in. While on the Free plan it is bought outside AWS: Free-plan accounts reportedly can't register domains, and AWS credits never pay for them.
+
+- **Accounts (production).** An AWS Organization with one member account, `sentry-production`; a staging account later, when changes need testing against real infrastructure. The owner signs in through IAM Identity Center with MFA; the root user has MFA and no access keys.
+- **No NAT gateway.** The service tasks sit in public subnets with public addresses, and their security groups accept traffic only from the load balancer. The database is in private subnets with no route to the internet. This saves about $35 a month plus data charges. Revisit (private subnets with NAT or VPC endpoints) when traffic grows.
+- **One image for every service,** built on GitHub's Arm runners after `pnpm verify` passes on `main`. It is pushed with a GitHub OIDC role that can only push images, and only from `main`. The repository is public, so pull requests from forks must never match: their tokens name `refs/pull/…`.
+- **Releases are deliberate** (`infra/scripts/release.sh <environment> <commit>`): the migrations run first as a one-off task, and the services move only if they succeed. The released tags are committed in `infra/terraform/env/<environment>.release.tfvars`, so the repository says what each environment runs.
+- **Cognito sign-up.** People may create their own account, with a verified email and authenticator-app MFA required for everyone. An account alone grants nothing: access comes only from an invitation, which the API accepts only from the verified email it was sent to. Until there is an email domain (EXT-15), Cognito sends from its default address, limited to 50 emails a day.
+- **WAF:** AWS's IP-reputation, common and known-bad-inputs rule sets. The common set's rule against request bodies over 8 KB only counts, because sync batches can be up to 2 MB. There is no per-IP rate rule: many guards share one mobile-carrier address, and the API limits guards by device instead (SEC §9).
+- **Database:** `db.t4g.micro`, Multi-AZ, for Pilot 0 (about 50 guards); raise it before the 1,000-guard rollout. RDS manages its administrator password; the four role passwords are generated by Terraform and kept in Secrets Manager. Connections verify the server against the RDS certificate authorities shipped in the image.
+- **No file bucket yet.** Nothing stores files until incidents (Phase 8).
+- **Personal values stay out of the repository.** It is public, so the alerts email goes in a git-ignored `local.auto.tfvars`.
+- **Found while preparing the setup:**
+  - The role setup would have failed on RDS: only a true superuser may name SUPERUSER or BYPASSRLS in `ALTER ROLE`, even to clear them. It now sets them only when run as a superuser, and always checks afterwards that no role has them. A test runs it as an RDS-like administrator.
+  - The server announced disclosure version `2026-10-08`, but the guard app ships version `1` and can only record acceptance of text it showed. A real phone could never have started tracking. The version is now one shared constant, and a guard-app test fails if a build doesn't ship it.
 
 ## Index
 

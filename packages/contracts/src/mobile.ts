@@ -90,6 +90,14 @@ export const mobileConfigSchema = z.object({
 });
 export type MobileConfig = z.infer<typeof mobileConfigSchema>;
 
+/**
+ * The tracking disclosure version the server currently asks guards to accept (SEC §16.3). The guard
+ * app can only record acceptance of text it ships, so every app build must bundle this version
+ * (apps/mobile/src/core/i18n/disclosure.ts; a test checks). A new text after the legal review gets a
+ * new version here and in the app.
+ */
+export const CURRENT_DISCLOSURE_VERSION = '1';
+
 export const trackingConsentRequestSchema = z.strictObject({
   disclosureVersion: z.string().max(40),
   locale: z.enum(GUARD_LOCALES),

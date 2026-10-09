@@ -36,3 +36,12 @@ coverage/
 Thumbs.db
 .vscode/*
 !.vscode/extensions.json
+
+# Terraform working files and state (state lives in S3; infra/README.md)
+**/.terraform/
+**/.terraform-*/
+*.tfstate
+*.tfstate.*
+*.tfplan
+infra/terraform/env/*.backend.hcl
+infra/terraform/**/local.auto.tfvars

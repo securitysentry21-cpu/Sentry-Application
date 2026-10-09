@@ -1,0 +1,16 @@
+# The image build (infra/docker/Dockerfile) never sees secrets, local data or build output.
+.git
+.github
+.claude
+.local
+**/node_modules
+**/.env
+**/.env.*
+!.env.example
+apps/web/.next
+apps/mobile/android
+apps/mobile/ios
+apps/mobile/dist
+infra/terraform
+coverage
+*.log

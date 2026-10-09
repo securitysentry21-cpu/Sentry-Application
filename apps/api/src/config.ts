@@ -1,5 +1,6 @@
 // Configuration from the environment, validated once at startup. Error messages name the
 // variable, never its value (secrets live in these variables; SEC §13, §15).
+import { CURRENT_DISCLOSURE_VERSION } from '@sentryops/contracts';
 import { z } from 'zod';
 
 const LOG_LEVELS = ['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent'] as const;
@@ -45,7 +46,7 @@ export const configSchema = z
           .filter(Boolean),
       ),
     /** The disclosure text version guards must accept before tracking (SEC §16.3). */
-    DISCLOSURE_VERSION: z.string().default('2026-10-08'),
+    DISCLOSURE_VERSION: z.string().default(CURRENT_DISCLOSURE_VERSION),
     /** SOS stays off for pilot guards until the Phase 8 exit tests pass (ARCH §22). */
     FEATURE_SOS: flag,
     /** SEC §9: guard codes only for +92 numbers unless the operator allows other countries. */

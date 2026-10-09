@@ -1,27 +1,77 @@
 # Infrastructure
 
-## Environments (ARCH §19.1, D-13, D-37)
+The first cell (D-37, ARCH §19.8) on AWS. One Terraform module, `terraform/cell/`, builds either environment from its own variables in `terraform/env/`:
 
-| Environment | Where                                        | Database                                                    | Notes                                                      |
-| ----------- | -------------------------------------------- | ----------------------------------------------------------- | ---------------------------------------------------------- |
-| development | the developer's machine                      | embedded PostgreSQL 17 (`pnpm db:up`)                       | no Docker needed; development-only passwords               |
-| test        | the developer's machine and GitHub Actions   | embedded PostgreSQL 17 locally; `postgres:17` service in CI | a fresh database per test file, connected as `app_runtime` |
-| staging     | AWS cell, eu-central-1                       | RDS for PostgreSQL 17                                       | separate AWS account; SMS only to allow-listed numbers     |
-| production  | AWS cell, eu-central-1, backups in eu-west-1 | RDS for PostgreSQL 17, Multi-AZ, PITR 35 days               | separate AWS account                                       |
+|                         | `test` (now)                                                   | `production` (before the first real guard)               |
+| ----------------------- | -------------------------------------------------------------- | -------------------------------------------------------- |
+| AWS account             | the first account: Free plan, AWS's simplified type            | Paid plan with AWS's advanced features, or a new account |
+| Region                  | ap-southeast-2 (Sydney), the only one this account type allows | eu-central-1 (Frankfurt)                                 |
+| Data                    | test data only, never real guards                              | real guards                                              |
+| Address                 | `https://<id>.cloudfront.net` (no domain yet)                  | `https://app.<domain>`                                   |
+| Database                | single zone                                                    | standby in a second zone, backups also copied to Ireland |
+| WAF, GuardDuty          | off (GuardDuty is blocked on this account type)                | on                                                       |
+| Server image built by   | CodeBuild, inside the account                                  | GitHub CI, through OIDC                                  |
+| Monthly cost (estimate) | about $80 while running                                        | about $130–170                                           |
 
-Each cell is one deployment per data region (D-13). The `CELL_REGION` setting names it, and every organization's `data_region` must match.
+Never put real guards on the `test` environment. When the Free plan's credit runs out, or after six months, AWS suspends the whole account at once, and deletes it 90 days later.
 
-## The first cell: what gets created (ARCH §19.8)
+| Part      | What it is                                                                                                                                                                                                                        |
+| --------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Network   | One VPC across two zones. Service tasks in public subnets, which accept traffic only from the load balancer; the database in private subnets with no internet route                                                               |
+| Database  | RDS for PostgreSQL 17, private, TLS required, KMS-encrypted, 35 days of point-in-time recovery                                                                                                                                    |
+| Services  | ECS Fargate on Arm: `api` (Fastify), `web` (Next.js), `worker` (detectors), plus one-off `dbadmin` (migrations) and operator tasks. One image for all of them (`docker/Dockerfile`)                                               |
+| Edge      | One origin for the dashboard and the API (review A-07): `/api/*` to the API, everything else to the dashboard. With a domain: a public load balancer, TLS 1.2+, AWS WAF. Without one: an internal load balancer behind CloudFront |
+| Sign-in   | Amazon Cognito (D-01), MFA required for everyone                                                                                                                                                                                  |
+| Secrets   | Secrets Manager, one secret per consumer, generated by Terraform; RDS manages the administrator password                                                                                                                          |
+| Detection | CloudTrail, and GuardDuty where the account allows it; findings and budget warnings by email                                                                                                                                      |
+| Images    | ECR, filled by CodeBuild in the account or by GitHub CI through OIDC; no AWS keys anywhere                                                                                                                                        |
 
-The security baseline for this cell is listed in ARCH §19.8.
+## First-time setup (an environment)
 
-- **Network:** a VPC with public subnets (load balancer) and private subnets (containers, database).
-- **Containers:** ECS on Fargate for three long-lived services, `api` (REST and SSE) and two worker types. They are long-lived because SSE and LISTEN/NOTIFY can't run on serverless (EXT-41).
-- **Load balancer:** an Application Load Balancer that routes `/api/*` to the API and everything else to the dashboard, so both share one origin (review A-07).
-- **Database:** RDS for PostgreSQL 17 with Multi-AZ and point-in-time recovery for 35 days, plus automated backups replicated to eu-west-1. The roles `migrator`, `app_runtime`, `system_worker` and `retention_worker` are created once with `bootstrapRoles()`, using passwords from Secrets Manager.
-- **Files:** S3 with Block Public Access, KMS encryption and versioning, replicated to eu-west-1.
-- **Secrets and detection:** Secrets Manager; CloudTrail and GuardDuty; WAF in front of the API.
+Prerequisites: the AWS CLI v2 (≥ 2.32) and Terraform (≥ 1.10). Sign in with `aws login`: it opens the browser, uses your console sign-in, and gives the CLI temporary credentials for up to 12 hours, with no access keys. Terraform reads them through a profile that refreshes them when they expire:
 
-## Deviation from the Phase 0 plan
+```ini
+# ~/.aws/config
+[profile sentry-test]
+credential_process = aws configure export-credentials --profile default --format process
+region = ap-southeast-2
+```
 
-The plan said the Terraform for this cell would be written in Phase 0, without being applied. It moves to Phase 1. Terraform that can't be planned against a real account (EXT-14) can't be checked, and unchecked infrastructure code is the kind of doc-versus-reality drift the spec warns about. Phase 1 writes it, and validates it with `terraform plan` against the staging account.
+```bash
+aws login
+export AWS_PROFILE=sentry-test
+infra/scripts/bootstrap-state.sh test                 # once: the state bucket, and terraform init
+echo 'alerts_email = "<operator email>"' > infra/terraform/cell/local.auto.tfvars   # git-ignored
+infra/scripts/tf.sh test apply                        # about 15 minutes; services start at zero tasks
+```
+
+Then build the image for a commit that passed CI, release it, and create the first organization:
+
+```bash
+infra/scripts/build-image.sh test <commit>            # CodeBuild; in production GitHub CI does this
+infra/scripts/release.sh test <commit>
+infra/scripts/operator.sh test create-organization --name "<company>" --owner-email <owner's email>
+```
+
+For production with GitHub OIDC: after the first apply, run `gh variable set AWS_IMAGES_ROLE_ARN --body "$(infra/scripts/tf.sh production output -raw github_images_role_arn)"`. CI then pushes an image for every green commit on `main`.
+
+The operator prints an invitation link. The owner opens it, creates a sign-in (an email code, then an authenticator app for MFA), and accepts.
+
+## Releasing
+
+```bash
+aws login
+export AWS_PROFILE=sentry-test
+infra/scripts/build-image.sh test <commit that passed CI>
+infra/scripts/release.sh test <commit>
+git add infra/terraform/env/test.release.tfvars && git commit -m "Release <commit> to test"
+```
+
+The migrations run first, as a one-off task. If they fail, the services aren't touched. A service deployment that fails its health checks rolls back by itself.
+
+## Before the first real guard
+
+1. Buy the domain (outside AWS while on the Free plan; about $10–15 a year).
+2. Switch the AWS account to the Paid plan and activate AWS's advanced features (irreversible), which unlocks Frankfurt and every service (`TODO.md`).
+3. Set the domain in `env/production.tfvars`, and run the first-time setup with `production`.
+4. Build the guard app against `https://app.<domain>`. Then destroy the test environment: `infra/scripts/tf.sh test destroy`.
