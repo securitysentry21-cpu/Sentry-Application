@@ -87,14 +87,29 @@ resource "aws_vpc_security_group_ingress_rule" "alb_public" {
   to_port           = tonumber(each.key)
 }
 
-# Without one: the load balancer is internal, reached only by CloudFront's VPC origin.
+# Without one: the load balancer is internal, reached only by CloudFront's VPC origin. CloudFront's
+# traffic is admitted by its service-managed security group, which exists once the VPC origin does;
+# a rule for the VPC's own address range does not admit it (CloudFront docs, VPC origins).
+data "aws_security_group" "cloudfront_vpc_origins" {
+  count = local.has_domain ? 0 : 1
+  filter {
+    name   = "group-name"
+    values = ["CloudFront-VPCOrigins-Service-SG"]
+  }
+  filter {
+    name   = "vpc-id"
+    values = [aws_vpc.main.id]
+  }
+  depends_on = [aws_cloudfront_vpc_origin.alb]
+}
+
 resource "aws_vpc_security_group_ingress_rule" "alb_from_cloudfront" {
-  count             = local.has_domain ? 0 : 1
-  security_group_id = aws_security_group.alb.id
-  cidr_ipv4         = local.vpc_cidr
-  ip_protocol       = "tcp"
-  from_port         = 80
-  to_port           = 80
+  count                        = local.has_domain ? 0 : 1
+  security_group_id            = aws_security_group.alb.id
+  referenced_security_group_id = data.aws_security_group.cloudfront_vpc_origins[0].id
+  ip_protocol                  = "tcp"
+  from_port                    = 80
+  to_port                      = 80
 }
 
 resource "aws_vpc_security_group_egress_rule" "alb_to_vpc" {

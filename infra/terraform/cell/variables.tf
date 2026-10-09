@@ -117,6 +117,18 @@ variable "db_allocated_storage_gb" {
   default = 20
 }
 
+variable "db_backup_retention_days" {
+  description = "Point-in-time recovery window (ARCH §19.8: 35). The Free plan allows less."
+  type        = number
+  default     = 35
+}
+
+variable "db_storage_autoscaling" {
+  description = "Let storage grow up to five times the allocation."
+  type        = bool
+  default     = true
+}
+
 variable "api_desired_count" {
   type    = number
   default = 1

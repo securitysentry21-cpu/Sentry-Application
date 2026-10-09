@@ -8,7 +8,7 @@ The first cell (D-37, ARCH §19.8) on AWS. One Terraform module, `terraform/cell
 | Region                  | ap-southeast-2 (Sydney), the only one this account type allows | eu-central-1 (Frankfurt)                                 |
 | Data                    | test data only, never real guards                              | real guards                                              |
 | Address                 | `https://<id>.cloudfront.net` (no domain yet)                  | `https://app.<domain>`                                   |
-| Database                | single zone                                                    | standby in a second zone, backups also copied to Ireland |
+| Database                | single zone, 1 day of backups (the Free plan's limit)          | standby in a second zone, backups also copied to Ireland |
 | WAF, GuardDuty          | off (GuardDuty is blocked on this account type)                | on                                                       |
 | Server image built by   | CodeBuild, inside the account                                  | GitHub CI, through OIDC                                  |
 | Monthly cost (estimate) | about $80 while running                                        | about $130–170                                           |

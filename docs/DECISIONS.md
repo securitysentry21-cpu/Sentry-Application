@@ -173,6 +173,10 @@ The first cell, in Terraform (`infra/`), following ARCH §19.8. The choices the 
 - **Found while preparing the setup:**
   - The role setup would have failed on RDS: only a true superuser may name SUPERUSER or BYPASSRLS in `ALTER ROLE`, even to clear them. It now sets them only when run as a superuser, and always checks afterwards that no role has them. A test runs it as an RDS-like administrator.
   - The server announced disclosure version `2026-10-08`, but the guard app ships version `1` and can only record acceptance of text it showed. A real phone could never have started tracking. The version is now one shared constant, and a guard-app test fails if a build doesn't ship it.
+- **Found while creating the test environment:**
+  - The Free plan refuses an RDS backup retention of 35 days (`FreeTierRestrictionError`). The test environment keeps 1 day, which is enough for test data; production keeps 35.
+  - A CloudFront VPC origin isn't admitted by a security-group rule for the VPC's own address range. The load balancer must admit CloudFront's managed prefix list, or its service-managed security group (`CloudFront-VPCOrigins-Service-SG`). We use the group, which is the stricter option.
+  - The operator CLI prints the owner's invitation link, so the operator script deletes that task's log stream once it has shown the output (SEC §15: logs never keep tokens).
 
 ## Index
 

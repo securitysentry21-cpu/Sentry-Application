@@ -29,9 +29,11 @@ resource "aws_db_parameter_group" "main" {
   name   = "${local.name}-pg17"
   family = "postgres17"
 
+  # Static in RDS: set at creation, and applied on reboot if it ever changes.
   parameter {
-    name  = "rds.force_ssl"
-    value = "1"
+    name         = "rds.force_ssl"
+    value        = "1"
+    apply_method = "pending-reboot"
   }
   # Slow statements are logged by duration only; parameters may hold personal data and stay out.
   parameter {
@@ -47,7 +49,7 @@ resource "aws_db_instance" "main" {
   instance_class = var.db_instance_class
 
   allocated_storage     = var.db_allocated_storage_gb
-  max_allocated_storage = var.db_allocated_storage_gb * 5
+  max_allocated_storage = var.db_storage_autoscaling ? var.db_allocated_storage_gb * 5 : 0
   storage_type          = "gp3"
   storage_encrypted     = true
   kms_key_id            = aws_kms_key.main.arn
@@ -65,14 +67,14 @@ resource "aws_db_instance" "main" {
   parameter_group_name   = aws_db_parameter_group.main.name
   ca_cert_identifier     = "rds-ca-rsa2048-g1"
 
-  backup_retention_period = 35
+  backup_retention_period = var.db_backup_retention_days
   backup_window           = "20:00-21:00"         # 01:00–02:00 in Pakistan
   maintenance_window      = "sun:21:30-sun:22:30" # Monday 02:30–03:30 in Pakistan
   copy_tags_to_snapshot   = true
 
   auto_minor_version_upgrade      = true
   deletion_protection             = var.environment == "production"
-  skip_final_snapshot             = false
+  skip_final_snapshot             = var.environment != "production"
   final_snapshot_identifier       = "${local.name}-final"
   enabled_cloudwatch_logs_exports = ["postgresql"]
 }
@@ -82,5 +84,5 @@ resource "aws_db_instance_automated_backups_replication" "backup" {
   provider               = aws.backup
   source_db_instance_arn = aws_db_instance.main.arn
   kms_key_id             = aws_kms_key.backup[0].arn
-  retention_period       = 35
+  retention_period       = var.db_backup_retention_days
 }

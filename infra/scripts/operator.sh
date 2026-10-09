@@ -17,5 +17,8 @@ task=$("$AWS" ecs run-task --region "$region" --cluster "$cluster" --launch-type
   --query 'tasks[0].taskArn' --output text)
 echo "operator task: $task"
 "$AWS" ecs wait tasks-stopped --region "$region" --cluster "$cluster" --tasks "$task"
+stream="api/api/${task##*/}"
 "$AWS" logs get-log-events --region "$region" --log-group-name "/$prefix/api" \
-  --log-stream-name "api/api/${task##*/}" --query 'events[].message' --output text
+  --log-stream-name "$stream" --query 'events[].message' --output text
+# The output can hold an invitation link, and logs never keep tokens (SEC §15): delete it once shown.
+"$AWS" logs delete-log-stream --region "$region" --log-group-name "/$prefix/api" --log-stream-name "$stream"

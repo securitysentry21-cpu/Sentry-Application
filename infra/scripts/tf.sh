@@ -10,6 +10,7 @@ command="${1:?usage: tf.sh <test|production> <terraform command> [args]}"
 shift
 TERRAFORM="${TERRAFORM:-terraform}"
 cell="$(cd "$(dirname "$0")/../terraform/cell" && pwd)"
+if command -v cygpath >/dev/null 2>&1; then cell="$(cygpath -m "$cell")"; export MSYS_NO_PATHCONV=1; fi
 export TF_DATA_DIR=".terraform-$env_name"
 
 case "$command" in
