@@ -15,3 +15,6 @@ guardduty_enabled        = false
 cloudtrail_multi_region  = false
 image_builder            = "codebuild"
 monthly_budget_usd       = 80
+
+# Switched off on 2026-10-10 at the owner's request, to save credit. false switches it back on.
+paused = true

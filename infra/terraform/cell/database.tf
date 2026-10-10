@@ -79,6 +79,13 @@ resource "aws_db_instance" "main" {
   enabled_cloudwatch_logs_exports = ["postgresql"]
 }
 
+# Stopped while the environment is paused (var.paused); started again when it isn't.
+resource "aws_rds_instance_state" "main" {
+  identifier = aws_db_instance.main.identifier
+  state      = var.paused ? "stopped" : "available"
+  depends_on = [aws_ecs_service.app]
+}
+
 resource "aws_db_instance_automated_backups_replication" "backup" {
   count                  = var.backup_copy_enabled ? 1 : 0
   provider               = aws.backup

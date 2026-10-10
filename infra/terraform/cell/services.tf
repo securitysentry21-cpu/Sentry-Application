@@ -188,7 +188,7 @@ resource "aws_ecs_service" "app" {
   name            = each.key
   cluster         = aws_ecs_cluster.main.id
   task_definition = each.value.definition
-  desired_count   = local.released ? each.value.count : 0
+  desired_count   = local.released && !var.paused ? each.value.count : 0
   launch_type     = "FARGATE"
   propagate_tags  = "SERVICE"
 

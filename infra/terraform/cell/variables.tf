@@ -129,6 +129,12 @@ variable "db_storage_autoscaling" {
   default     = true
 }
 
+variable "paused" {
+  description = "Switched off to save money: no service tasks run and the database is stopped. Data and settings stay. RDS restarts a stopped database by itself after 7 days; another apply stops it again."
+  type        = bool
+  default     = false
+}
+
 variable "api_desired_count" {
   type    = number
   default = 1
