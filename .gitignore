@@ -19,6 +19,9 @@ apps/mobile/ios/
 # planted by scripts/negative-controls.ts and removed again; never commit it
 packages/domain/src/__negative_control__.ts
 
+# copied from maplibre-gl on every dashboard dev/build (apps/web/scripts/copy-map-worker.mjs)
+apps/web/public/maplibre/
+
 # local state
 .local/
 .claude/worktrees/

@@ -62,7 +62,7 @@
 - Location exports (Phase 9). ADV-A04's export half is tested there.
 - D-22, the guard's own trail in the app: rejected by the owner (2026-11-01). The unused `location.history.read.own` permission was removed from the guard role.
 - Web push, the SOS banner and the alarm sound (Phase 8). Open incidents on the home page (Phase 8).
-- **The visual check at 1,000 guards on a desktop and a phone** (ARCH §22) is a human check: `pnpm demo --crowd=1000`, then the Live map.
+- **The visual check at 1,000 guards** (ARCH §22): done by the owner on a computer on 2026-11-01 ("Map looks good."). A check on a real phone waits for the AWS copy with test guards.
 - `status.json` stays at Phase 3 until Phase 4's device tests have run.
 
 ## Checked by running it
@@ -82,3 +82,8 @@ On the local database, with `pnpm api:dev`, `pnpm web:dev` and the demo, the str
   - the count of shifts not started refreshes at most once a minute;
   - a `resync` still reloads at once.
 - **For production:** the API doesn't compress responses, and CloudFront won't with the caching-disabled policy. Compressing JSON responses would cut the snapshot to roughly a tenth. That is worth doing before the 1,000-guard rollout; it isn't needed for 50 pilot guards.
+- **Found by the owner's look at the map (2026-11-01): the map was blank.** MapLibre 6 starts its tile worker from a file next to its own module; Next bundles MapLibre into its own chunks, so the worker never loaded ("Worker failed to load"). The tests and the build couldn't see this, because it only happens in a browser. Now:
+  - `apps/web/scripts/copy-map-worker.mjs` copies the worker into `public/maplibre/` before every `next dev` and `next build`, the image build included;
+  - the map points MapLibre at it with `setWorkerUrl()`;
+  - labels name a font the tile service serves (Noto Sans);
+  - a map that hasn't loaded after 15 s says so instead of staying blank.

@@ -15,6 +15,10 @@ import type { GeoJSONSource, Map as MapLibreMap, MapLayerMouseEvent, MapMouseEve
 import { useEffect, useRef, useState } from 'react';
 
 export const MAP_STYLE_URL = 'https://tiles.openfreemap.org/styles/liberty';
+/** MapLibre's tile worker, served by the dashboard (scripts/copy-map-worker.mjs). */
+export const MAP_WORKER_URL = '/maplibre/maplibre-gl-worker.mjs';
+/** Without a loaded map by then, say so rather than show an empty box. */
+const LOAD_TIMEOUT_MS = 15_000;
 /** The pilot colony's area, Lahore (Q-19, about 400 km²): the default view until sites exist. */
 export const DEFAULT_CENTER = { lat: 31.4697, lng: 74.4078 };
 
@@ -150,6 +154,9 @@ function trackGeoJson(track: MapTrack | null | undefined): FeatureCollection {
   return collection(features);
 }
 
+/** A font the tile service serves; without one MapLibre asks for a default it doesn't have. */
+const LABEL_FONT = ['Noto Sans Regular'];
+
 const LABEL_PAINT = { 'text-color': '#12161b', 'text-halo-color': '#ffffff', 'text-halo-width': 1.5 };
 
 export function BoundaryMap(props: {
@@ -178,10 +185,12 @@ export function BoundaryMap(props: {
 
   useEffect(() => {
     let disposed = false;
+    const timeout = window.setTimeout(() => setFailed(true), LOAD_TIMEOUT_MS);
     void (async () => {
       try {
         const maplibre = await import('maplibre-gl');
         if (disposed || !container.current) return;
+        maplibre.setWorkerUrl(new URL(MAP_WORKER_URL, window.location.origin).href);
         const start = center ?? DEFAULT_CENTER;
         const instance = new maplibre.Map({
           container: container.current,
@@ -215,7 +224,7 @@ export function BoundaryMap(props: {
             id: 'shapes-label',
             type: 'symbol',
             source: 'shapes',
-            layout: { 'text-field': ['get', 'name'], 'text-size': 12 },
+            layout: { 'text-field': ['get', 'name'], 'text-font': LABEL_FONT, 'text-size': 12 },
             paint: LABEL_PAINT,
           });
           instance.addSource('draft', { type: 'geojson', data: draftGeoJson([]) });
@@ -307,7 +316,11 @@ export function BoundaryMap(props: {
             type: 'symbol',
             source: 'points',
             filter: ['has', 'point_count'],
-            layout: { 'text-field': ['get', 'point_count_abbreviated'], 'text-size': 12 },
+            layout: {
+              'text-field': ['get', 'point_count_abbreviated'],
+              'text-font': LABEL_FONT,
+              'text-size': 12,
+            },
             paint: { 'text-color': '#12161b' },
           });
           instance.addLayer({
@@ -331,6 +344,7 @@ export function BoundaryMap(props: {
             filter: ['!', ['has', 'point_count']],
             layout: {
               'text-field': ['get', 'label'],
+              'text-font': LABEL_FONT,
               'text-size': 11,
               'text-offset': [0, 1.3],
               'text-anchor': 'top',
@@ -356,6 +370,8 @@ export function BoundaryMap(props: {
             instance.on('mouseenter', layer, () => (instance.getCanvas().style.cursor = 'pointer'));
             instance.on('mouseleave', layer, () => (instance.getCanvas().style.cursor = ''));
           }
+          window.clearTimeout(timeout);
+          setFailed(false);
           setReady(true);
         });
         instance.on('click', (event: MapMouseEvent) =>
@@ -369,6 +385,7 @@ export function BoundaryMap(props: {
     })();
     return () => {
       disposed = true;
+      window.clearTimeout(timeout);
       map.current?.remove();
       map.current = null;
     };
@@ -428,7 +445,11 @@ export function BoundaryMap(props: {
         }}
         aria-label="Map"
       />
-      {failed ? <div className="banner error">The map could not be loaded.</div> : null}
+      {failed ? (
+        <div className="banner error" role="status">
+          The map could not be loaded. Check the internet connection, then reload the page.
+        </div>
+      ) : null}
     </div>
   );
 }

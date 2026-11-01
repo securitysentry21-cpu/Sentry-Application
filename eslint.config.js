@@ -37,6 +37,8 @@ export default tseslint.config(
       '.tmp/**',
       'apps/mobile/android/**',
       'apps/mobile/ios/**',
+      // MapLibre's worker, copied in by apps/web/scripts/copy-map-worker.mjs.
+      'apps/web/public/maplibre/**',
       '**/next-env.d.ts',
       'packages/db/src/generated/**',
       // Agent worktrees are separate checkouts; they are linted on their own.
