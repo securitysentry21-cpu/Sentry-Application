@@ -32,7 +32,6 @@ The role → permission map that implements PROD §3.2. Code checks these string
 | `shifts.self` | – | – | – | – | ✔ | Start and end own shift |
 | `live.read` | ✔ | ✔ | ✔ | ✔ | – | Live map and live locations |
 | `location.history.read` | ✔ | ✔ | ✔ | – | – | Location history and location exports (audited) |
-| `location.history.read.own` | – | – | – | – | ✔ | Own location trail for own shifts (D-22) |
 | `incidents.create` | ✔ | ✔ | ✔ | – | ✔ | Create incidents |
 | `incidents.read` | ✔ | ✔ | ✔ | ✔ | – | View incidents |
 | `incidents.read.own` | – | – | – | – | ✔ | View own incidents |

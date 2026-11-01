@@ -166,6 +166,20 @@ beforeAll(async () => {
         `insert into alert_events (id, organization_id, alert_id, type, actor_type) values ($1, $2, $3, 'OPENED', 'SYSTEM')`,
         [randomUUID(), org, alert],
       );
+      // Phase 6 tables.
+      await m.query(
+        `insert into outbox (id, organization_id, topic, payload) values ($1, $2, 'alert.opened', $3)`,
+        [randomUUID(), org, JSON.stringify({ alertId: alert })],
+      );
+      await m.query(
+        `insert into realtime_events (id, organization_id, seq, type, payload) values ($1, $2, 1, 'alert.opened', $3)`,
+        [randomUUID(), org, JSON.stringify({ alertId: alert })],
+      );
+      await m.query(
+        `insert into stream_connections (id, organization_id, user_id, client, instance_id, connected_at, last_seen_at)
+         values ($1, $2, $3, 'DESKTOP', 'test', now(), now())`,
+        [randomUUID(), org, user],
+      );
     }
   });
   runtime = new pg.Pool({ connectionString: db.urls.app_runtime, max: 2 });

@@ -140,14 +140,27 @@ export async function lastClosedByKey(trx: Database, organizationId: string, ded
   return row ? toRow(row) : null;
 }
 
-export type ListFilter = { status: 'active' | 'closed' | 'all'; shiftId?: string | undefined; limit: number };
+export type ListFilter = {
+  status: 'active' | 'closed' | 'all';
+  shiftId?: string | undefined;
+  guardId?: string | undefined;
+  limit: number;
+};
 
 export async function listAlerts(trx: Database, organizationId: string, f: ListFilter) {
   let q = base(trx, organizationId);
   if (f.status === 'active') q = q.where('a.status', 'in', ['OPEN', 'ACKNOWLEDGED']);
   if (f.status === 'closed') q = q.where('a.status', 'in', ['RESOLVED', 'DISMISSED']);
   if (f.shiftId) q = q.where('a.shift_id', '=', f.shiftId);
+  if (f.guardId) q = q.where('a.guard_id', '=', f.guardId);
   const rows = await q.orderBy('a.opened_at', 'desc').orderBy('a.id', 'desc').limit(f.limit).execute();
+  return rows.map(toRow);
+}
+
+/** The current state of the alerts named by realtime events (ARCH §14). */
+export async function alertsByIds(trx: Database, organizationId: string, ids: readonly string[]) {
+  if (ids.length === 0) return [];
+  const rows = await base(trx, organizationId).where('a.id', 'in', ids).execute();
   return rows.map(toRow);
 }
 

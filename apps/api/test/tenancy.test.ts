@@ -17,7 +17,7 @@ let both: string;
  * request reaches the ownership check (a malformed body would answer 400 before it).
  */
 type Probe =
-  | { id: () => Promise<string>; body?: Record<string, unknown> }
+  | { id: () => Promise<string>; body?: Record<string, unknown>; query?: string }
   /** Guard-only routes: a dashboard user is refused before any lookup; ADV-A03 covers them with a real guard. */
   | { guardOnly: string };
 
@@ -92,6 +92,11 @@ const CROSS_TENANT_RESOURCES: Record<string, Probe> = {
   'POST /api/v1/guards/:id/terminate': { id: fixed(() => B.guard) },
   'POST /api/v1/guards/:id/enrollment-codes': { id: fixed(() => B.guard) },
   'GET /api/v1/guards/:id/devices': { id: fixed(() => B.guard) },
+  'GET /api/v1/guards/:id/location': { id: fixed(() => B.guard) },
+  'GET /api/v1/guards/:id/location-history': {
+    id: fixed(() => B.guard),
+    query: 'from=2026-10-08T00:00:00Z&to=2026-10-08T12:00:00Z&reason=probe',
+  },
   'POST /api/v1/devices/:id/revoke': { id: fixed(() => B.device), body: { reason: 'LOST' } },
   'GET /api/v1/sites/:id': { id: fixed(() => B.site) },
   'PATCH /api/v1/sites/:id': { id: fixed(() => B.site), body: { name: 'Changed', version: 1 } },
@@ -186,7 +191,7 @@ describe('cross-tenant resources (SEC §4.2 rule 4)', () => {
       const id = await probe.id();
       const res = await call(t.app, {
         method: route.method as 'GET',
-        url: route.url.replace(':id', id),
+        url: route.url.replace(':id', id) + ('query' in probe && probe.query ? `?${probe.query}` : ''),
         cookie: ownerA,
         org: orgA.id,
         body: probe.body,

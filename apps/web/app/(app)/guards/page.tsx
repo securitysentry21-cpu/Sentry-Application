@@ -3,6 +3,7 @@
 // Guards: the roster, CSV import, phone enrollment and devices (PROD §4, D-31). Enrollment codes
 // are shown once, as text and as a QR code, for the supervisor to hand over in person (round 6).
 import type { Guard } from '@sentryops/contracts';
+import Link from 'next/link';
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 
 import { QrCode } from '../../../components/qr';
@@ -102,7 +103,9 @@ export default function GuardsPage() {
                 {shown.map((g) => (
                   <tr key={g.id}>
                     <td className="mono">{g.employeeNumber}</td>
-                    <td>{g.displayName}</td>
+                    <td>
+                      <Link href={`/guards/${g.id}`}>{g.displayName}</Link>
+                    </td>
                     <td className="mono muted">{g.phone}</td>
                     <td>
                       <span className={`badge ${STATUS_BADGE[g.status] ?? ''}`}>

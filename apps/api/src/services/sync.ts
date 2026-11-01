@@ -33,6 +33,7 @@ import {
 } from '../repositories/tracking.ts';
 import { deviceReportAlerts, raiseAlert, reopenSuppressionMs } from './alerts.ts';
 import { evaluateGeofence } from './geofence.ts';
+import { publish } from './realtime.ts';
 import { guardEnd, guardStart, type GuardOutcome, type GuardRef } from './shifts.ts';
 
 type Result = { clientEventId: string; status: SyncItemStatus; code?: ErrorCode };
@@ -59,6 +60,8 @@ export async function processBatch(
   // being judged against a shift that hasn't started, which would reject and lose them.
   const heldShifts = new Set<string>();
   const pointShifts = new Set<string>();
+  // Shifts whose live state this batch moved: the dashboards hear about each once (ARCH §14).
+  const liveShifts = new Set<string>();
   const results: Result[] = [];
   await withTenantTransaction(deps.db, guard.organizationId, async (trx) => {
     const settings = await organizationSettings(trx, guard.organizationId);
@@ -93,6 +96,7 @@ export async function processBatch(
         });
         await releaseSavepoint(trx, name);
         if (item.type === 'LOCATION' && result.status === 'ACCEPTED') pointShifts.add(item.shiftId);
+        if (shiftId && result.status === 'ACCEPTED') liveShifts.add(shiftId);
         results.push({ clientEventId: item.clientEventId, ...result });
       } catch {
         // Unexpected: keep the item for operator replay; the phone may delete it (ARCH §9.3).
@@ -124,6 +128,9 @@ export async function processBatch(
         await rollbackToSavepoint(trx, name);
         deps.metrics.increment('geofence_evaluation_failed');
       }
+    }
+    for (const shiftId of liveShifts) {
+      await publish(trx, deps, guard.organizationId, 'guard.state', { shiftId });
     }
   });
 

@@ -2,12 +2,12 @@
 
 Operations platform for private security companies. Guards carry an Android app that tracks them during their shifts. The control room, supervisors and duty officers use a web dashboard. Each company's data is kept separate from every other company's, enforced by the database (row-level security), not only by the application.
 
-| Part                                     | Where         | Status                                                                                                                                                |
-| ---------------------------------------- | ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| API (Fastify, PostgreSQL 17)             | `apps/api`    | Phases 1–5 core: identity, guards and devices, sites and QR checkpoints, shifts, sync and live state, geofence and alerts, attendance report          |
-| Web dashboard (Next.js 16)               | `apps/web`    | Overview, Live map, Alerts, Shifts, Guards, Sites, Reports, Members, Settings, Audit log                                                              |
-| Guard app (Expo SDK 57, Android first)   | `apps/mobile` | Framework: enrollment, consent, shifts, background tracking with an offline outbox, sync, SOS client (off for the pilot). See `apps/mobile/README.md` |
-| Shared contracts, domain rules, database | `packages/*`  |                                                                                                                                                       |
+| Part                                     | Where         | Status                                                                                                                                                     |
+| ---------------------------------------- | ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| API (Fastify, PostgreSQL 17)             | `apps/api`    | Phases 1–6: identity, guards and devices, sites and QR checkpoints, shifts, sync and live state, geofence and alerts, realtime stream, location history    |
+| Web dashboard (Next.js 16)               | `apps/web`    | Overview (exceptions first), Live map (live updates), guard detail, location history, Alerts, Shifts, Guards, Sites, Reports, Members, Settings, Audit log |
+| Guard app (Expo SDK 57, Android first)   | `apps/mobile` | Framework: enrollment, consent, shifts, background tracking with an offline outbox, sync, SOS client (off for the pilot). See `apps/mobile/README.md`      |
+| Shared contracts, domain rules, database | `packages/*`  |                                                                                                                                                            |
 
 Read `CLAUDE.md` first, then `docs/SECURITY_AND_INVARIANTS.md` (it wins every conflict), `docs/DECISIONS.md`, `docs/PRODUCT_SPEC.md` and `docs/ARCHITECTURE.md`. Phase plans and reports are in `docs/phases/`.
 
@@ -33,7 +33,9 @@ The demo creates "Demo Security": five guards, a gate and a patrol beat in the c
 - Usman's battery is at 12%: "Low battery".
 - Hina's phone loses signal after two minutes. On the map she turns DELAYED, then OFFLINE, with her position marked last known; "Device offline" opens after ten minutes.
 
-The background worker runs the shift and alert detectors every minute (`pnpm worker:dev`). The demo runs the alert detectors itself, so the worker isn't needed for it.
+The dashboard updates live, through a stream from the API. The background worker runs the shift and alert detectors every minute, and moves live updates from the database to the API every half second (`pnpm worker:dev`). The demo does both itself, so the worker isn't needed for it.
+
+`pnpm demo --crowd=1000` adds 1,000 more guards across 16 zones of the colony, each reporting once a minute, to see the Live map at pilot scale. Setting them up takes a few minutes.
 
 ## Checks
 

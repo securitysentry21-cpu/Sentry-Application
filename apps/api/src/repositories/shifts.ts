@@ -358,3 +358,69 @@ export async function overlapping(
     .where('ends_at', '>', from)
     .execute();
 }
+
+/** The status of each shift named by realtime events (ARCH §14). */
+export async function shiftStatuses(
+  trx: Database,
+  organizationId: string,
+  ids: readonly string[],
+): Promise<Map<string, string>> {
+  if (ids.length === 0) return new Map();
+  const rows = await trx
+    .selectFrom('shifts')
+    .select(['id', 'status'])
+    .where('organization_id', '=', organizationId)
+    .where('id', 'in', ids)
+    .execute();
+  return new Map(rows.map((r) => [r.id, r.status]));
+}
+
+/** Scheduled shifts whose start time has passed without a start (PROD §14.2). */
+export async function countShiftsNotStarted(
+  trx: Database,
+  organizationId: string,
+  now: Date,
+): Promise<number> {
+  const row = await trx
+    .selectFrom('shifts')
+    .select((eb) => eb.fn.countAll<string>().as('n'))
+    .where('organization_id', '=', organizationId)
+    .where('status', '=', 'SCHEDULED')
+    .where('starts_at', '<=', now)
+    .executeTakeFirst();
+  return Number(row?.n ?? 0);
+}
+
+/** Events the location history shows on its timeline: starts, ends, leaving and returning. */
+export const HISTORY_EVENT_TYPES = [
+  'STARTED',
+  'ENDED',
+  'AUTO_ENDED',
+  'FORCE_ENDED',
+  'LEFT_SITE',
+  'ENTERED_SITE',
+  'TRACKING_DEGRADED',
+  'TRACKING_RESTORED',
+] as const;
+
+export async function historyEvents(
+  trx: Database,
+  organizationId: string,
+  shiftIds: readonly string[],
+  from: Date,
+  to: Date,
+) {
+  if (shiftIds.length === 0) return [];
+  return trx
+    .selectFrom('shift_events')
+    .select(['shift_id', 'type', 'occurred_at'])
+    .where('organization_id', '=', organizationId)
+    .where('shift_id', 'in', shiftIds)
+    .where('type', 'in', HISTORY_EVENT_TYPES)
+    .where('occurred_at', '>=', from)
+    .where('occurred_at', '<=', to)
+    .orderBy('occurred_at')
+    .orderBy('id')
+    .limit(1000)
+    .execute();
+}

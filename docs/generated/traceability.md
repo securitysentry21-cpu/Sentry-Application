@@ -8,6 +8,7 @@ Current phase: 3. IDs due through this phase: ADV-X01, ADV-X02, ADV-X07, ADV-T01
 | ADV-A01 | apps/api/test/enrollment.test.ts |
 | ADV-A02 | apps/api/test/members.test.ts<br>packages/domain/test/members.test.ts |
 | ADV-A03 | apps/api/test/shifts.test.ts |
+| ADV-A04 | apps/api/test/live.test.ts |
 | ADV-A05 | apps/api/test/members.test.ts<br>packages/domain/test/members.test.ts |
 | ADV-A06 | apps/api/test/members.test.ts<br>packages/domain/test/members.test.ts |
 | ADV-A07 | apps/api/test/auth.test.ts |
@@ -48,6 +49,7 @@ Current phase: 3. IDs due through this phase: ADV-X01, ADV-X02, ADV-X07, ADV-T01
 | ADV-O08 | apps/mobile/test/storage.test.ts |
 | ADV-O09 | apps/api/test/sync.test.ts<br>apps/mobile/test/sync-engine.test.ts |
 | ADV-P01 | apps/api/test/sync.test.ts |
+| ADV-P02 | apps/api/test/live.test.ts |
 | ADV-P05 | apps/api/test/sync.test.ts |
 | ADV-Q05 | apps/api/test/sites.test.ts |
 | ADV-S02 | apps/mobile/test/sos.test.ts |
@@ -59,6 +61,7 @@ Current phase: 3. IDs due through this phase: ADV-X01, ADV-X02, ADV-X07, ADV-T01
 | ADV-SH05 | apps/api/test/shifts.test.ts<br>apps/mobile/test/app-flows.test.ts<br>apps/mobile/test/local-shift.test.ts |
 | ADV-SH06 | apps/api/test/shifts.test.ts<br>packages/domain/test/shifts.test.ts |
 | ADV-T01 | apps/api/test/tenancy.test.ts |
+| ADV-T02 | apps/api/test/realtime.test.ts |
 | ADV-T04 | apps/api/test/sites.test.ts<br>packages/db/test/rls.test.ts |
 | ADV-T05 | apps/api/test/sites.test.ts |
 | ADV-T06 | packages/db/test/kysely.test.ts<br>packages/db/test/rls.test.ts |
@@ -66,10 +69,11 @@ Current phase: 3. IDs due through this phase: ADV-X01, ADV-X02, ADV-X07, ADV-T01
 | ADV-T09 | apps/api/test/tenancy.test.ts |
 | ADV-TM01 | apps/api/test/shifts.test.ts<br>apps/mobile/test/i18n.test.ts<br>packages/domain/test/shifts.test.ts |
 | ADV-TM03 | apps/api/test/shifts.test.ts |
-| ADV-U01 | packages/domain/test/tracking.test.ts |
+| ADV-U01 | apps/web/test/live-model.test.ts<br>packages/domain/test/tracking.test.ts |
 | ADV-U02 | apps/mobile/test/app-status.test.ts |
 | ADV-U03 | apps/mobile/test/app-status.test.ts<br>apps/mobile/test/presenter.test.ts |
 | ADV-U04 | packages/domain/test/tracking.test.ts |
+| ADV-W01 | apps/web/test/plain-text.test.tsx |
 | ADV-W03 | apps/api/test/csrf.test.ts |
 | ADV-X01 | packages/db/test/schema-lint.test.ts |
 | ADV-X02 | scripts/negative-controls.ts |
@@ -83,10 +87,11 @@ Current phase: 3. IDs due through this phase: ADV-X01, ADV-X02, ADV-X07, ADV-T01
 | INV-06 | apps/mobile/test/ids.test.ts<br>apps/mobile/test/outbox.test.ts<br>apps/mobile/test/sync-engine.test.ts |
 | INV-07 | packages/domain/test/tracking.test.ts |
 | INV-08 | apps/api/test/sync.test.ts<br>apps/mobile/test/app-flows.test.ts<br>apps/mobile/test/app-status.test.ts<br>apps/mobile/test/local-shift.test.ts |
-| INV-09 | apps/mobile/test/presenter.test.ts<br>packages/domain/test/tracking.test.ts |
+| INV-09 | apps/mobile/test/presenter.test.ts<br>apps/web/test/live-model.test.ts<br>packages/domain/test/tracking.test.ts |
 | INV-10 | apps/mobile/test/presenter.test.ts<br>apps/mobile/test/sos.test.ts |
 | INV-12 | apps/api/test/route-registry.test.ts |
 | INV-13 | packages/db/test/rls.test.ts |
+| INV-14 | apps/api/test/live.test.ts |
 | INV-15 | apps/mobile/test/device-key.test.ts<br>apps/mobile/test/sos.test.ts |
 | INV-16 | apps/mobile/test/app-status.test.ts<br>apps/mobile/test/local-shift.test.ts<br>apps/mobile/test/presenter.test.ts |
 | INV-17 | apps/api/test/tenancy.test.ts |

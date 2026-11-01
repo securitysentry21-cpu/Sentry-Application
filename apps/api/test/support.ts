@@ -11,7 +11,7 @@ import type { FastifyInstance, InjectOptions } from 'fastify';
 import pg from 'pg';
 import { inject } from 'vitest';
 
-import { buildApp } from '../src/app.ts';
+import { buildApp, type BuildOptions } from '../src/app.ts';
 import type { Config } from '../src/config.ts';
 import type { AppDeps } from '../src/deps.ts';
 import { createDeps } from '../src/server.ts';
@@ -51,12 +51,14 @@ export type TestApp = {
   close(): Promise<void>;
 };
 
-export async function startTestApp(options: { config?: Partial<Config> } = {}): Promise<TestApp> {
+export async function startTestApp(
+  options: { config?: Partial<Config>; realtime?: BuildOptions['realtime'] } = {},
+): Promise<TestApp> {
   const db = await createTestDatabase(inject('adminUrl'));
   const pool: Pool = createPool(db.urls.app_runtime, { max: 4 });
   const clock = new FakeClock(NOW);
   const deps = createDeps(testConfig(db.urls.app_runtime, options.config), pool, { clock, oidc: null });
-  const app = buildApp(deps, { logger: false });
+  const app = buildApp(deps, { logger: false, ...(options.realtime ? { realtime: options.realtime } : {}) });
   await app.ready();
   return {
     app,

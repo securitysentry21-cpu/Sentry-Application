@@ -185,7 +185,7 @@ Roles are fixed in V1. Authorization is implemented as permissions (ARCH §4.6) 
 | Manual start, force-end, extend, reopen shift | ✔ | ✔ | ✔ | – | – |
 | Start / end own shift | – | – | – | – | ✔ |
 | Live map and live locations | ✔ | ✔ | ✔ | ✔ | – |
-| Location history and location exports (audited) | ✔ | ✔ | ✔ | – | own shifts (D-22) |
+| Location history and location exports (audited) | ✔ | ✔ | ✔ | – | – (D-22) |
 | Create incident | ✔ | ✔ | ✔ | – | ✔ |
 | View incidents | ✔ | ✔ | ✔ | ✔ | own |
 | Change incident status / severity / type, add notes | ✔ | ✔ | ✔ | acknowledge + notes | notes on own |
@@ -869,7 +869,7 @@ Report dates use the site's timezone (organization timezone for multi-site repor
 
 - Location is collected only during active shifts and an active SOS.
 - The guard always sees whether tracking is on; Android shows a persistent notification, iOS shows its location indicator.
-- The guard sees their own shift history and, per D-22, their own location trail for their own shifts.
+- The guard sees their own shift history in the app, but not their location trail (D-22, rejected by the owner on 2026-11-01). An Owner or Administrator can export a guard's own data, location included, for them (SEC §16.6).
 - Nothing else is collected: no contacts, microphone, call logs, other apps, or photo library browsing (gallery access only through the system picker when the guard chooses a photo).
 - Retention defaults (product defaults, not legal requirements; legal review required): raw location 90 days, device status 30 days, operational records 12 months, audit logs 24 months.
 
@@ -934,7 +934,7 @@ Status: **OPEN** unless marked APPROVED or REJECTED; `docs/DECISIONS.md` holds t
 | D-17 | Do QR-only (location unconfirmed) scans count? | yes, labelled · no | yes, labelled "QR only" | Phase 7 |
 | D-18 | Incident photos from gallery | camera only · gallery allowed, labelled | allowed, labelled | Phase 8 |
 | D-21 | Reason for viewing location history | optional · mandatory · per-organization setting | field always present, optional by default, organization may require | Phase 6 |
-| D-22 | Guard sees own location trail | yes · no | yes, own shifts only | Phase 6 |
+| D-22 | Guard sees own location trail | yes · no | **REJECTED 2026-11-01** (owner): no; the guard sees their own shift history only | Phase 6 |
 | D-24 | Checkpoint coordinates calibrated on site with the app | V1 · V1.1 | V1.1; map pin in V1 | Phase 7 |
 | D-25 | App distribution | public store listing · private enterprise channels | public listing with demo organization; on iOS, public or unlisted App Store distribution (Apple Business custom apps don't reach Pakistan, ARCH §20) | Phase 10 |
 | D-34 | First pilot | pilot after Phase 4 · pilot at launch | **APPROVED 2026-10-08:** Android pilot with the lined-up customer once tracking is proven (Phase 4 exit tests and the device-matrix subset on its guards' phones). It is rolled out in stages: a few sites (about 50 guards) first, then the rest of the ~1,000 guards once that stage meets the tracking-reliability gate (ARCH §21.4). No SOS button until Phase 8's exit criteria pass | Phase 4 |

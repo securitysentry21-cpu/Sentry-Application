@@ -13,6 +13,8 @@ Things only you can do, in order. Tick an item by changing `[ ]` to `[x]`, or te
 - [ ] **Protect your AWS sign-in:** Google 2-Step Verification if you signed up with Google, otherwise settings.aws.com → Manage security and sign-in → Register device.
 - [ ] **Create a free Expo account** at expo.dev (Free plan only), then run `npx eas-cli@latest login` in the VS Code terminal.
 - [ ] **Install the test guard app** on an Android phone from the link I send, and run a test shift.
+- [ ] **Confirm the location-history reason rule** (D-21): a reason is asked for every time someone views a guard's location history, but it is optional unless you switch it to mandatory in Settings. (D-22, guards seeing their own trail: you said no on 2026-11-01.)
+- [ ] **Look at the Live map with 1,000 guards** (Phase 6's human check), on a computer and on a phone. I start the demo with 1,000 simulated guards; you open the map and say if it is usable.
 
 ## Before the first real guard
 

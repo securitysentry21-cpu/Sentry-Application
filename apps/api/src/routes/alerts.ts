@@ -79,7 +79,12 @@ export const alertRoutes = [
     handler: async ({ deps, ctx, query }) => {
       const org = orgOf(ctx);
       const rows = await withTenantTransaction(deps.db, org.id, (trx) =>
-        listAlerts(trx, org.id, { status: query.status, shiftId: query.shiftId, limit: query.limit }),
+        listAlerts(trx, org.id, {
+          status: query.status,
+          shiftId: query.shiftId,
+          guardId: query.guardId,
+          limit: query.limit,
+        }),
       );
       return { alerts: rows.map(alertDto) };
     },

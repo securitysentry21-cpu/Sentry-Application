@@ -285,7 +285,7 @@ Location is sensitive. Collection is tied to a legitimate product function (shif
 
 - In-app disclosure before any permission request (PROD §7.2); versioned; acceptance recorded with version and language in an append-only table; re-shown when the version changes.
 - Tracking always visibly indicated while active.
-- The guard can see their own shift history and, per D-22, their own location trail.
+- The guard can see their own shift history, not their location trail (D-22, rejected 2026-11-01). Their data, location included, reaches them through an export by an Owner or Administrator (§16.6).
 
 ### 16.4 Access to historical location
 

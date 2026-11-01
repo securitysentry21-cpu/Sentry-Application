@@ -5,6 +5,7 @@ import { enrollmentRoutes } from './enrollment.ts';
 import { guardRoutes } from './guards.ts';
 import { healthRoutes } from './health.ts';
 import { invitationRoutes } from './invitations.ts';
+import { liveRoutes } from './live.ts';
 import { meRoutes } from './me.ts';
 import { memberRoutes } from './members.ts';
 import { mobileRoutes } from './mobile.ts';
@@ -30,6 +31,7 @@ export const ROUTES: readonly RouteDefinition[] = [
   ...siteRoutes,
   ...shiftRoutes,
   ...syncRoutes,
+  ...liveRoutes,
   ...alertRoutes,
   ...reportRoutes,
 ];

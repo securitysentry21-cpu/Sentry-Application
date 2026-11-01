@@ -10,7 +10,11 @@
 //   - Usman's battery is at 12%: "Low battery".
 //   - Hina's phone loses signal after two minutes: DELAYED, then OFFLINE on the map, with her
 //     position marked last known, and "Device offline" after ten minutes.
-// The demo runs the alert detectors itself every minute, so the worker is not needed.
+// The demo runs the alert detectors itself every minute, and moves live updates to the dashboard
+// every second (the outbox dispatcher), so the worker is not needed.
+//
+// `pnpm demo --crowd=1000` adds that many more guards, spread over 16 zones across the colony and
+// reporting once a minute, to check the Live map at pilot scale (ARCH §22, Phase 6), also on a phone.
 //
 // Run `pnpm db:up` and `pnpm api:dev` first, then sign in to the dashboard as owner@demo.test.
 import { generateKeyPairSync, randomUUID } from 'node:crypto';
@@ -20,8 +24,10 @@ import type { InjectOptions } from 'fastify';
 
 import { buildApp } from '../src/app.ts';
 import { alertsForOrganization } from '../src/workers/detectors.ts';
+import { dispatchOrganization } from '../src/workers/outbox.ts';
 import { loadConfig } from '../src/config.ts';
 import { provisionOrganization } from '../src/provisioning.ts';
+import type { RateLimiter } from '../src/rate-limit.ts';
 import { createDeps } from '../src/server.ts';
 
 const config = loadConfig({ ...process.env, DEV_AUTH: process.env.DEV_AUTH ?? 'true' });
@@ -41,17 +47,39 @@ const BEAT = [
   { lat: 31.4724, lng: 74.4135 },
   { lat: 31.4741, lng: 74.4019 },
 ];
-const GUARDS = [
+type DemoGuard = { employeeNumber: string; displayName: string; phone: string; site: string };
+const GUARDS: DemoGuard[] = [
   { employeeNumber: 'D-101', displayName: 'Ali Raza', phone: '+923001110101', site: 'gate' },
   { employeeNumber: 'D-102', displayName: 'Bilal Khan', phone: '+923001110102', site: 'beat' },
   { employeeNumber: 'D-103', displayName: 'Sana Iqbal', phone: '+923001110103', site: 'beat' },
   { employeeNumber: 'D-104', displayName: 'Usman Tariq', phone: '+923001110104', site: 'gate' },
   { employeeNumber: 'D-105', displayName: 'Hina Malik', phone: '+923001110105', site: 'beat' },
-] as const;
+];
+const crowdArg = process.argv.find((a) => a.startsWith('--crowd=')) ?? '';
+const CROWD = Math.min(2000, Number(/^--crowd=(\d+)$/.exec(crowdArg)?.[1] ?? 0));
+/** 16 zones on a 4 × 4 grid about 5 km apart: roughly the colony's 400 km² (Q-19). */
+const ZONES = Array.from({ length: 16 }, (_, i) => ({
+  name: `Crowd zone ${i + 1}`,
+  center: { lat: GATE.lat + (Math.floor(i / 4) - 1.5) * 0.045, lng: GATE.lng + ((i % 4) - 1.5) * 0.053 },
+}));
+for (let i = 0; i < CROWD; i++) {
+  const n = String(i + 1).padStart(4, '0');
+  GUARDS.push({
+    employeeNumber: `C-${n}`,
+    displayName: `Crowd guard ${n}`,
+    phone: `+9230220${n.padStart(5, '0')}`,
+    site: `zone:${i % ZONES.length}`,
+  });
+}
 
 const pool = createPool(config.DATABASE_URL, { applicationName: 'sentryops-demo', max: 4 });
 await verifyRuntimeRole(pool, ['app_runtime']);
-const deps = createDeps(config, pool, { oidc: null });
+// One process plays every phone here, so the per-user and per-IP limits (SEC §9) would throttle
+// the crowd. They are off in the demo only, which refuses to run outside development (above).
+const deps = {
+  ...createDeps(config, pool, { oidc: null }),
+  rateLimiter: { hit: () => undefined } as unknown as RateLimiter,
+};
 const app = buildApp(deps, { logger: false });
 await app.ready();
 
@@ -129,6 +157,22 @@ async function site(name: string, boundary: unknown): Promise<string> {
 }
 const gateId = await site('Main gate', { kind: 'CIRCLE', center: GATE, radiusM: 150 });
 const beatId = await site('Sector C patrol beat', { kind: 'POLYGON', points: BEAT });
+const zoneIds: string[] = [];
+if (CROWD > 0) {
+  for (const z of ZONES)
+    zoneIds.push(await site(z.name, { kind: 'CIRCLE', center: z.center, radiusM: 5000 }));
+}
+/** A crowd guard stays within about 3 km of their zone's centre: inside it. */
+function placeFor(g: DemoGuard): { siteId: string; home: { lat: number; lng: number } } {
+  if (g.site === 'gate') return { siteId: gateId, home: GATE };
+  if (g.site === 'beat') return { siteId: beatId, home: { lat: 31.469, lng: 74.406 } };
+  const zone = Number(g.site.slice('zone:'.length));
+  const c = ZONES[zone]!.center;
+  return {
+    siteId: zoneIds[zone]!,
+    home: { lat: c.lat + (Math.random() - 0.5) * 0.05, lng: c.lng + (Math.random() - 0.5) * 0.06 },
+  };
+}
 
 type Guard = { id: string; employeeNumber: string };
 const existingGuards = (
@@ -146,6 +190,8 @@ type Phone = {
   home: { lat: number; lng: number };
   /** Picked up a shift already running from an earlier demo run (no new start). */
   resumed: boolean;
+  /** Crowd phones report once a minute, not every 10 s. */
+  crowd: boolean;
 };
 const phones: Phone[] = [];
 const bootId = randomUUID();
@@ -169,7 +215,7 @@ for (const g of GUARDS) {
         },
       })
     ).id;
-  const home = g.site === 'gate' ? GATE : { lat: 31.469, lng: 74.406 };
+  const { siteId, home } = placeFor(g);
   const now = deps.clock.now();
   // A rerun: a shift still running from an earlier demo run is picked up by the new phone, as when
   // a guard switches phones mid-shift (the old phone is retired as REPLACED). A leftover shift that
@@ -210,7 +256,7 @@ for (const g of GUARDS) {
           org,
           payload: {
             guardId,
-            siteId: g.site === 'gate' ? gateId : beatId,
+            siteId,
             startsAt: new Date(now.getTime() + 60_000).toISOString(),
             endsAt: new Date(now.getTime() + 8 * 3_600_000).toISOString(),
           },
@@ -257,7 +303,9 @@ for (const g of GUARDS) {
     position: { ...home },
     home,
     resumed: running !== undefined,
+    crowd: g.site.startsWith('zone:'),
   });
+  if (phones.length % 100 === 0) console.log(`${phones.length} phones enrolled…`);
 }
 
 async function sync(phone: Phone, items: Record<string, unknown>[]) {
@@ -319,13 +367,23 @@ const PERMISSION = phones.find((p) => p.name === 'Sana Iqbal');
 const BATTERY = phones.find((p) => p.name === 'Usman Tariq');
 const SILENT = phones.at(-1);
 let lastDetectors = 0;
+let tick = 0;
 let permissionState: 'ok' | 'off' | 'restored' = 'ok';
 let batteryReported = false;
+
+// Live updates: committed changes move from the outbox to the dashboards every second, as the
+// worker's dispatcher does (ARCH §14).
+const dispatcher = setInterval(() => {
+  if (org) void dispatchOrganization(deps, org).catch(() => undefined);
+}, 1_000);
 
 console.log('Phones are reporting every 10 s. Open the Live map and the Alerts page. Ctrl+C to stop.');
 while (!stopping) {
   const elapsed = Date.now() - started;
+  tick++;
   for (const [index, p] of phones.entries()) {
+    // Crowd phones take turns: each reports once a minute.
+    if (p.crowd && (tick + index) % 6 !== 0) continue;
     // The last phone "loses signal" after two minutes: watch it turn DELAYED, then OFFLINE.
     if (p === SILENT && elapsed > 120_000) continue;
     const wandering = p === WANDERER && elapsed > 60_000 && elapsed < 9 * 60_000;
@@ -383,5 +441,6 @@ while (!stopping) {
   }
   await new Promise((r) => setTimeout(r, 10_000));
 }
+clearInterval(dispatcher);
 await app.close();
 await pool.end();

@@ -51,6 +51,9 @@ On this Windows machine, run pnpm unattended (`CI=true`, `--reporter=append-only
 | Coordinates in response schemas are tagged `GUARD_LOCATION` or `SITE_GEOMETRY`; a route returning guard coordinates declares `locationScope: 'live'` or an audit action | `packages/contracts/src/geo.ts`, `route-registry.test.ts` (ADV-X05) |
 | Only `POST /sync/batch` (`replacedDeviceDrain`) accepts a REPLACED phone, for 72 h, and only data it captured before the replacement | `context.ts`, `services/sync.ts` (ADV-A08) |
 | Alert rules are pure (`packages/domain/alerts.ts`, `geofence.ts`); the engine applies them against the partial unique index on open dedupe keys | `apps/api/src/services/alerts.ts` (ADV-AL01–AL05, G01–G06) |
+| Changes reach dashboards only through outbox rows written in the same transaction (`publish()`); the dispatcher numbers them after commit, under a per-organization lock; a stream belongs to the request's organization and re-checks session and membership every 30 s | `services/realtime.ts`, `workers/outbox.ts`, `realtime/hub.ts`, `routes/live.ts`; `realtime.test.ts` (ADV-T02) |
+| Location history writes its audit row before reading any point; the reason is required when the organization says so | `routes/live.ts`; `live.test.ts` (ADV-P02, A04) |
+| The dashboard has no HTML sink (no `innerHTML`, map-popup HTML or `dangerouslySetInnerHTML`); map details open in a plain-text panel | ESLint; `apps/web/test/plain-text.test.tsx` (ADV-W01) |
 | SQL only in `packages/db` or `**/repositories/**`; time only from the injected `Clock` in domain logic and services; no `dangerouslySetInnerHTML` | ESLint rules |
 | Defaults, error codes and audit actions equal the spec tables | spec-consistency tests (ADV-X04) |
 | Generated docs and DB types match the code | `docs:check`, `db:codegen --check` |

@@ -3,6 +3,7 @@ export * from './attendance.ts';
 export * from './clock.ts';
 export * from './geo.ts';
 export * from './geofence.ts';
+export * from './history.ts';
 export * from './members.ts';
 export * from './shifts.ts';
 export * from './time.ts';

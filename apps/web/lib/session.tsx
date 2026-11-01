@@ -123,7 +123,7 @@ function SignedOutOverlay() {
   return (
     <div className="overlay" role="alertdialog" aria-modal="true" aria-labelledby="signed-out-title">
       <div className="dialog">
-        <h2 id="signed-out-title">You have been signed out</h2>
+        <h2 id="signed-out-title">Signed out — live monitoring stopped</h2>
         <p className="muted">
           Your session ended or your access changed. Nothing on this screen is current any more. Sign in again
           to continue.

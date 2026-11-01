@@ -37,6 +37,11 @@ export function onSignedOut(listener: () => void): () => void {
   return () => signedOutListeners.delete(listener);
 }
 
+/** The live stream reports a refused session the same way an ordinary request does. */
+export function notifySignedOut(): void {
+  for (const listener of signedOutListeners) listener();
+}
+
 type Options = { method?: 'GET' | 'POST' | 'PATCH' | 'DELETE'; body?: unknown; organization?: string | null };
 
 export async function api<T>(path: string, options: Options = {}): Promise<T> {
@@ -57,9 +62,7 @@ export async function api<T>(path: string, options: Options = {}): Promise<T> {
     throw new ApiError('NETWORK', 'Cannot reach the server. Check the connection.', 0);
   }
   const data: unknown = await response.json().catch(() => null);
-  if (response.status === 401) {
-    for (const listener of signedOutListeners) listener();
-  }
+  if (response.status === 401) notifySignedOut();
   if (!response.ok) {
     const envelope = (data ?? {}) as {
       error?: { code?: ErrorCode; message?: string; details?: { path: string; issue: string }[] };

@@ -1,71 +1,45 @@
 'use client';
 
-// Home, exceptions first (PROD §14.2): who is on duty and how their phones are reporting, then
-// the active alerts, most severe first. Each section appears only with its permission; the server
-// decides. Polls every 15 seconds until the realtime stream arrives (Phase 6).
-import type { Alert } from '@sentryops/contracts';
-import { trackingHealth, type FreshnessSettings } from '@sentryops/domain';
+// Home, exceptions first (PROD §14.2): who is on duty and how their phones are reporting, how many
+// dashboards are watching (PROD §11.5), then the active alerts, most severe first. Every number
+// opens the matching list. Live through the realtime stream; freshness ticks against server time.
+// Each section appears only with its permission; the server decides.
 import Link from 'next/link';
-import { useCallback, useEffect, useState } from 'react';
 
 import { PageHead } from '../../../components/shell';
-import { api, errorText } from '../../../lib/api';
 import { formatRelative, ROLE_LABELS } from '../../../lib/format';
+import { useLive } from '../../../lib/live';
+import { alertsBySeverity, guardView, homeCounts } from '../../../lib/live-model';
 import { useSession } from '../../../lib/session';
 
-type Snapshot = {
-  serverTime: string;
-  freshness: FreshnessSettings;
-  guards: { shiftId: string; lastContactAt: string | null; manualStart: boolean }[];
-};
-
-const POLL_MS = 15_000;
-const SEVERITY_ORDER = { CRITICAL: 0, HIGH: 1, MEDIUM: 2, LOW: 3 } as const;
 const SEVERITY_BADGE = { CRITICAL: 'danger', HIGH: 'danger', MEDIUM: 'warn', LOW: 'info' } as const;
 
 export default function DashboardPage() {
   const { me, membership, can } = useSession();
-  const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
-  const [offsetMs, setOffsetMs] = useState(0);
-  const [alerts, setAlerts] = useState<Alert[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const { model, now, error } = useLive();
   const canLive = can('live.read');
   const canAlerts = can('alerts.read');
 
-  const load = useCallback(async () => {
-    try {
-      if (canLive) {
-        const s = await api<Snapshot>('/dashboard/snapshot');
-        setOffsetMs(new Date(s.serverTime).getTime() - Date.now());
-        setSnapshot(s);
-      }
-      if (canAlerts) setAlerts((await api<{ alerts: Alert[] }>('/alerts?status=active&limit=200')).alerts);
-      setError(null);
-    } catch (e) {
-      setError(errorText(e));
-    }
-  }, [canLive, canAlerts]);
+  const views = model ? [...model.guards.values()].map((g) => guardView(g, now, model.freshness)) : [];
+  const counts = homeCounts(views);
+  const alerts = model ? alertsBySeverity(model.alerts.values()) : [];
+  const critical = alerts.filter((a) => a.severity === 'CRITICAL').length;
+  const watching = model ? model.coverage.desktop + model.coverage.phone : 0;
+  const value = (n: number) => (model ? n : '–');
 
-  useEffect(() => {
-    void load();
-    const poll = window.setInterval(() => void load(), POLL_MS);
-    return () => window.clearInterval(poll);
-  }, [load, membership.organizationId]);
-
-  // Judged by server time, never this computer's clock.
-  const now = new Date(Date.now() + offsetMs);
-  const health = { LIVE: 0, DELAYED: 0, OFFLINE: 0 };
-  for (const g of snapshot?.guards ?? []) {
-    health[trackingHealth(now, g.lastContactAt ? new Date(g.lastContactAt) : null, snapshot!.freshness)]++;
-  }
-  const bySeverity = { CRITICAL: 0, HIGH: 0, MEDIUM: 0, LOW: 0 };
-  for (const a of alerts ?? []) bySeverity[a.severity]++;
-  const urgent = [...(alerts ?? [])]
-    .sort(
-      (a, b) =>
-        SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity] || a.openedAt.localeCompare(b.openedAt),
-    )
-    .slice(0, 6);
+  const tiles: { label: string; value: number; href: string; tone?: 'warn' | 'danger' }[] = [
+    { label: 'active guards', value: counts.active, href: '/live' },
+    { label: 'on site', value: counts.onSite, href: '/live?show=on-site' },
+    { label: 'off site', value: counts.offSite, href: '/live?show=off-site', tone: 'danger' },
+    { label: 'delayed / offline', value: counts.delayedOrOffline, href: '/live?show=not-live', tone: 'warn' },
+    { label: 'tracking problems', value: counts.trackingProblems, href: '/live?show=problems', tone: 'warn' },
+    {
+      label: 'shifts not started',
+      value: model?.shiftsNotStarted ?? 0,
+      href: can('shifts.read') ? '/shifts' : '/dashboard',
+      tone: 'warn',
+    },
+  ];
 
   return (
     <>
@@ -74,49 +48,62 @@ export default function DashboardPage() {
         description={`Welcome, ${me.user.name}. You are signed in as ${ROLE_LABELS[membership.role] ?? membership.role}.`}
       />
       {error ? <div className="banner error">{error}</div> : null}
-      {bySeverity.CRITICAL > 0 ? (
-        <div className="banner error">
+      {critical > 0 ? (
+        <div className="banner error" role="alert">
           <strong>
-            {bySeverity.CRITICAL} critical alert{bySeverity.CRITICAL > 1 ? 's' : ''}
+            {critical} critical alert{critical > 1 ? 's' : ''}
           </strong>{' '}
           — <Link href="/alerts">open Alerts</Link>
         </div>
       ) : null}
-      {canLive ? (
-        <div className="grid cols-4">
-          <Link className="card stat" href="/live">
-            <span className="label">on duty</span>
-            <span className="value">{snapshot ? snapshot.guards.length : '–'}</span>
-          </Link>
-          {(['LIVE', 'DELAYED', 'OFFLINE'] as const).map((h) => (
-            <Link className="card stat" href="/live" key={h}>
-              <span className="label">{h.toLowerCase()}</span>
-              <span className="value">{snapshot ? health[h] : '–'}</span>
-            </Link>
-          ))}
+      {canLive && model && counts.active > 0 && watching === 0 ? (
+        <div className="banner warn" role="status">
+          <strong>Nobody is watching live.</strong> Guards are on duty, but no dashboard is connected right
+          now.
         </div>
+      ) : null}
+      {canLive ? (
+        <>
+          <div className="grid cols-6">
+            {tiles.map((t) => (
+              <Link
+                className={`card stat${t.tone && model && t.value > 0 ? ` tone-${t.tone}` : ''}`}
+                href={t.href}
+                key={t.label}
+              >
+                <span className="label">{t.label}</span>
+                <span className="value">{value(t.value)}</span>
+              </Link>
+            ))}
+          </div>
+          <div className="card monitoring">
+            <span className="label">Monitoring now</span>
+            <span>
+              {model
+                ? `${model.coverage.desktop} dashboard${model.coverage.desktop === 1 ? '' : 's'}, ${model.coverage.phone} phone${model.coverage.phone === 1 ? '' : 's'}`
+                : '–'}{' '}
+              <span className="faint">(this screen included)</span>
+            </span>
+          </div>
+        </>
       ) : null}
       {canAlerts ? (
         <div className="card">
           <div className="card-head">
             <h2>
-              Active alerts <span className="faint">({alerts ? alerts.length : '…'})</span>
+              Active alerts <span className="faint">({model ? alerts.length : '…'})</span>
             </h2>
-            <span className="faint">
-              {(['HIGH', 'MEDIUM', 'LOW'] as const)
-                .map((s) => `${bySeverity[s]} ${s.toLowerCase()}`)
-                .join(' · ')}
-            </span>
+            <span className="faint">Most severe first, then oldest</span>
           </div>
-          {!alerts ? (
+          {!model ? (
             <div className="loading">Loading…</div>
-          ) : urgent.length === 0 ? (
+          ) : alerts.length === 0 ? (
             <div className="empty">No active alerts.</div>
           ) : (
             <div className="table-wrap">
               <table>
                 <tbody>
-                  {urgent.map((a) => (
+                  {alerts.slice(0, 10).map((a) => (
                     <tr key={a.id}>
                       <td>
                         <span className={`badge ${SEVERITY_BADGE[a.severity]}`}>

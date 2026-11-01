@@ -9,7 +9,11 @@ import { usePathname } from 'next/navigation';
 import type { ReactNode } from 'react';
 
 import { ROLE_LABELS } from '../lib/format';
+import { useLive } from '../lib/live';
 import { SignOutButton, useSession } from '../lib/session';
+
+/** PROD §14.7: say so when live updates have been down for more than 10 s. */
+const DISCONNECTED_BANNER_MS = 10_000;
 
 type NavItem = { href: string; label: string; permission?: Permission };
 
@@ -79,8 +83,22 @@ export function AppShell({ children }: { children: ReactNode }) {
             <SignOutButton className="btn small" />
           </div>
         </header>
-        <main className="content">{children}</main>
+        <main className="content">
+          <LiveBanner />
+          {children}
+        </main>
       </div>
+    </div>
+  );
+}
+
+function LiveBanner() {
+  const live = useLive();
+  if (!live.model || live.disconnectedMs <= DISCONNECTED_BANNER_MS) return null;
+  return (
+    <div className="banner warn" role="status">
+      <strong>Live updates disconnected</strong> — reconnecting. Times keep counting, but positions and alerts
+      may be out of date.
     </div>
   );
 }

@@ -76,4 +76,9 @@ export const TABLES: TableRegistry = {
   // Phase 5: alerts.
   alerts: { kind: 'tenant' },
   alert_events: { kind: 'tenant-append-only' },
+
+  // Phase 6: realtime.
+  outbox: { kind: 'tenant' },
+  realtime_events: { kind: 'tenant' },
+  stream_connections: { kind: 'tenant' },
 };

@@ -256,6 +256,16 @@ erDiagram
     timestamp_with_time_zone created_at
     timestamp_with_time_zone updated_at
   }
+  outbox {
+    uuid id PK
+    uuid organization_id
+    bigint position
+    text topic
+    jsonb payload
+    timestamp_with_time_zone created_at
+    timestamp_with_time_zone processed_at
+    integer attempts
+  }
   quarantined_items {
     uuid id PK
     uuid organization_id
@@ -266,6 +276,14 @@ erDiagram
     text error_code
     timestamp_with_time_zone created_at
     timestamp_with_time_zone replayed_at
+  }
+  realtime_events {
+    uuid id
+    uuid organization_id PK
+    bigint seq PK
+    text type
+    jsonb payload
+    timestamp_with_time_zone created_at
   }
   schema_migrations {
     text version PK
@@ -366,6 +384,15 @@ erDiagram
     uuid created_by_user_id
     uuid updated_by_user_id
   }
+  stream_connections {
+    uuid id PK
+    uuid organization_id
+    uuid user_id
+    text client
+    text instance_id
+    timestamp_with_time_zone connected_at
+    timestamp_with_time_zone last_seen_at
+  }
   tracking_consents {
     uuid id PK
     uuid organization_id
@@ -432,8 +459,10 @@ erDiagram
   users ||--o{ organization_members : "organization_members_user_id_fkey"
   organizations ||--o{ organization_settings : "organization_settings_organization_id_fkey"
   users ||--o{ organization_settings : "organization_settings_updated_by_user_id_fkey"
+  organizations ||--o{ outbox : "outbox_organization_id_fkey"
   guard_devices ||--o{ quarantined_items : "quarantined_items_organization_id_device_id_fkey"
   organizations ||--o{ quarantined_items : "quarantined_items_organization_id_fkey"
+  organizations ||--o{ realtime_events : "realtime_events_organization_id_fkey"
   users ||--o{ shift_events : "shift_events_actor_user_id_fkey"
   guard_devices ||--o{ shift_events : "shift_events_organization_id_device_id_fkey"
   organizations ||--o{ shift_events : "shift_events_organization_id_fkey"
@@ -451,6 +480,8 @@ erDiagram
   users ||--o{ sites : "sites_created_by_user_id_fkey"
   organizations ||--o{ sites : "sites_organization_id_fkey"
   users ||--o{ sites : "sites_updated_by_user_id_fkey"
+  organizations ||--o{ stream_connections : "stream_connections_organization_id_fkey"
+  users ||--o{ stream_connections : "stream_connections_user_id_fkey"
   guard_devices ||--o{ tracking_consents : "tracking_consents_organization_id_device_id_fkey"
   organizations ||--o{ tracking_consents : "tracking_consents_organization_id_fkey"
   guards ||--o{ tracking_consents : "tracking_consents_organization_id_guard_id_fkey"

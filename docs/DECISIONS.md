@@ -104,6 +104,44 @@ Made as a co-founder would make them, while the owner was away. Each is reversib
 - **No SMS aggregator yet.** Guard enrollment codes are shown in the dashboard, as a code and a QR code, for the supervisor to hand to the guard in person. SMS goes behind an `SmsProvider` interface and switches on when EXT-10 is done. Member invitations work the same way: the dashboard shows the invitation link to send by hand until an email provider is chosen.
 - **Device key (ARCH §5.3).** The P-256 key pair is generated on the phone and the private key is kept in the secure store (Keychain or Android Keystore-encrypted storage). It is not yet generated inside the Secure Enclave or Keystore hardware, which needs a native module; revisit with Phase 0B.
 
+## Phase 6 · live operations dashboard · agent-decided 2026-11-01
+
+The owner asked for Phase 6 to start while Phase 4's device tests are still open (2026-11-01: "can you start working on phase 6 aswell to save time?"). `status.json` stays at Phase 3, as for Phase 5. These are the gaps the spec left, each filled with the simplest option that keeps its rules. Review and veto in the diff.
+
+- **The dashboard reads the stream with `fetch()`, not `EventSource`.** EventSource can't send headers, and the organization comes only from `X-Organization-Id`, never a query string (ARCH §4.1). So the stream goes through the same request pipeline as every other call, and no stream tickets are needed. The wire format is still standard SSE.
+- **Stored events hold IDs only; the API adds the current state when it sends them.** One read per organization on each API instance serves all of that organization's dashboards. Otherwise every dashboard would fetch each guard's state for each event: about 17 requests a second per dashboard at 1,000 guards. A replayed event therefore carries the current state, which is what a reconnecting dashboard needs.
+- **Membership is re-checked by polling, not by a membership-change event.** Every 30 s each stream re-runs the full request check: session, membership, organization status and permission. A stream that fails it closes. This meets ADV-T02's 60 s for every way access can end: sign-out, removal, suspension, a role change, or an edit made directly in the database. Streams are also cycled every 30 minutes (ARCH §14).
+- **Sequence:**
+  - the dispatcher numbers each organization's events under a transaction-level advisory lock for that organization;
+  - pruning always keeps the newest event, so the sequence never restarts and a position older than the buffer is always recognised (`resync`);
+  - outbox rows carry an insertion-order column, so changes made in the same millisecond keep their order.
+- **The dispatcher follows the detectors' pattern.** It lists the organizations with pending rows as `system_worker`, then moves each organization's rows as `app_runtime` in its own tenant transaction.
+- **Monitoring coverage (PROD §11.5) counts rows in `stream_connections`.** There is one row per open stream, touched every 30 s; a row not seen for 90 s doesn't count, and the worker removes it. So the count stays right across several API instances. Desktop or phone is what the dashboard reports (`?client=`); it grants nothing.
+- **Limits on open streams:**
+  - at most 10 per user (a few tabs and a phone);
+  - a stream with more than 1 MB waiting to be sent is dropped, and replays when it reconnects.
+- **Home page counts (PROD §14.2):**
+  - "on site" means the geofence says INSIDE; "off site" means a departure is confirmed. A suspected departure, an uncertain fix or no fix yet counts in neither, so nothing is guessed;
+  - "tracking problems" means the phone reports its tracking service stopped, a permission problem, or a location permission short of "Allow all the time";
+  - "shifts not started" means scheduled shifts whose start time has passed;
+  - open incidents wait for Phase 8.
+- **Location history (PROD §14.5):**
+  - thinning keeps, in priority order, the first and last points, both sides of every gap, then flagged points, and spreads the rest of the 2,000 evenly;
+  - a kept point is marked as a break when any gap of more than 5 minutes lies between it and the previous kept point;
+  - a shift's range is its start − 60 s to its end + 60 s (ARCH §9.2); a free range is at most 24 hours;
+  - the reason is limited to 500 characters;
+  - the audit metadata names the range, never a coordinate;
+  - one view reads at most 100,000 points (24 hours at one fix a second);
+  - nothing loads until the user presses "Show history", because every view is audited.
+- **D-21** is built as recommended and as SEC §16.4 already states: the reason field is always shown, and it is mandatory when `privacy.require_history_access_reason` is on.
+- **D-22 · rejected by the owner (2026-11-01):** the owner sees no use in guards seeing their own location history. Guards see their own shift history in the app, not their location trail. The `location.history.read.own` permission is removed. A guard's own data, location included, still reaches them through an export by an Owner or Administrator (SEC §16.6); the legal review (EXT-17) may revisit this.
+- **Map (D-12 revised):**
+  - markers cluster, and a cluster takes its worst member's colour, so an offline guard is never hidden;
+  - accuracy circles show from zoom 14;
+  - details open in a plain-text panel instead of map popups (ADV-W01).
+- **The dashboard imports types only from `packages/contracts`,** so zod stays out of the browser bundle.
+- **`pnpm demo --crowd=N`** adds up to 2,000 guards to check the Live map at pilot scale. One process plays every phone, so the demo turns rate limits off. It runs only in development.
+
 ## Phase 5 · alerts and geofence · agent-decided 2026-10-08 (round 6 delegation)
 
 Gaps in the spec that Phase 5 had to fill. Each is the simplest option that keeps the stated rules; review and veto in the diff.
@@ -193,6 +231,7 @@ The first cell, in Terraform (`infra/`), following ARCH §19.8. The choices the 
 | D-09 | SSE, keeping the replay buffer and per-organization sequence | APPROVED |
 | D-10 | Kysely, plain SQL migrations, generated types | APPROVED |
 | D-12 | Map provider: MapLibre GL with OpenFreeMap tiles (was Google Maps) | REVISED under delegation, round 6 |
+| D-22 | Guard sees own location trail in the app | REJECTED 2026-11-01 (owner) |
 | D-13 | Data residency: cells, launching with one | APPROVED; first cell in D-37 |
 | D-14 | English and Urdu only, English by default; English dashboard in V1 | APPROVED |
 | D-30 | Our own device-bound mobile session | APPROVED |
@@ -207,6 +246,7 @@ The first cell, in Terraform (`infra/`), following ARCH §19.8. The choices the 
 | — | Review A-06: evaluate geofences inside the ingest transaction | REJECTED |
 | — | Review C-01–C-13 and the remaining A, M and P items | APPROVED ("apply all") |
 | — | Phase 0 engineering choices (toolchain, test database, dependency exceptions) | Agent-decided 2026-10-08; veto in the diff |
+| — | Phase 6 choices (stream client, event enrichment, revalidation, coverage, history thinning) | Agent-decided 2026-11-01; veto in the diff |
 
 ---
 

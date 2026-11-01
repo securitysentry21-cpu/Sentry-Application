@@ -274,9 +274,16 @@ export async function quarantine(
     .execute();
 }
 
-/** Every ACTIVE shift with its live state, for the dashboard snapshot. Live coordinates only. */
-export async function liveSnapshot(trx: Database, organizationId: string) {
-  return trx
+/**
+ * Every ACTIVE shift with its live state, for the dashboard snapshot and the realtime stream; or
+ * only the shifts named, or only one guard's. Live coordinates only.
+ */
+export async function liveSnapshot(
+  trx: Database,
+  organizationId: string,
+  only: { shiftIds?: readonly string[]; guardId?: string } = {},
+) {
+  let q = trx
     .selectFrom('shifts as sh')
     .innerJoin('guards as g', (j) =>
       j.onRef('g.organization_id', '=', 'sh.organization_id').onRef('g.id', '=', 'sh.guard_id'),
@@ -294,6 +301,8 @@ export async function liveSnapshot(trx: Database, organizationId: string) {
       'g.employee_number',
       'sh.site_id',
       's.name as site_name',
+      's.timezone as site_timezone',
+      'sh.starts_at',
       'sh.actual_started_at',
       'sh.ends_at',
       'sh.start_source',
@@ -303,18 +312,26 @@ export async function liveSnapshot(trx: Database, organizationId: string) {
       'l.last_fix_accuracy_m',
       'l.last_fix_captured_at',
       'l.last_contact_at',
+      'l.geofence_state',
       'l.tracking_service_state',
       'l.location_permission',
       'l.battery_pct',
       'l.is_charging',
+      'l.app_version',
       'l.pending_queue_count',
+      'l.device_report_at',
     ])
     .where('sh.organization_id', '=', organizationId)
-    .where('sh.status', '=', 'ACTIVE')
-    .orderBy('g.display_name')
-    .limit(5000)
-    .execute();
+    .where('sh.status', '=', 'ACTIVE');
+  if (only.shiftIds) {
+    if (only.shiftIds.length === 0) return [];
+    q = q.where('sh.id', 'in', only.shiftIds);
+  }
+  if (only.guardId) q = q.where('sh.guard_id', '=', only.guardId);
+  return q.orderBy('g.display_name').limit(5000).execute();
 }
+
+export type LiveRow = Awaited<ReturnType<typeof liveSnapshot>>[number];
 
 export type GeofenceRow = {
   state: string;
@@ -439,4 +456,36 @@ export async function hasQuarantinedStart(
     .where(sql<boolean>`item->>'type' = 'SHIFT_START' and item->>'shiftId' = ${shiftId}`)
     .executeTakeFirst();
   return row !== undefined;
+}
+
+/**
+ * A guard's stored points in a time range (or one shift's), in capture order, for the location
+ * history viewer (PROD §14.5). Callers audit the read first (INV-14).
+ */
+export async function historyPoints(
+  trx: Database,
+  organizationId: string,
+  filter: { guardId: string; shiftId?: string; from: Date; to: Date },
+  limit: number,
+) {
+  let q = trx
+    .selectFrom('location_points')
+    .select(['latitude', 'longitude', 'accuracy_m', 'captured_at', 'shift_id', 'source', 'flags', 'is_mock'])
+    .where('organization_id', '=', organizationId)
+    .where('guard_id', '=', filter.guardId)
+    .where('captured_at', '>=', filter.from)
+    .where('captured_at', '<=', filter.to);
+  if (filter.shiftId) q = q.where('shift_id', '=', filter.shiftId);
+  return q.orderBy('captured_at').orderBy('id').limit(limit).execute();
+}
+
+export async function latestConsent(trx: Database, organizationId: string, guardId: string) {
+  return trx
+    .selectFrom('tracking_consents')
+    .select(['disclosure_version', 'locale', 'accepted_at'])
+    .where('organization_id', '=', organizationId)
+    .where('guard_id', '=', guardId)
+    .orderBy('accepted_at', 'desc')
+    .limit(1)
+    .executeTakeFirst();
 }

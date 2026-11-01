@@ -113,6 +113,14 @@ export const CROSS_TENANT_FIXTURES: Readonly<Record<string, Coverage>> = {
     test: "sync.test.ts › ADV-L02 (another guard's shift is rejected, nothing stored)",
   },
   'GET /api/v1/dashboard/snapshot': T09,
+
+  // Phase 6
+  'GET /api/v1/stream': {
+    covered: 'test',
+    test: "realtime.test.ts › ADV-T02: refused for another organization's ID; never carries its events; closed when membership ends",
+  },
+  'GET /api/v1/guards/:id/location': T01,
+  'GET /api/v1/guards/:id/location-history': T01,
   'GET /api/v1/me/shifts': {
     covered: 'test',
     test: "shifts.test.ts › ADV-A03 (only the guard's own shifts)",

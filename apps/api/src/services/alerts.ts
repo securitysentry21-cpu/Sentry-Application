@@ -33,6 +33,7 @@ import {
 import { numberSetting, organizationSettings } from '../repositories/organizations.ts';
 import type { ShiftRow } from '../repositories/shifts.ts';
 import { lastGoodReportAt } from '../repositories/tracking.ts';
+import { publish } from './realtime.ts';
 
 export type AlertIntent = {
   readonly type: AlertType;
@@ -220,6 +221,9 @@ async function event(
     payload: payload ?? {},
     at: deps.clock.now(),
   });
+  // Every alert change reaches the dashboards (ARCH §14); a reopened alert alarms like a new one.
+  const opened = type === 'OPENED' || type === 'REOPENED';
+  await publish(trx, deps, organizationId, opened ? 'alert.opened' : 'alert.updated', { alertId });
 }
 
 export type ManualOutcome =
@@ -386,7 +390,8 @@ export async function deviceReportAlerts(
 
 /**
  * The alert side of a shift change (PROD §12.1, §12.4), called with the updated shift by every path
- * that changes a shift's status. The detectors also sweep for anything a path missed.
+ * that changes a shift's status or times. It also tells the dashboards (`shift.updated`). The
+ * detectors sweep for anything a path missed.
  */
 export async function onShiftChanged(
   trx: Database,
@@ -394,6 +399,7 @@ export async function onShiftChanged(
   organizationId: string,
   shift: ShiftRow,
 ): Promise<void> {
+  await publish(trx, deps, organizationId, 'shift.updated', { shiftId: shift.id });
   const settings = await organizationSettings(trx, organizationId);
   const suppressionMs = reopenSuppressionMs(settings);
   const subject = { guardId: shift.guardId, siteId: shift.siteId, shiftId: shift.id };

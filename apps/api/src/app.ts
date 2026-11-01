@@ -4,7 +4,9 @@ import Fastify, { LogController, type FastifyInstance, type FastifyServerOptions
 
 import type { AppDeps } from './deps.ts';
 import { envelope, errorHandler } from './errors.ts';
+import { SECURITY_HEADERS } from './headers.ts';
 import { loggerOptions } from './logger.ts';
+import { RealtimeHub, type HubTimings } from './realtime/hub.ts';
 import { ROUTES } from './routes/index.ts';
 import {
   enforceRoutePolicies,
@@ -22,20 +24,12 @@ declare module 'fastify' {
 
 const INCOMING_REQUEST_ID = /^[A-Za-z0-9._-]{1,64}$/;
 
-// SEC §10 baseline. In AWS the load balancer sends /api/* straight to the API (ARCH §2), so API
-// responses can't rely on the dashboard's headers. JSON is never a page: it may not be framed,
-// sniffed as HTML, or run anything.
-const SECURITY_HEADERS = {
-  'content-security-policy': "default-src 'none'; frame-ancestors 'none'",
-  'x-content-type-options': 'nosniff',
-  'strict-transport-security': 'max-age=63072000; includeSubDomains',
-  'referrer-policy': 'no-referrer',
-} as const;
-
 export type BuildOptions = {
   logger?: FastifyServerOptions['logger'];
   /** Test seam: routes added after the real ones. They still go through the policy check. */
   extraRoutes?: readonly RouteDefinition[];
+  /** Test seam: the realtime stream's timers, shortened so tests don't wait 30 s. */
+  realtime?: Partial<HubTimings>;
 };
 
 export function buildApp(deps: AppDeps, options: BuildOptions = {}): FastifyInstance {
@@ -57,6 +51,12 @@ export function buildApp(deps: AppDeps, options: BuildOptions = {}): FastifyInst
   });
 
   app.decorate('routeCatalog', catalog);
+  const hub = new RealtimeHub(deps, app.log, options.realtime);
+  app.decorate('realtime', hub);
+  // Streams end first, so the pool can close once they have recorded their departure.
+  app.addHook('preClose', async () => {
+    await hub.close();
+  });
   enforceRoutePolicies(app, catalog);
 
   // ARCH §15.1 response headers. Phones compare X-Server-Time with their own clock (ARCH §8.7).

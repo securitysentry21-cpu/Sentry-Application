@@ -55,6 +55,7 @@ export type Alert = z.infer<typeof alertSchema>;
 export const alertListQuerySchema = z.strictObject({
   status: z.enum(['active', 'closed', 'all']).default('active'),
   shiftId: uuid.optional(),
+  guardId: uuid.optional(),
   limit: z.coerce.number().int().min(1).max(500).default(200),
 });
 export const alertListResponseSchema = z.object({ alerts: z.array(alertSchema) });

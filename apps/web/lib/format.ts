@@ -46,3 +46,30 @@ export const ALERT_TYPE_LABEL: Record<Alert['type'], string> = {
   LOW_BATTERY: 'Low battery',
   DEVICE_CHANGED: 'Device changed',
 };
+
+/** A short age for map labels: "8 s", "4 min", "2 h" (PROD §8.3: every marker carries its age). */
+export function shortAge(iso: string, now: Date): string {
+  const seconds = Math.max(0, Math.round((now.getTime() - new Date(iso).getTime()) / 1000));
+  if (seconds < 60) return `${seconds} s`;
+  if (seconds < 3600) return `${Math.floor(seconds / 60)} min`;
+  if (seconds < 86_400) return `${Math.floor(seconds / 3600)} h`;
+  return `${Math.floor(seconds / 86_400)} d`;
+}
+
+/** A site-bound time in the site's own time zone, with its abbreviation (PROD §14.7). */
+export function siteTime(iso: string, timeZone: string, withZone = true): string {
+  return new Intl.DateTimeFormat('en-GB', {
+    timeZone,
+    hour: '2-digit',
+    minute: '2-digit',
+    ...(withZone ? { timeZoneName: 'short' as const } : {}),
+  }).format(new Date(iso));
+}
+
+/** Tracking service states as words. */
+export const SERVICE_LABEL: Record<string, string> = {
+  RUNNING: 'running',
+  STOPPED: 'stopped',
+  PERMISSION_PROBLEM: 'permission problem',
+  UNKNOWN: 'not reported',
+};

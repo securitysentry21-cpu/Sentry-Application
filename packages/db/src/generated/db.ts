@@ -10,6 +10,8 @@ export type Generated<T> = T extends ColumnType<infer S, infer I, infer U>
   ? ColumnType<S, I | undefined, U>
   : ColumnType<T, T | undefined, T>;
 
+export type Int8 = ColumnType<string, bigint | number | string, bigint | number | string>;
+
 export type Json = JsonValue;
 
 export type JsonArray = JsonValue[];
@@ -290,6 +292,17 @@ export interface OrganizationSettings {
   version: Generated<number>;
 }
 
+export interface Outbox {
+  attempts: Generated<number>;
+  created_at: Generated<Timestamp>;
+  id: string;
+  organization_id: string;
+  payload: Generated<Json>;
+  position: Generated<Int8>;
+  processed_at: Timestamp | null;
+  topic: string;
+}
+
 export interface QuarantinedItems {
   batch_id: string;
   client_event_id: string;
@@ -300,6 +313,15 @@ export interface QuarantinedItems {
   item: Json;
   organization_id: string;
   replayed_at: Timestamp | null;
+}
+
+export interface RealtimeEvents {
+  created_at: Generated<Timestamp>;
+  id: string;
+  organization_id: string;
+  payload: Generated<Json>;
+  seq: Int8;
+  type: string;
 }
 
 export interface SchemaMigrations {
@@ -406,6 +428,16 @@ export interface Sites {
   version: Generated<number>;
 }
 
+export interface StreamConnections {
+  client: string;
+  connected_at: Timestamp;
+  id: string;
+  instance_id: string;
+  last_seen_at: Timestamp;
+  organization_id: string;
+  user_id: string;
+}
+
 export interface TrackingConsents {
   accepted_at: Timestamp;
   created_at: Generated<Timestamp>;
@@ -446,12 +478,15 @@ export interface DB {
   organization_members: OrganizationMembers;
   organization_settings: OrganizationSettings;
   organizations: Organizations;
+  outbox: Outbox;
   quarantined_items: QuarantinedItems;
+  realtime_events: RealtimeEvents;
   schema_migrations: SchemaMigrations;
   shift_events: ShiftEvents;
   shift_live_state: ShiftLiveState;
   shifts: Shifts;
   sites: Sites;
+  stream_connections: StreamConnections;
   tracking_consents: TrackingConsents;
   users: Users;
 }
