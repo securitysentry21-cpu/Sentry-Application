@@ -1,2 +1,2 @@
-image_tag           = "aaf9d030281f2f00c05730fdb72c363d0b16bc57"
-migration_image_tag = "aaf9d030281f2f00c05730fdb72c363d0b16bc57"
+image_tag           = "63b545bf44aa1884180ea06b568421710f9c32a8"
+migration_image_tag = "63b545bf44aa1884180ea06b568421710f9c32a8"

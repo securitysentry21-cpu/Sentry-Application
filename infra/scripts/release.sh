@@ -16,6 +16,16 @@ release_file="$here/../terraform/env/$env_name.release.tfvars"
 current=$(sed -n 's/^image_tag *= *"\(.*\)"/\1/p' "$release_file" 2>/dev/null || true)
 write_release() { printf 'image_tag           = "%s"\nmigration_image_tag = "%s"\n' "$1" "$2" >"$release_file"; }
 
+# A paused environment's database is stopped. Terraform's aws_rds_instance_state can check the
+# state before its own start request registers, see 'stopped' and fail; so start it here first.
+db_status=$("$AWS" rds describe-db-instances --region "$region" --db-instance-identifier "$prefix" \
+  --query 'DBInstances[0].DBInstanceStatus' --output text)
+if [ "$db_status" = "stopped" ]; then
+  echo "starting the database (it was stopped)"
+  "$AWS" rds start-db-instance --region "$region" --db-instance-identifier "$prefix" >/dev/null
+  "$AWS" rds wait db-instance-available --region "$region" --db-instance-identifier "$prefix"
+fi
+
 echo "== 1/2: migrations with $sha (services stay on ${current:-nothing yet})"
 write_release "$current" "$sha"
 tf apply -auto-approve
