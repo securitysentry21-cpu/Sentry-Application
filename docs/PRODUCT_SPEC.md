@@ -600,7 +600,7 @@ V1 does not promise anti-spoofing. It collects evidence (accuracy, mock-location
 - **Patrol run** — one required execution of a route inside a shift, with a due time and a completion window.
 - **Checkpoint visit** — one scan and its verification result.
 
-### 9.2 Schedules and runs (D-16: per-shift runs recommended)
+### 9.2 Schedules and runs (D-16: per-shift runs, approved)
 
 - A route with an interval *I* and completion window *W* generates runs for every ACTIVE shift at its site: run *k* is due at actual start + offset + *k*·*I*, closes at due + *W*, while due is before the scheduled end.
 - Runs are generated when the shift starts and regenerated for future runs if the shift is extended or the route changes.
@@ -930,12 +930,12 @@ Status: **OPEN** unless marked APPROVED or REJECTED; `docs/DECISIONS.md` holds t
 | D-06 | Offline shift start | allow (provisional) · require online | allow | Phase 3 |
 | D-14 | Launch languages | English · English + Urdu · more | **APPROVED 2026-10-08:** English and Urdu only. English is the default and Urdu is selectable in the guard app; the dashboard is English-only in V1 but i18n-ready | Phase 2 |
 | D-15 | Starting outside the geofence | block · allow and flag | allow and flag | Phase 3 |
-| D-16 | Patrol accountability | per shift · per site (shared) | per shift | Phase 7 |
-| D-17 | Do QR-only (location unconfirmed) scans count? | yes, labelled · no | yes, labelled "QR only" | Phase 7 |
+| D-16 | Patrol accountability | per shift · per site (shared) | **APPROVED 2026-11-02** (owner): per shift | Phase 7 |
+| D-17 | Do QR-only (location unconfirmed) scans count? | yes, labelled · no | **APPROVED 2026-11-02** (owner): yes, labelled "QR only"; an organization may turn it off | Phase 7 |
 | D-18 | Incident photos from gallery | camera only · gallery allowed, labelled | allowed, labelled | Phase 8 |
-| D-21 | Reason for viewing location history | optional · mandatory · per-organization setting | field always present, optional by default, organization may require | Phase 6 |
+| D-21 | Reason for viewing location history | optional · mandatory · per-organization setting | **APPROVED 2026-11-01** (owner): field always present, optional by default, organization may require | Phase 6 |
 | D-22 | Guard sees own location trail | yes · no | **REJECTED 2026-11-01** (owner): no; the guard sees their own shift history only | Phase 6 |
-| D-24 | Checkpoint coordinates calibrated on site with the app | V1 · V1.1 | V1.1; map pin in V1 | Phase 7 |
+| D-24 | Checkpoint coordinates calibrated on site with the app | V1 · V1.1 | **APPROVED 2026-11-02** (owner): V1.1; map pin in V1 | Phase 7 |
 | D-25 | App distribution | public store listing · private enterprise channels | public listing with demo organization; on iOS, public or unlisted App Store distribution (Apple Business custom apps don't reach Pakistan, ARCH §20) | Phase 10 |
 | D-34 | First pilot | pilot after Phase 4 · pilot at launch | **APPROVED 2026-10-08:** Android pilot with the lined-up customer once tracking is proven (Phase 4 exit tests and the device-matrix subset on its guards' phones). It is rolled out in stages: a few sites (about 50 guards) first, then the rest of the ~1,000 guards once that stage meets the tracking-reliability gate (ARCH §21.4). No SOS button until Phase 8's exit criteria pass | Phase 4 |
 | D-35 | Foreground-only tracking (never ask for "Allow all the time") | foreground-only · background permission | **REJECTED 2026-10-08:** "Allow all the time" stays required (PROD §7.3–§7.4) | Phase 0B |

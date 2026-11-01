@@ -104,6 +104,14 @@ Made as a co-founder would make them, while the owner was away. Each is reversib
 - **No SMS aggregator yet.** Guard enrollment codes are shown in the dashboard, as a code and a QR code, for the supervisor to hand to the guard in person. SMS goes behind an `SmsProvider` interface and switches on when EXT-10 is done. Member invitations work the same way: the dashboard shows the invitation link to send by hand until an email provider is chosen.
 - **Device key (ARCH §5.3).** The P-256 key pair is generated on the phone and the private key is kept in the secure store (Keychain or Android Keystore-encrypted storage). It is not yet generated inside the Secure Enclave or Keystore hardware, which needs a native module; revisit with Phase 0B.
 
+## Phase 7 · patrols · owner decisions 2026-11-02
+
+The owner read how scanning will work and approved Phase 7 ("Go ahead with Phase 7"), with the three decisions it needs, as recommended:
+
+- **D-16 · per shift:** each guard on duty gets their own patrol runs; guards at the same site don't share them.
+- **D-17 · QR-only scans count, always labelled:** a valid scan whose location can't be confirmed counts and is labelled "QR only". An organization can turn this off (`patrol.count_unconfirmed_as_completed`).
+- **D-24 · map pin in V1:** a checkpoint's position is set with a map pin in the dashboard; calibrating it on site with the app is V1.1.
+
 ## Phase 6 · live operations dashboard · agent-decided 2026-11-01
 
 The owner asked for Phase 6 to start while Phase 4's device tests are still open (2026-11-01: "can you start working on phase 6 aswell to save time?"). `status.json` stays at Phase 3, as for Phase 5. These are the gaps the spec left, each filled with the simplest option that keeps its rules. Review and veto in the diff.
@@ -133,7 +141,7 @@ The owner asked for Phase 6 to start while Phase 4's device tests are still open
   - the audit metadata names the range, never a coordinate;
   - one view reads at most 100,000 points (24 hours at one fix a second);
   - nothing loads until the user presses "Show history", because every view is audited.
-- **D-21** is built as recommended and as SEC §16.4 already states: the reason field is always shown, and it is mandatory when `privacy.require_history_access_reason` is on.
+- **D-21 · approved by the owner (2026-11-01):** built as recommended and as SEC §16.4 already states. The reason field is always shown, optional by default, and mandatory when the organization turns on `privacy.require_history_access_reason` in Settings. The owner: "the mandatory option is fine".
 - **D-22 · rejected by the owner (2026-11-01):** the owner sees no use in guards seeing their own location history. Guards see their own shift history in the app, not their location trail. The `location.history.read.own` permission is removed. A guard's own data, location included, still reaches them through an export by an Owner or Administrator (SEC §16.6); the legal review (EXT-17) may revisit this.
 - **Map (D-12 revised):**
   - markers cluster, and a cluster takes its worst member's colour, so an offline guard is never hidden;
@@ -231,6 +239,10 @@ The first cell, in Terraform (`infra/`), following ARCH §19.8. The choices the 
 | D-09 | SSE, keeping the replay buffer and per-organization sequence | APPROVED |
 | D-10 | Kysely, plain SQL migrations, generated types | APPROVED |
 | D-12 | Map provider: MapLibre GL with OpenFreeMap tiles (was Google Maps) | REVISED under delegation, round 6 |
+| D-16 | Patrol runs per shift, not shared per site | APPROVED 2026-11-02 (owner) |
+| D-17 | QR-only scans count, always labelled; an organization may turn this off | APPROVED 2026-11-02 (owner) |
+| D-21 | Reason for viewing location history: always asked, optional unless the organization requires it | APPROVED 2026-11-01 (owner) |
+| D-24 | Checkpoint position by map pin in V1; on-site calibration in V1.1 | APPROVED 2026-11-02 (owner) |
 | D-22 | Guard sees own location trail in the app | REJECTED 2026-11-01 (owner) |
 | D-13 | Data residency: cells, launching with one | APPROVED; first cell in D-37 |
 | D-14 | English and Urdu only, English by default; English dashboard in V1 | APPROVED |
