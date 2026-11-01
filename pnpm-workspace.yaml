@@ -20,6 +20,9 @@ nodeLinker: hoisted
 overrides:
   react: 19.2.3
   react-dom: 19.2.3
+  # The Expo CLI still asks for node-forge 1.4.0, which has High advisories (GHSA-86w9-cpqp-85rv
+  # and five more); 1.4.2 fixes them. Remove this once @expo/cli depends on >= 1.4.1 itself.
+  node-forge: 1.4.2
 
 # Never wait for an interactive 'purge node_modules?' prompt (installs run unattended).
 confirmModulesPurge: false
