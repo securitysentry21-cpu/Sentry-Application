@@ -170,6 +170,29 @@ erDiagram
     timestamp_with_time_zone last_successful_sync_at
     timestamp_with_time_zone created_at
   }
+  export_jobs {
+    uuid id PK
+    uuid organization_id
+    uuid requested_by
+    text kind
+    jsonb params
+    text title
+    boolean contains_location
+    text status
+    integer row_count
+    bigint size_bytes
+    text object_key
+    text content_type
+    text file_name
+    text error_code
+    integer attempts
+    timestamp_with_time_zone created_at
+    timestamp_with_time_zone started_at
+    timestamp_with_time_zone finished_at
+    timestamp_with_time_zone expires_at
+    integer version
+    timestamp_with_time_zone updated_at
+  }
   guard_devices {
     uuid id PK
     uuid organization_id
@@ -741,6 +764,8 @@ erDiagram
   organizations ||--o{ device_status_events : "device_status_events_organization_id_fkey"
   guards ||--o{ device_status_events : "device_status_events_organization_id_guard_id_fkey"
   shifts ||--o{ device_status_events : "device_status_events_organization_id_shift_id_fkey"
+  organizations ||--o{ export_jobs : "export_jobs_organization_id_fkey"
+  users ||--o{ export_jobs : "export_jobs_requested_by_fkey"
   organizations ||--o{ guard_devices : "guard_devices_organization_id_fkey"
   guards ||--o{ guard_devices : "guard_devices_organization_id_guard_id_fkey"
   users ||--o{ guard_devices : "guard_devices_revoked_by_user_id_fkey"

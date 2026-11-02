@@ -7,6 +7,7 @@ import { z } from 'zod';
 import { sniffImageType } from '../attachments/image.ts';
 import { notFound } from '../errors.ts';
 import { LocalObjectStore } from '../storage/local.ts';
+import { MAX_EXPORT_BYTES } from '../storage/objects.ts';
 import { defineRoute } from './registry.ts';
 
 const PUBLIC = { kind: 'public' } as const;
@@ -53,9 +54,16 @@ export const objectRoutes = [
       if (!(store instanceof LocalObjectStore)) throw notFound();
       const grant = store.verify(p.token, 'GET');
       if (!grant) throw notFound();
-      const bytes = await store.read(grant.key, MAX_ATTACHMENT_BYTES);
+      // Photos, or an export file (PROD §15.2: CSV or, for a guard's data, a ZIP).
+      const exported = grant.key.startsWith('exports/');
+      const bytes = await store.read(grant.key, exported ? MAX_EXPORT_BYTES : MAX_ATTACHMENT_BYTES);
       if (!bytes) throw notFound();
-      void reply.header('content-type', sniffImageType(bytes.subarray(0, 32)) ?? 'application/octet-stream');
+      const type = exported
+        ? grant.key.endsWith('.zip')
+          ? 'application/zip'
+          : 'text/csv; charset=utf-8'
+        : (sniffImageType(bytes.subarray(0, 32)) ?? 'application/octet-stream');
+      void reply.header('content-type', type);
       void reply.header('cache-control', 'private, max-age=300');
       if (grant.downloadName) {
         void reply.header(

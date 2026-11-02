@@ -4,17 +4,19 @@
 // age (PROD §8.3), the phone's own report and devices, the disclosure they accepted, recent shifts,
 // patrol rounds, incidents and alerts. The live part follows the realtime stream. Location history
 // opens on its own, audited page; each round and shift opens on the Patrols page, each incident on
-// its own page.
+// its own page. Owners and Administrators can export the guard's own data (SEC §16.6).
 import type { Alert, Guard, IncidentSummary, LiveGuard, PatrolRun, Shift } from '@sentryops/contracts';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
 
+import { GuardDataExport } from '../../../../components/exports';
 import { GuardPanel } from '../../../../components/guard-panel';
 import { IncidentTable } from '../../../../components/incidents';
 import { RunsTable } from '../../../../components/patrol-runs';
 import { PageHead } from '../../../../components/shell';
 import { api, errorText } from '../../../../lib/api';
+import { canExport } from '../../../../lib/exports';
 import { ALERT_TYPE_LABEL, formatDateTime, formatRelative, siteTime } from '../../../../lib/format';
 import { useLive } from '../../../../lib/live';
 import { guardView } from '../../../../lib/live-model';
@@ -63,8 +65,10 @@ export default function GuardDetailPage() {
   const [runs, setRuns] = useState<PatrolRun[] | null>(null);
   const [incidents, setIncidents] = useState<IncidentSummary[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [exportingData, setExportingData] = useState(false);
   const canHistory = can('location.history.read');
   const canPatrols = can('patrols.read');
+  const canGuardData = canExport('GUARD_DATA', can);
 
   useEffect(() => {
     let cancelled = false;
@@ -127,14 +131,24 @@ export default function GuardDetailPage() {
         title={guard.displayName}
         description={`Employee ${guard.employeeNumber} · ${guard.status.toLowerCase()}${guard.enrolled ? ' · phone enrolled' : ' · no phone enrolled'}`}
         actions={
-          canHistory ? (
-            <Link className="btn" href={`/guards/${guard.id}/history`}>
-              Location history
-            </Link>
+          canHistory || canGuardData ? (
+            <>
+              {canHistory ? (
+                <Link className="btn" href={`/guards/${guard.id}/history`}>
+                  Location history
+                </Link>
+              ) : null}
+              {canGuardData ? (
+                <button type="button" className="btn" onClick={() => setExportingData(true)}>
+                  Export this guard’s data
+                </button>
+              ) : null}
+            </>
           ) : null
         }
       />
       {error ? <div className="banner error">{error}</div> : null}
+      {exportingData ? <GuardDataExport guard={guard} onClose={() => setExportingData(false)} /> : null}
       <div className="grid cols-2">
         <div className="card">
           {current ? (

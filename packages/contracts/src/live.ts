@@ -84,6 +84,7 @@ export const REALTIME_EVENT_TYPES = [
   'sos.updated',
   'incident.created',
   'incident.updated',
+  'export.updated',
 ] as const;
 export type RealtimeEventType = (typeof REALTIME_EVENT_TYPES)[number];
 
@@ -140,6 +141,12 @@ export const streamEventSchema = z.discriminatedUnion('type', [
     type: z.enum(['incident.created', 'incident.updated']),
     occurredAt: instant,
     data: z.object({ incidentId: uuid, incident: incidentSummarySchema.nullable() }),
+  }),
+  z.object({
+    /** An export changed (queued, running, ready, failed); the list says which ones this person may see. */
+    type: z.literal('export.updated'),
+    occurredAt: instant,
+    data: z.object({ exportId: uuid }),
   }),
   z.object({ type: z.literal('resync'), occurredAt: instant, data: z.object({}) }),
 ]);

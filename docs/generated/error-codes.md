@@ -34,6 +34,9 @@
 | `ATTACHMENT_TYPE_NOT_ALLOWED` | 415 | content does not match an allowed type |
 | `ATTACHMENT_LIMIT_REACHED` | 409 | the incident already has 5 photos |
 | `EXPORT_RANGE_TOO_LARGE` | 422 | export range > 92 days |
+| `EXPORT_ALREADY_RUNNING` | 409 | one export at a time per person; wait for the running one |
+| `EXPORT_NOT_READY` | 409 | the export has not finished, or failed |
+| `EXPORT_EXPIRED` | 410 | the export file was deleted after 7 days |
 | `APP_VERSION_UNSUPPORTED` | 426 | below minimum (not returned for SOS or queued uploads unless revoked) |
 | `RATE_LIMITED` | 429 | with Retry-After |
 | `INTERNAL_ERROR` | 500 | no internals exposed |

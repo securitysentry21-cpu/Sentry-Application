@@ -129,7 +129,7 @@ resource "aws_ecs_task_definition" "worker" {
       ] : [],
     )
     secrets = [for key in concat(
-      ["DATABASE_URL", "SWEEP_DATABASE_URL", "QR_TOKEN_SECRET", "OIDC_CLIENT_SECRET", "WEB_PUSH_VAPID_PRIVATE_KEY_PEM"],
+      ["DATABASE_URL", "SWEEP_DATABASE_URL", "QR_TOKEN_SECRET", "OIDC_CLIENT_SECRET", "WEB_PUSH_VAPID_PRIVATE_KEY_PEM", "RETENTION_DATABASE_URL"],
       keys(local.worker_optional_secrets),
     ) : { name = key, valueFrom = "${local.secret_from.worker}:${key}::" }]
     logConfiguration = local.logs["worker"]

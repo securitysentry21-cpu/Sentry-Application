@@ -208,6 +208,19 @@ describe('applying the stream (ARCH §14)', () => {
     expect(model.alerts.size).toBe(0);
   });
 
+  it('an export event leaves the picture as it is and only moves the stream position on', () => {
+    const model = fromSnapshot(snapshot([guard()], 10, 1), [alert()]);
+    const applied = applyEvent(model, {
+      id: '11',
+      type: 'export.updated',
+      occurredAt: iso(1),
+      data: { exportId: '0190a0d2-7c5e-7000-8000-0000000000ff' },
+    });
+    // The Exports page reloads its own list; the live picture needs no snapshot for it.
+    expect(applied.reload).toBe(false);
+    expect(applied.model).toEqual({ ...model, lastEventId: 11 });
+  });
+
   it('reads the stream format: frames, keep-alives and a frame split across chunks', () => {
     const frame = (seq: number) =>
       `id: ${seq}\nevent: coverage.updated\ndata: ${JSON.stringify({ id: String(seq), type: 'coverage.updated', occurredAt: iso(0), data: { coverage: { desktop: 2, phone: 1 } } })}\n\n`;

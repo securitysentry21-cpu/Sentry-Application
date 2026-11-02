@@ -140,7 +140,12 @@ export class S3ObjectStore implements ObjectStore {
     return { url, expiresAt: new Date(at.getTime() + expiresInS * 1000) };
   }
 
-  async #request(method: 'HEAD' | 'GET' | 'PUT', key: string, body?: Buffer, contentType?: string) {
+  async #request(
+    method: 'HEAD' | 'GET' | 'PUT' | 'DELETE',
+    key: string,
+    body?: Buffer,
+    contentType?: string,
+  ) {
     const headers = signedHeaders({
       method,
       host: this.#host,
@@ -185,6 +190,12 @@ export class S3ObjectStore implements ObjectStore {
   async write(key: string, body: Buffer, contentType: string): Promise<void> {
     const response = await this.#request('PUT', key, body, contentType);
     if (!response.ok) throw new Error(`S3 PUT: HTTP ${response.status}`);
+  }
+
+  async delete(key: string): Promise<void> {
+    const response = await this.#request('DELETE', key);
+    // S3 answers 204 whether or not the object was there.
+    if (!response.ok && response.status !== 404) throw new Error(`S3 DELETE: HTTP ${response.status}`);
   }
 
   /** For logs and errors: never a key or a URL. */

@@ -7,6 +7,8 @@ export * from './history.ts';
 export * from './incidents.ts';
 export * from './members.ts';
 export * from './patrols.ts';
+export * from './reports.ts';
+export * from './retention.ts';
 export * from './shifts.ts';
 export * from './sos.ts';
 export * from './time.ts';

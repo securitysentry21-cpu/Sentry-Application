@@ -200,6 +200,30 @@ export interface DeviceStatusEvents {
   tracking_service_state: string;
 }
 
+export interface ExportJobs {
+  attempts: Generated<number>;
+  contains_location: boolean;
+  content_type: string | null;
+  created_at: Timestamp;
+  error_code: string | null;
+  expires_at: Timestamp | null;
+  file_name: string | null;
+  finished_at: Timestamp | null;
+  id: string;
+  kind: string;
+  object_key: string | null;
+  organization_id: string;
+  params: Json;
+  requested_by: string;
+  row_count: number | null;
+  size_bytes: Int8 | null;
+  started_at: Timestamp | null;
+  status: Generated<string>;
+  title: string;
+  updated_at: Generated<Timestamp>;
+  version: Generated<number>;
+}
+
 export interface GuardDevices {
   app_version: string | null;
   created_at: Generated<Timestamp>;
@@ -782,6 +806,7 @@ export interface DB {
   checkpoints: Checkpoints;
   dashboard_sessions: DashboardSessions;
   device_status_events: DeviceStatusEvents;
+  export_jobs: ExportJobs;
   guard_devices: GuardDevices;
   guards: Guards;
   incident_attachments: IncidentAttachments;

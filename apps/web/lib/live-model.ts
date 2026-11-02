@@ -3,7 +3,8 @@
 // from server time every second. A guard therefore turns DELAYED and OFFLINE on time even when
 // nothing arrives, and a last-known position is never shown as live (ADV-U01, INV-09). SOS events
 // carry their alert, which drives the alarm (PROD §11.6); incident events keep the home page's count
-// of open incidents current (PROD §14.2).
+// of open incidents current (PROD §14.2). Export events leave the picture as it is: the Exports page
+// follows them itself (PROD §15.2).
 import type {
   Alert,
   Coverage,
@@ -164,6 +165,9 @@ export function applyEvent(model: LiveModel, event: Envelope): Applied {
     }
     case 'coverage.updated':
       return { model: { ...model, coverage: event.data.coverage, lastEventId }, reload: false };
+    // An export changed (Phase 9): the Exports page reloads its own list; the picture only moves on.
+    case 'export.updated':
+      return { model: { ...model, lastEventId }, reload: false };
     case 'resync':
       return { model: { ...model, lastEventId }, reload: 'now' };
   }

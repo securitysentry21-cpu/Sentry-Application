@@ -36,6 +36,11 @@ const controls: Control[] = [
     run: vitest('db', 'test/schema-lint.test.ts', 'append-only-update-granted'),
   },
   {
+    name: 'retention_worker allowed to update more than positions → the schema linter (ADV-X01) must fail',
+    expect: /× .*ADV-X01/,
+    run: vitest('db', 'test/schema-lint.test.ts', 'retention-update-widened'),
+  },
+  {
     name: 'route mounted without a policy → the route meta-test (ADV-A09) must fail',
     expect: /× .*ADV-A09/,
     run: vitest('api', 'test/route-registry.test.ts', 'route-without-policy'),

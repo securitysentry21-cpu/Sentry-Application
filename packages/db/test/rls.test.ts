@@ -277,6 +277,12 @@ beforeAll(async () => {
          values ($1, $2, 'ALERT', $3, 'WEB_PUSH', $4, $5, $6, 3, now(), 'SOS', 'SOS — Guard — Gate')`,
         [randomUUID(), org, alert, member, subscription, `${alert}:${member}:WEB_PUSH:0`],
       );
+      // Phase 9.
+      await m.query(
+        `insert into export_jobs (id, organization_id, requested_by, kind, params, title, contains_location, created_at)
+         values ($1, $2, $3, 'ATTENDANCE', '{}', 'Attendance', false, now())`,
+        [randomUUID(), org, user],
+      );
     }
   });
   runtime = new pg.Pool({ connectionString: db.urls.app_runtime, max: 2 });

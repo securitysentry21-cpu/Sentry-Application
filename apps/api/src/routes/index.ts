@@ -11,6 +11,7 @@ import { meRoutes } from './me.ts';
 import { memberRoutes } from './members.ts';
 import { mobileRoutes } from './mobile.ts';
 import { notificationRoutes } from './notifications.ts';
+import { exportRoutes } from './exports.ts';
 import { objectRoutes } from './objects.ts';
 import { patrolRoutes } from './patrols.ts';
 import type { RouteDefinition } from './registry.ts';
@@ -40,6 +41,7 @@ export const ROUTES: readonly RouteDefinition[] = [
   ...liveRoutes,
   ...alertRoutes,
   ...reportRoutes,
+  ...exportRoutes,
   ...incidentRoutes,
   ...sosRoutes,
   ...notificationRoutes,

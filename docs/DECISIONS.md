@@ -104,6 +104,62 @@ Made as a co-founder would make them, while the owner was away. Each is reversib
 - **No SMS aggregator yet.** Guard enrollment codes are shown in the dashboard, as a code and a QR code, for the supervisor to hand to the guard in person. SMS goes behind an `SmsProvider` interface and switches on when EXT-10 is done. Member invitations work the same way: the dashboard shows the invitation link to send by hand until an email provider is chosen.
 - **Device key (ARCH §5.3).** The P-256 key pair is generated on the phone and the private key is kept in the secure store (Keychain or Android Keystore-encrypted storage). It is not yet generated inside the Secure Enclave or Keystore hardware, which needs a native module; revisit with Phase 0B.
 
+## Phase 9 · reports, exports and retention · owner decisions 2026-11-02
+
+The owner approved Phase 9 ("commit and push phase 8 and then proceed to phase 9"). Three gaps touching retention, privacy and access to exports, asked under the STOP rule and answered the same day:
+
+- **What "operational records" are, and when their 12 months start** (PROD Appendix B, `retention.operational_months`). As recommended:
+  - everything that isn't location (90 days), device status (30 days) or audit (24 months) is an operational record: shifts with their events, patrol rounds and scans, alerts with their events, incidents with their notes and photos, SOS with its presses, notification records, export records and drills;
+  - each is deleted 12 months after it closed: the shift ended; the alert, incident or SOS was resolved or dismissed; the round closed. Nothing is deleted while it is still open;
+  - guard, site, checkpoint, route and member profiles aren't records. They stay until someone removes them.
+- **Positions stored on records.** As recommended:
+  - after the location period (`retention.location_days`, 90 days) the position is removed from a shift's start and end, from a checkpoint scan and from the live state. The record keeps its times, distances and results for its 12 months;
+  - positions on incidents, SOS and their photos are evidence and stay as long as the incident or SOS (SEC §16.5).
+- **Who may download a finished export:** anyone allowed to export, that is any Supervisor, Administrator or Owner of the organization. This was not the recommendation (the recommendation was the requester only). SEC still applies to each kind of export at download:
+  - a guard's data export stays with Owners and Administrators (SEC §16.6);
+  - an export containing location needs location-history access, and the reason when the organization requires one (SEC §16.4);
+  - every download is audited (`EXPORT_DOWNLOADED`).
+
+**Agent-decided while building Phase 9 (2026-11-02).** These fill gaps the spec left, each with the simplest option that keeps its rules. Review and veto in the diff.
+
+- **Every export runs in the background,** not only "large ones and any with location" (PROD §15.2). One path is simpler, keeps "one at a time per person", and every file gets the same 15-minute link and 7-day life. The attendance CSV built in the request is gone.
+- **Exports holding location** (the location report, a location history, a guard's data):
+  - they need location-history access as well as the export permission;
+  - a request writes `LOCATION_HISTORY_EXPORTED` with the reason, besides `EXPORT_REQUESTED`;
+  - a download asks for the reason again when the organization requires one, since under owner decision 3 the person downloading may not be the one who asked.
+- **A guard's data** (SEC §16.6):
+  - a ZIP of four CSV files: profile, shifts, location, and the incidents they reported;
+  - it holds everything still kept, so the 92-day limit doesn't apply;
+  - a new permission, `exports.guard_data`, gives it to Owners and Administrators.
+- **The location report:**
+  - it needs location-history access and the reports permission, writes `LOCATION_REPORT_VIEWED` first, asks for the D-21 reason, and holds no coordinates;
+  - "unknown" time is any stretch longer than `freshness.location_stale_after_s` with no fix;
+  - excursions follow the live geofence rules. One is "detected late" when the fix that confirmed it arrived more than 5 minutes after it was taken;
+  - distance is measured between usable fixes;
+  - the page shows at most 200 shifts and an export 5,000. Beyond that the report says it was cut short;
+  - a shift whose track was deleted under retention is labelled so, not shown as "unknown".
+- **The other reports:**
+  - incidents leave drills out unless asked for. Times to acknowledge and resolve count from receipt;
+  - site activity has one row per site and local date, in the site's own zone. A start counts as late after `shift.late_alert_after_minutes`, and cancelled shifts aren't counted;
+  - patrols count "missed" only for closed rounds. Their flags are OUT_OF_ORDER, SENT_LATE (a scan that arrived more than 5 minutes after it was made) and SUSPICIOUS.
+- **Retention, in detail:**
+  - each record's 12 months start when it closed: an alert when resolved or dismissed, an incident or SOS when resolved, a round when it closed, a shift when it ended, a drill when it ended;
+  - export records go 12 months after they were made; their files go after 7 days;
+  - quarantined sync items go after 30 days, never later than location;
+  - the evidence window runs from an incident's occurred time to its reported time, ±30 minutes. For an SOS it runs from the press to the resolution, ±30 minutes, plus the SOS's own trail;
+  - anything still referenced by a kept record stays: an open alert keeps its shift. Photos leave the store before their rows;
+  - the run is due from 03:00 local once a day. A run that failed half-way is due again, and the last complete run is its `RETENTION_RUN` row;
+  - a new settings rule: `retention.location_days` ≤ 30 × `retention.operational_months`, so location never outlives its shift;
+  - in production the worker refuses to start without its retention connection.
+- **Exports, in detail:**
+  - an export left running for 30 minutes by a stopped worker is tried again, 3 times at most, then FAILED;
+  - the list shows the newest 200;
+  - a download link is http(s) only and served as an attachment.
+- **Dashboard** (built by a helper agent from a written brief; reviewed):
+  - the Location tab loads only on "Show report";
+  - the reason never goes into the address;
+  - "Your export is ready" shows on the Exports page.
+
 ## Phase 8 · incidents and SOS · owner decisions 2026-11-02
 
 The owner approved Phase 8 ("Go for phase 8. The two decisions we will go with your recommendations."):
@@ -383,6 +439,7 @@ The first cell, in Terraform (`infra/`), following ARCH §19.8. The choices the 
 | — | Phase 7 choices (scans through sync, verification order, run windows and changes, closing grace, late scans) | Agent-decided 2026-11-02; veto in the diff |
 | Q-22 | A replaced checkpoint label says "Old QR code — report to supervisor" | APPROVED 2026-11-02 (owner) |
 | — | Phase 8 gaps: members' SOS numbers, incident location, drill participants, a second SOS press | APPROVED 2026-11-02 (owner) |
+| — | Phase 9 gaps: operational records, positions on records, who downloads exports | APPROVED 2026-11-02 (owner) |
 
 ---
 

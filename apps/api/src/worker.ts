@@ -1,9 +1,11 @@
 // The background worker (ARCH §16): shift detectors, alert detectors and the patrol-run closer every
 // minute (the geofence evaluator runs with each sync batch); the outbox dispatcher every half
 // second; SOS escalation every 15 seconds; the notification sender every second; the photo checker
-// every few seconds. Runs as two connections — system_worker for the cross-organization sweeps,
-// app_runtime for every change — and refuses any other role (D-33). Operator alarms (ARCH §18.4) are
-// log lines with a fixed `msg`, matched by CloudWatch metric filters (infra/terraform).
+// every few seconds; exports every few seconds; retention daily at 03:00 each organization's time.
+// Runs as three connections — system_worker for the cross-organization sweeps, retention_worker for
+// retention (SEC §16.5), app_runtime for every other change — and refuses any other role (D-33).
+// Operator alarms (ARCH §18.4) are log lines with a fixed `msg`, matched by CloudWatch metric
+// filters (infra/terraform).
 import { createKysely, createPool, verifyRuntimeRole } from '@sentryops/db';
 import { z } from 'zod';
 
@@ -19,6 +21,7 @@ import {
   staleSosOrganizations,
 } from './workers/notifications.ts';
 import { runDispatcher, sweepStaleStreams } from './workers/outbox.ts';
+import { runExportWork, runRetentionSweep } from './workers/retention.ts';
 
 const env = z.object({
   SWEEP_DATABASE_URL: z.string().min(1),
@@ -33,15 +36,28 @@ const env = z.object({
   CANARY_BASE_URL: z.url().optional(),
   CANARY_DEVICE_ID: z.uuid().optional(),
   CANARY_DEVICE_KEY: z.string().min(100).optional(),
+  /** retention_worker's connection (SEC §16.5). Without it nothing is deleted: required in production. */
+  RETENTION_DATABASE_URL: z.string().min(1).optional(),
+  EXPORT_INTERVAL_S: z.coerce.number().int().min(1).default(5),
+  RETENTION_CHECK_INTERVAL_S: z.coerce.number().int().min(60).default(600),
 });
 const config = loadConfig(process.env);
 const extra = env.parse(process.env);
+if (config.NODE_ENV === 'production' && !extra.RETENTION_DATABASE_URL) {
+  console.error(JSON.stringify({ msg: 'RETENTION_DATABASE_URL is required in production (SEC §16.5)' }));
+  process.exit(2);
+}
 
 const runtime = createPool(config.DATABASE_URL, { applicationName: 'sentryops-worker', max: 4 });
 const sweepPool = createPool(extra.SWEEP_DATABASE_URL, { applicationName: 'sentryops-worker-sweep', max: 2 });
+const retentionPool = extra.RETENTION_DATABASE_URL
+  ? createPool(extra.RETENTION_DATABASE_URL, { applicationName: 'sentryops-worker-retention', max: 1 })
+  : null;
 await verifyRuntimeRole(runtime, ['app_runtime']);
 await verifyRuntimeRole(sweepPool, ['system_worker']);
+if (retentionPool) await verifyRuntimeRole(retentionPool, ['retention_worker']);
 const deps = { ...createDeps(config, runtime, { oidc: null }), sweep: createKysely(sweepPool) };
+const retentionDb = retentionPool ? createKysely(retentionPool) : null;
 
 const failed = (msg: string, error: unknown) =>
   console.error(JSON.stringify({ msg, error: error instanceof Error ? error.message : 'unknown' }));
@@ -114,10 +130,36 @@ async function dispatch(): Promise<void> {
   if (!stopping) setTimeout(() => void dispatch(), extra.DISPATCH_INTERVAL_MS);
 }
 
+async function exportWork(): Promise<void> {
+  try {
+    const result = await runExportWork(deps);
+    if (result.built + result.expired + result.retried > 0)
+      console.log(JSON.stringify({ msg: 'exports', ...result }));
+  } catch (error) {
+    failed('export runner failed', error);
+  }
+  if (!stopping) setTimeout(() => void exportWork(), extra.EXPORT_INTERVAL_S * 1000);
+}
+
+async function retention(): Promise<void> {
+  if (!retentionDb) {
+    console.error(JSON.stringify({ msg: 'retention disabled: no RETENTION_DATABASE_URL' }));
+    return;
+  }
+  try {
+    for (const [organizationId, counts] of await runRetentionSweep({ ...deps, retention: retentionDb })) {
+      console.log(JSON.stringify({ msg: 'retention run', organizationId, ...counts }));
+    }
+  } catch (error) {
+    failed('retention run failed', error);
+  }
+  if (!stopping) setTimeout(() => void retention(), extra.RETENTION_CHECK_INTERVAL_S * 1000);
+}
+
 for (const signal of ['SIGINT', 'SIGTERM'] as const) {
   process.once(signal, () => {
     stopping = true;
-    void Promise.all([runtime.end(), sweepPool.end()]).finally(() => process.exit(0));
+    void Promise.all([runtime.end(), sweepPool.end(), retentionPool?.end()]).finally(() => process.exit(0));
   });
 }
 const canary =
@@ -151,3 +193,5 @@ void canaryRun();
 void escalate();
 void send();
 void processPhotos();
+void exportWork();
+void retention();

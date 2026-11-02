@@ -5,13 +5,19 @@ import { join, relative } from 'node:path';
 
 import type {
   Alert,
+  AttendanceRow,
   Checkpoint,
   CheckpointVisit,
+  ExportJob,
   IncidentDetail,
+  IncidentReportRow,
   LiveGuard,
+  LocationReportRow,
+  PatrolReportRow,
   PatrolRoute,
   PatrolRun,
   Site,
+  SiteActivityRow,
   SosDetail,
 } from '@sentryops/contracts';
 import type { AnchorHTMLAttributes } from 'react';
@@ -20,12 +26,22 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { AlarmBar, AlarmView } from '../components/alarm';
 import { CheckpointEditor } from '../components/checkpoint-editor';
+import { ExportNotice, ExportsTable, GuardDataExport, ReasonDialog } from '../components/exports';
 import { GuardPanel } from '../components/guard-panel';
 import { PhotoTiles } from '../components/incident-photos';
 import { IncidentDescription, IncidentFacts, IncidentTable, IncidentTimeline } from '../components/incidents';
 import { RouteEditor, RouteTable } from '../components/patrol-routes';
 import { RunDetail, RunsTable, VisitsTable } from '../components/patrol-runs';
+import {
+  AttendanceTable,
+  IncidentReportTable,
+  LocationReportTable,
+  PatrolReportTable,
+  SiteActivityTable,
+} from '../components/reports';
 import { CancelNotice, DeliveriesTable, SosFacts, SosProgressList } from '../components/sos';
+import { Toast } from '../components/ui';
+import { readyMessage } from '../lib/exports';
 import { guardView } from '../lib/live-model';
 
 vi.mock('next/link', () => ({
@@ -495,6 +511,181 @@ describe('plain text only (SEC §8)', () => {
     expect(html).toContain('Sent, not confirmed');
     expect(html).toContain('not yet');
     expect(html).toContain('DRILL');
+  });
+
+  it('ADV-W01 script payloads in guard, site and route names and export titles render as text in the report tables, the exports list and the export dialogs', () => {
+    const id = (n: number) => `0190a0d2-7c5e-7000-8000-${String(n).padStart(12, '0')}`;
+    const at = '2026-11-02T16:00:00Z';
+    const later = '2026-11-02T18:30:00Z';
+    const guard = { id: id(1), displayName: PAYLOAD, employeeNumber: SCRIPT };
+    const site = { id: id(2), name: SCRIPT };
+    const attendance: AttendanceRow = {
+      shiftId: id(3),
+      guard,
+      site,
+      scheduledStart: at,
+      scheduledEnd: later,
+      actualStart: at,
+      actualEnd: null,
+      status: 'ACTIVE',
+      lateMinutes: 5,
+      earlyLeaveMinutes: null,
+      workedMinutes: 150,
+      // An unknown flag still renders as words, as text.
+      flags: ['MANUAL_START', '<b>NEW_FLAG</b>'],
+    };
+    const patrol: PatrolReportRow = {
+      runId: id(4),
+      shiftId: id(3),
+      guard,
+      site,
+      route: { id: id(5), name: PAYLOAD },
+      sequenceNo: 2,
+      dueAt: at,
+      windowEndsAt: later,
+      status: 'INCOMPLETE',
+      required: 4,
+      verified: 2,
+      qrOnly: 1,
+      missed: 1,
+      completionPct: 75,
+      flags: ['SENT_LATE', '<b>X</b>'],
+    };
+    const incident: IncidentReportRow = {
+      incidentId: id(6),
+      referenceNumber: 'INC-000123',
+      type: 'THEFT',
+      severity: 'HIGH',
+      site,
+      guard,
+      occurredAt: at,
+      reportedAt: later,
+      status: 'RESOLVED',
+      secondsToAcknowledge: 95,
+      secondsToResolve: 7500,
+      isDrill: true,
+    };
+    const location: LocationReportRow = {
+      shiftId: id(3),
+      guard,
+      site,
+      scheduledStart: at,
+      scheduledEnd: later,
+      firstFixAt: at,
+      lastFixAt: later,
+      insideSeconds: 7200,
+      outsideSeconds: 1500,
+      unknownSeconds: 300,
+      excursions: [{ from: at, to: '2026-11-02T16:25:00Z', seconds: 1500, detectedLate: true }],
+      longestGapSeconds: 300,
+      distanceM: 4321,
+      points: 840,
+      trackDeleted: false,
+    };
+    const activity: SiteActivityRow = {
+      site,
+      date: '2026-11-02',
+      shiftsScheduled: 3,
+      shiftsCovered: 2,
+      shiftsMissed: 1,
+      lateStarts: 1,
+      workedMinutes: 600,
+      patrolRequired: 8,
+      patrolCounted: 6,
+      patrolCompletionPct: 75,
+      incidents: 2,
+      incidentsHighOrCritical: 1,
+    };
+    const ready: ExportJob = {
+      id: id(8),
+      kind: 'LOCATION_REPORT',
+      status: 'READY',
+      title: `Location · ${SCRIPT} · ${PAYLOAD}`,
+      requestedBy: { id: id(9), name: SCRIPT },
+      containsLocation: true,
+      rowCount: 12,
+      sizeBytes: 2048,
+      fileName: 'location.csv',
+      createdAt: at,
+      finishedAt: later,
+      expiresAt: '2026-11-09T18:30:00Z',
+      errorCode: null,
+    };
+    const failed: ExportJob = {
+      ...ready,
+      id: id(10),
+      status: 'FAILED',
+      errorCode: '<b>E</b>',
+      requestedBy: { id: id(11), name: PAYLOAD },
+    };
+    const html = renderToStaticMarkup(
+      <>
+        <AttendanceTable rows={[attendance]} timeZone="Asia/Karachi" />
+        <PatrolReportTable rows={[patrol]} timeZone="Asia/Karachi" />
+        <IncidentReportTable
+          rows={[incident, { ...incident, incidentId: id(12), guard: null, site: null }]}
+          timeZone="Asia/Karachi"
+          linkIncidents
+        />
+        <LocationReportTable
+          rows={[location, { ...location, shiftId: id(7), trackDeleted: true }]}
+          timeZone="Asia/Karachi"
+        />
+        <SiteActivityTable rows={[activity]} />
+        <ExportsTable
+          exports={[ready, failed]}
+          timeZone="Asia/Karachi"
+          mine={[id(9)]}
+          busyId={null}
+          onDownload={() => undefined}
+        />
+        <ExportNotice
+          status={{ state: 'failed', code: 'VALIDATION_FAILED', text: SCRIPT, reasonRequired: false }}
+        />
+        <GuardDataExport guard={{ id: id(1), displayName: PAYLOAD }} onClose={() => undefined} />
+        <ReasonDialog
+          title={SCRIPT}
+          confirmLabel="Download"
+          busy={false}
+          reasonRequired
+          reasonMessage={PAYLOAD}
+          placeholder="For example: monthly report for the client"
+          onConfirm={() => undefined}
+          onClose={() => undefined}
+        >
+          <p className="prewrap">{ready.title}</p>
+        </ReasonDialog>
+        <Toast onClose={() => undefined}>{readyMessage([ready])}</Toast>
+      </>,
+    );
+    expect(html).not.toContain('<img');
+    expect(html).not.toContain('<script');
+    expect(html).not.toContain('<b>');
+    expect(html).toContain('&lt;img src=x onerror=alert(1)&gt;');
+    expect(html).toContain('&lt;script&gt;alert(1)&lt;/script&gt;');
+    // The words around them: durations, completion, distance, flags, statuses and sizes.
+    expect(html).toContain('2 h 30 min');
+    expect(html).toContain('not ended');
+    expect(html).toContain('manual start · &lt;b&gt;new flag&lt;/b&gt;');
+    expect(html).toContain('sent late');
+    expect(html).toContain('75%');
+    expect(html).toContain('2 h 05 min');
+    expect(html).toContain('From the dashboard');
+    expect(html).toContain('DRILL');
+    expect(html).toContain('4.3 km');
+    expect(html).toContain('1 · longest 25 min');
+    expect(html).toContain('21:00–21:25 · 25 min · detected late');
+    expect(html).toContain('Track deleted (retention)');
+    expect(html).toContain('2 of 3');
+    expect(html).toContain('6 of 8 checkpoints');
+    expect(html).toContain('Ready');
+    expect(html).toContain('12 rows · 2.0 KB');
+    expect(html).toContain('contains location');
+    expect(html).toContain('(you)');
+    expect(html).toContain('Failed');
+    expect(html).toContain('Reason (required by your organization)');
+    expect(html).toContain('Reason (optional)');
+    expect(html).toContain('Your export is ready: Location · ');
   });
 
   it('ADV-W01 the dashboard has no HTML sink: no innerHTML, map popup HTML or dangerouslySetInnerHTML', () => {

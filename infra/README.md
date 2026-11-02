@@ -103,6 +103,16 @@ Two parts wait for the owner:
      canary_device_key = <<EOT … EOT
      ```
 
+## Exports and retention (Phase 9)
+
+Phase 9 adds three things to the Terraform. **Apply them before releasing a Phase 9 commit:** the worker refuses to start in AWS without its retention connection.
+
+- **The worker connects as `retention_worker` too** (`RETENTION_DATABASE_URL` in its secret). Only that role deletes (SEC §16.5), one organization at a time, at 03:00 in each organization's time zone.
+- **The worker may delete objects.** That covers photos, with their incident once its 12 months are over, and export files after 7 days. The API can't delete anything.
+- **Export files live under `exports/`** in the same private bucket. An expiry rule removes any that are 8 days old as a backstop.
+
+These add no measurable cost.
+
 ## Before the first real guard
 
 1. Buy the domain (outside AWS while on the Free plan; about $10–15 a year).

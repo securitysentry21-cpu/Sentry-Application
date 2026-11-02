@@ -316,5 +316,8 @@ function toEvent(
       const incidentId = String(r.payload.incidentId ?? '');
       return { type: r.type, occurredAt, data: { incidentId, incident: incidents.get(incidentId) ?? null } };
     }
+    case 'export.updated':
+      // Only the ID: the list (GET /exports) decides what each person may see of it.
+      return { type: r.type, occurredAt, data: { exportId: String(r.payload.exportId ?? '') } };
   }
 }

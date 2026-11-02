@@ -38,6 +38,8 @@ describe('schema linter (ADV-X01)', () => {
       await m.query('create table loose_child (id uuid primary key, organization_id uuid)');
       // Roles are shared by every test database, so only grants are broken here, never role flags.
       await m.query('grant delete on fixture_events to system_worker');
+      // retention_worker clears position columns only; anything else is a violation.
+      await m.query('grant update (organization_id) on fixture_events to retention_worker');
     } finally {
       await m.end();
     }
@@ -70,6 +72,7 @@ describe('schema linter (ADV-X01)', () => {
       /bad_child: foreign key .* to fixture_sites must include organization_id/,
       /fixture_events: app_runtime has UPDATE on an append-only table/,
       /fixture_events: system_worker has DELETE on an append-only table/,
+      /fixture_events: retention_worker may update only the position columns it clears, not organization_id/,
       /registry lists ghost, but the table does not exist/,
     ];
     for (const pattern of expected)

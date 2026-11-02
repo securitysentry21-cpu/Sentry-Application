@@ -29,10 +29,15 @@ export interface ObjectStore {
   /** The object's bytes, or null when it doesn't exist; refuses objects larger than maxBytes. */
   read(key: string, maxBytes: number): Promise<Buffer | null>;
   write(key: string, body: Buffer, contentType: string): Promise<void>;
+  /** Removes the object (retention, expired exports); an object that isn't there is fine. */
+  delete(key: string): Promise<void>;
 }
 
 /** The conditional write that keeps an uploaded original from being replaced (S3: 412 if it exists). */
 export const NO_OVERWRITE = { 'if-none-match': '*' } as const;
+
+/** Export files are larger than photos (PROD §15.2): the development store serves them up to this. */
+export const MAX_EXPORT_BYTES = 200 * 1024 * 1024;
 
 /** SEC §12: upload links live at most 15 minutes, download links at most 5. */
 export const UPLOAD_LINK_TTL_S = 15 * 60;

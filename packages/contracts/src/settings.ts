@@ -241,6 +241,11 @@ export const SETTING_RULES: readonly Rule[] = [
     message: 'alerts.device_offline_after_s must be ≥ freshness.offline_after_s',
     holds: (v) => v['alerts.device_offline_after_s'] >= v['freshness.offline_after_s'],
   },
+  {
+    // A shift is an operational record: its location must not outlive it (SEC §16.5).
+    message: 'retention.location_days must be ≤ 30 × retention.operational_months',
+    holds: (v) => v['retention.location_days'] <= 30 * v['retention.operational_months'],
+  },
 ];
 
 const shape = Object.fromEntries(Object.entries(SETTINGS).map(([key, def]) => [key, def.schema])) as Record<

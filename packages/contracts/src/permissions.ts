@@ -39,6 +39,7 @@ export const PERMISSIONS = {
   'incidents.notes': 'Add notes to incidents',
   'incidents.notes.own': 'Add notes to own incidents',
   'incidents.attachments.original': 'Download original incident photos (audited; PROD §10.3)',
+  'exports.guard_data': "Export one guard's data, location included (audited; SEC §16.6)",
   'alerts.read': 'View alerts',
   'alerts.acknowledge': 'Acknowledge alerts',
   'alerts.resolve': 'Resolve and dismiss alerts',
@@ -110,6 +111,7 @@ const ADMIN: readonly Permission[] = [
   'checkpoints.qr.print',
   'patrols.write',
   'incidents.attachments.original',
+  'exports.guard_data',
   'sos.drill',
 ];
 

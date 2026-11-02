@@ -38,6 +38,7 @@ const B = {
   incident: randomUUID(),
   attachment: randomUUID(),
   drill: randomUUID(),
+  export: randomUUID(),
   subscription: randomUUID(),
 };
 
@@ -92,6 +93,12 @@ async function seedBResources(): Promise<void> {
     `insert into sos_drills (id, organization_id, started_by_user_id, started_at, ends_at)
      values ($1, $2, $3, now(), now() + interval '1 hour')`,
     [B.drill, orgB.id, bAdmin?.userId],
+  );
+  await seedB(
+    `insert into export_jobs (id, organization_id, requested_by, kind, params, title, contains_location, status,
+       object_key, file_name, expires_at, created_at)
+     values ($1, $2, $3, 'ATTENDANCE', '{}', 'Attendance', false, 'READY', $4, 'b.csv', now() + interval '7 days', now())`,
+    [B.export, orgB.id, bAdmin?.userId, `exports/${orgB.id}/${B.export}.csv`],
   );
   await seedB(
     `insert into sos_events (id, organization_id, guard_id, device_id, client_event_id, activated_at_recorded,
@@ -208,6 +215,8 @@ const CROSS_TENANT_RESOURCES: Record<string, Probe> = {
   'POST /api/v1/sos/:id/acknowledge': { id: fixed(() => B.sos) },
   'POST /api/v1/sos/:id/resolve': { id: fixed(() => B.sos), body: { resolution: 'OTHER', note: 'x' } },
   'GET /api/v1/sos-drills/:id': { id: fixed(() => B.drill) },
+  'GET /api/v1/exports/:id': { id: fixed(() => B.export) },
+  'POST /api/v1/exports/:id/download': { id: fixed(() => B.export), body: {} },
   'POST /api/v1/sos-drills/:id/end': { id: fixed(() => B.drill) },
   'DELETE /api/v1/push-subscriptions/:id': { id: fixed(() => B.subscription) },
   'POST /api/v1/alerts/:id/seen': { id: fixed(() => B.alert), body: { client: 'DESKTOP' } },
@@ -324,6 +333,15 @@ describe('cross-tenant resources (SEC §4.2 rule 4)', () => {
         query,
       ).not.toContain(B.run);
     }
+    // Exports: another organization's are never listed.
+    const exports = await call(t.app, {
+      method: 'GET',
+      url: '/api/v1/exports',
+      cookie: ownerA,
+      org: orgA.id,
+    });
+    expect(exports.statusCode).toBe(200);
+    expect(exports.json<{ exports: { id: string }[] }>().exports.map((e) => e.id)).not.toContain(B.export);
   });
 
   it("ADV-T01 another organization's shift is not found when its scans are asked for", async () => {

@@ -41,6 +41,9 @@ export const ERROR_CODES = {
   ATTACHMENT_TYPE_NOT_ALLOWED: { http: 415, meaning: 'content does not match an allowed type' },
   ATTACHMENT_LIMIT_REACHED: { http: 409, meaning: 'the incident already has 5 photos' },
   EXPORT_RANGE_TOO_LARGE: { http: 422, meaning: 'export range > 92 days' },
+  EXPORT_ALREADY_RUNNING: { http: 409, meaning: 'one export at a time per person; wait for the running one' },
+  EXPORT_NOT_READY: { http: 409, meaning: 'the export has not finished, or failed' },
+  EXPORT_EXPIRED: { http: 410, meaning: 'the export file was deleted after 7 days' },
   APP_VERSION_UNSUPPORTED: {
     http: 426,
     meaning: 'below minimum (not returned for SOS or queued uploads unless revoked)',

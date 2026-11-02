@@ -40,6 +40,7 @@ The role → permission map that implements PROD §3.2. Code checks these string
 | `incidents.notes` | ✔ | ✔ | ✔ | ✔ | – | Add notes to incidents |
 | `incidents.notes.own` | – | – | – | – | ✔ | Add notes to own incidents |
 | `incidents.attachments.original` | ✔ | ✔ | – | – | – | Download original incident photos (audited; PROD §10.3) |
+| `exports.guard_data` | ✔ | ✔ | – | – | – | Export one guard's data, location included (audited; SEC §16.6) |
 | `alerts.read` | ✔ | ✔ | ✔ | ✔ | – | View alerts |
 | `alerts.acknowledge` | ✔ | ✔ | ✔ | ✔ | – | Acknowledge alerts |
 | `alerts.resolve` | ✔ | ✔ | ✔ | – | – | Resolve and dismiss alerts |

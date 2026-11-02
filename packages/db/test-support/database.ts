@@ -80,6 +80,9 @@ async function applyNegativeControl(migrator: pg.Client): Promise<void> {
     case 'append-only-update-granted':
       await migrator.query('grant update on fixture_events to app_runtime');
       break;
+    case 'retention-update-widened':
+      await migrator.query('grant update (organization_id) on fixture_events to retention_worker');
+      break;
     default:
       break;
   }

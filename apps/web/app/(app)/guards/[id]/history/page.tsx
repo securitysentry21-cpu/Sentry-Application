@@ -4,16 +4,21 @@
 // recorded in the audit log, with the reason given, before any point is returned (INV-14). The
 // reason field is always here; the organization may make it mandatory (D-21). The server thins the
 // track to at most 2,000 points; gaps longer than 5 minutes are drawn as breaks, never as lines
-// that imply travel. A slider plays the shift back.
+// that imply travel. A slider plays the shift back. "Export CSV" asks for the same shift, or the
+// whole days of the time range, as a background export with the same reason (PROD §15.2); asking
+// for it is audited too.
 import type { LocationHistory, Shift } from '@sentryops/contracts';
 import Link from 'next/link';
 import { useParams, useSearchParams } from 'next/navigation';
 import { Suspense, useEffect, useMemo, useState, type FormEvent } from 'react';
 
+import { ExportNotice, useStartExport } from '../../../../../components/exports';
 import { BoundaryMap, type MapShape, type MapTrack } from '../../../../../components/map';
 import { PageHead } from '../../../../../components/shell';
 import { api, ApiError, errorText } from '../../../../../lib/api';
+import { canExport, historyExport, type HistoryScope } from '../../../../../lib/exports';
 import { formatDateTime, siteTime } from '../../../../../lib/format';
+import { periodText } from '../../../../../lib/reports';
 import { useSession } from '../../../../../lib/session';
 
 const DAY = 86_400_000;
@@ -60,6 +65,8 @@ function History() {
   const [error, setError] = useState<string | null>(null);
   const [reasonRequired, setReasonRequired] = useState(false);
   const [cursor, setCursor] = useState(0);
+  const exporting = useStartExport();
+  const canExportHistory = canExport('LOCATION_HISTORY', can);
 
   useEffect(() => {
     if (!can('shifts.read')) {
@@ -106,6 +113,18 @@ function History() {
     } finally {
       setBusy(false);
     }
+  };
+
+  // What the form describes, for an export: the shift, or the time range read as local dates.
+  const scope: HistoryScope =
+    mode === 'shift' ? { shiftId } : { fromMs: Date.parse(from), toMs: Date.parse(to) };
+  const planned = historyExport(id, scope, reason, membership.organizationTimezone);
+
+  const exportCsv = async () => {
+    setError(null);
+    if ('problem' in planned) return setError(planned.problem);
+    const result = await exporting.start(planned.request);
+    if (result.state === 'failed' && result.reasonRequired) setReasonRequired(true);
   };
 
   const track = useMemo<MapTrack | null>(() => {
@@ -201,7 +220,27 @@ function History() {
           <button className="btn primary" disabled={busy}>
             {busy ? 'Loading…' : 'Show history'}
           </button>
+          {canExportHistory ? (
+            <button
+              type="button"
+              className="btn"
+              disabled={exporting.status.state === 'busy'}
+              onClick={() => void exportCsv()}
+            >
+              {exporting.status.state === 'busy' ? 'Starting…' : 'Export CSV'}
+            </button>
+          ) : null}
         </div>
+        {canExportHistory && 'days' in planned && planned.days ? (
+          <p className="faint">
+            An export takes whole days: every shift of this guard{' '}
+            {planned.days.from === planned.days.to
+              ? `on ${periodText(planned.days.from, planned.days.to)}`
+              : `from ${periodText(planned.days.from, planned.days.to)}`}{' '}
+            ({membership.organizationTimezone}).
+          </p>
+        ) : null}
+        <ExportNotice status={exporting.status} />
       </form>
       {history ? (
         <>

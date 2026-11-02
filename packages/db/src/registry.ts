@@ -13,7 +13,15 @@ export type TableKind =
   /** Bookkeeping with no tenant data. Needs a recorded reason; runtime roles get no write access. */
   | 'internal';
 
-export type TableEntry = { readonly kind: TableKind; readonly reason?: string };
+export type TableEntry = {
+  readonly kind: TableKind;
+  readonly reason?: string;
+  /**
+   * The position columns retention_worker may clear after the location period (owner decision
+   * 2026-11-02); it may update nothing else, anywhere (ADV-X01).
+   */
+  readonly retentionClears?: readonly string[];
+};
 export type TableRegistry = Readonly<Record<string, TableEntry>>;
 
 const TENANT_KINDS: ReadonlySet<TableKind> = new Set(['tenant-root', 'tenant', 'tenant-append-only']);
@@ -64,13 +72,16 @@ export const TABLES: TableRegistry = {
   checkpoints: { kind: 'tenant' },
 
   // Phase 3: shifts.
-  shifts: { kind: 'tenant' },
+  shifts: {
+    kind: 'tenant',
+    retentionClears: ['start_latitude', 'start_longitude', 'end_latitude', 'end_longitude'],
+  },
   shift_events: { kind: 'tenant-append-only' },
 
   // Phase 4: tracking.
   location_points: { kind: 'tenant-append-only' },
   device_status_events: { kind: 'tenant-append-only' },
-  shift_live_state: { kind: 'tenant' },
+  shift_live_state: { kind: 'tenant', retentionClears: ['last_fix_latitude', 'last_fix_longitude'] },
   quarantined_items: { kind: 'tenant-append-only' },
 
   // Phase 5: alerts.
@@ -86,7 +97,7 @@ export const TABLES: TableRegistry = {
   patrol_routes: { kind: 'tenant' },
   patrol_route_checkpoints: { kind: 'tenant' },
   patrol_runs: { kind: 'tenant' },
-  checkpoint_visits: { kind: 'tenant-append-only' },
+  checkpoint_visits: { kind: 'tenant-append-only', retentionClears: ['latitude', 'longitude'] },
   checkpoint_retired_labels: { kind: 'tenant-append-only' },
 
   // Phase 8: incidents, SOS, notifications.
@@ -101,4 +112,7 @@ export const TABLES: TableRegistry = {
   sos_presses: { kind: 'tenant-append-only' },
   web_push_subscriptions: { kind: 'tenant' },
   notification_deliveries: { kind: 'tenant' },
+
+  // Phase 9: reports, exports and retention.
+  export_jobs: { kind: 'tenant' },
 };

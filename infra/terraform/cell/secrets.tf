@@ -16,7 +16,7 @@ locals {
   # Inside the image (infra/docker/Dockerfile): the RDS certificate authorities of every region.
   db_ca_path = "/repo/infra/certs/rds-global-bundle.pem"
   db_url = {
-    for role in ["app_runtime", "system_worker"] :
+    for role in ["app_runtime", "system_worker", "retention_worker"] :
     role => "postgres://${role}:${random_password.db[role].result}@${aws_db_instance.main.address}:${aws_db_instance.main.port}/sentryops?sslmode=verify-full&sslrootcert=${local.db_ca_path}"
   }
 }
@@ -59,6 +59,8 @@ resource "aws_secretsmanager_secret_version" "worker" {
     QR_TOKEN_SECRET                = random_password.qr_token_secret.result
     OIDC_CLIENT_SECRET             = aws_cognito_user_pool_client.dashboard.client_secret
     WEB_PUSH_VAPID_PRIVATE_KEY_PEM = tls_private_key.vapid.private_key_pem_pkcs8 # gitleaks:allow (a reference, not a key)
+    # The retention run deletes as retention_worker, and only it may (SEC §16.5).
+    RETENTION_DATABASE_URL = local.db_url.retention_worker
   }, local.worker_optional_secrets))
 }
 

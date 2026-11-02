@@ -116,6 +116,23 @@ export async function lintSchema(db: pg.ClientBase, registry: TableRegistry): Pr
       }
     }
 
+    // retention_worker may clear named position columns and nothing more (owner decision 2026-11-02).
+    if (isTenantKind(entry.kind)) {
+      const { rows: updatable } = await db.query<{ column: string }>(
+        `select column_name as column from information_schema.column_privileges
+          where table_schema = 'public' and table_name = $1 and grantee = 'retention_worker'
+            and privilege_type = 'UPDATE'`,
+        [t.name],
+      );
+      const allowed = new Set(entry.retentionClears ?? []);
+      const extra = updatable.map((r) => r.column).filter((c) => !allowed.has(c));
+      if (extra.length > 0) {
+        problems.push(
+          `${label}: retention_worker may update only the position columns it clears, not ${extra.sort().join(', ')}`,
+        );
+      }
+    }
+
     if (entry.kind === 'tenant-append-only') {
       for (const role of RUNTIME_ROLES) {
         for (const privilege of ['UPDATE', 'DELETE', 'TRUNCATE'] as const) {

@@ -2,7 +2,7 @@
 // behaves like S3's signed links: the API signs a token naming the key, the method, the expiry and,
 // for uploads, the exact type and length; /api/v1/local-objects/:token serves it (routes/objects.ts).
 import { createHmac, timingSafeEqual } from 'node:crypto';
-import { mkdir, readFile, rename, stat, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve, sep } from 'node:path';
 
 import type { Clock } from '@sentryops/domain';
@@ -126,6 +126,10 @@ export class LocalObjectStore implements ObjectStore {
     const temporary = `${path}.${process.pid}.${this.#clock.now().getTime()}.part`;
     await writeFile(temporary, body);
     await rename(temporary, path);
+  }
+
+  async delete(key: string): Promise<void> {
+    await rm(this.#path(key), { force: true });
   }
 
   /** Like S3's `if-none-match: *`: false, and nothing written, when the object is already there. */

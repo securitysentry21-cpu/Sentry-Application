@@ -76,6 +76,9 @@ describe('settings validation (PROD §8.3, Appendix B)', () => {
     'alerts.device_offline_after_s must be ≥ freshness.offline_after_s': {
       'alerts.device_offline_after_s': 200,
     },
+    'retention.location_days must be ≤ 30 × retention.operational_months': {
+      'retention.location_days': 400,
+    },
   };
 
   it('has a failing example for every cross-field rule', () => {

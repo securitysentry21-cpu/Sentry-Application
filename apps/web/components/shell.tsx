@@ -9,6 +9,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import type { ReactNode } from 'react';
 
+import { EXPORTS_PAGE_PERMISSIONS } from '../lib/exports';
 import { ROLE_LABELS } from '../lib/format';
 import { useLive } from '../lib/live';
 import { SignOutButton, useSession } from '../lib/session';
@@ -17,7 +18,13 @@ import { AlarmLayer } from './alarm';
 /** PROD §14.7: say so when live updates have been down for more than 10 s. */
 const DISCONNECTED_BANNER_MS = 10_000;
 
-type NavItem = { href: string; label: string; permission?: Permission };
+type NavItem = {
+  href: string;
+  label: string;
+  permission?: Permission;
+  /** Shown with any one of these. */
+  anyOf?: readonly Permission[];
+};
 
 const OPERATIONS: NavItem[] = [
   { href: '/dashboard', label: 'Overview' },
@@ -29,6 +36,7 @@ const OPERATIONS: NavItem[] = [
   { href: '/guards', label: 'Guards', permission: 'guards.read' },
   { href: '/sites', label: 'Sites', permission: 'sites.read' },
   { href: '/reports', label: 'Reports', permission: 'reports.read' },
+  { href: '/exports', label: 'Exports', anyOf: EXPORTS_PAGE_PERMISSIONS },
 ];
 
 const ADMINISTRATION: NavItem[] = [
@@ -56,6 +64,7 @@ const BUILT = new Set([
   '/live',
   '/alerts',
   '/reports',
+  '/exports',
   '/incidents',
   '/drills',
   '/settings/notifications',
@@ -65,7 +74,12 @@ export function AppShell({ children }: { children: ReactNode }) {
   const session = useSession();
   const pathname = usePathname();
   const visible = (items: NavItem[]) =>
-    items.filter((i) => BUILT.has(i.href) && (!i.permission || session.can(i.permission)));
+    items.filter(
+      (i) =>
+        BUILT.has(i.href) &&
+        (!i.permission || session.can(i.permission)) &&
+        (!i.anyOf || i.anyOf.some((p) => session.can(p))),
+    );
 
   const operations = visible(OPERATIONS);
   const admin = visible(ADMINISTRATION);

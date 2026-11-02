@@ -20,7 +20,8 @@ Things only you can do, in order. Tick an item by changing `[ ]` to `[x]`, or te
 - [ ] **Look at incidents and SOS in the demo** on a computer (`pnpm demo`, as for the map):
   - at 2 minutes, a report with a photo arrives on the Incidents page;
   - at 3 minutes, an SOS covers the screen. Click "Enable alarm sound", then acknowledge and resolve it on its SOS page.
-- [ ] **Say yes or no to Phase 8's additions on AWS:** photo storage, the push keys and alarm emails, under $0.10 a month. Until they are added, the test setup stays on Phase 7.
+- [ ] **Say yes or no to Phase 8 and 9's additions on AWS:** photo and export storage, the push keys, alarm emails and the retention connection, under $0.10 a month in all. Until they are added, the test setup stays on Phase 7.
+- [ ] **Look at reports and exports** on a computer (`pnpm demo` fills them): Reports → each tab, then "Export CSV", and the Exports page to download it.
 - [ ] **Create a free Firebase project** (console.firebase.google.com, the free Spark plan) for pushes to the guard app (D-26). I'll guide you through adding the app and its key.
 
 ## Start now: these take weeks of waiting on others

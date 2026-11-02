@@ -55,6 +55,8 @@ Current phase: 3. IDs due through this phase: ADV-X01, ADV-X02, ADV-X07, ADV-T01
 | ADV-O09 | apps/api/test/sync.test.ts<br>apps/mobile/test/sync-engine.test.ts |
 | ADV-P01 | apps/api/test/sync.test.ts |
 | ADV-P02 | apps/api/test/live.test.ts |
+| ADV-P03 | apps/api/test/retention.test.ts |
+| ADV-P04 | apps/api/test/retention.test.ts |
 | ADV-P05 | apps/api/test/incidents.test.ts<br>apps/api/test/sync.test.ts |
 | ADV-Q01 | apps/api/test/patrols.test.ts<br>packages/domain/test/patrols.test.ts |
 | ADV-Q02 | apps/api/test/patrols.test.ts<br>packages/domain/test/patrols.test.ts |
@@ -84,6 +86,7 @@ Current phase: 3. IDs due through this phase: ADV-X01, ADV-X02, ADV-X07, ADV-T01
 | ADV-SH06 | apps/api/test/shifts.test.ts<br>packages/domain/test/shifts.test.ts |
 | ADV-T01 | apps/api/test/tenancy.test.ts |
 | ADV-T02 | apps/api/test/realtime.test.ts |
+| ADV-T03 | apps/api/test/exports.test.ts<br>apps/api/test/reports.test.ts |
 | ADV-T04 | apps/api/test/patrols.test.ts<br>apps/api/test/sites.test.ts<br>packages/db/test/rls.test.ts |
 | ADV-T05 | apps/api/test/sites.test.ts |
 | ADV-T06 | packages/db/test/kysely.test.ts<br>packages/db/test/rls.test.ts |
@@ -92,12 +95,14 @@ Current phase: 3. IDs due through this phase: ADV-X01, ADV-X02, ADV-X07, ADV-T01
 | ADV-T09 | apps/api/test/tenancy.test.ts |
 | ADV-T10 | apps/api/test/attachments.test.ts |
 | ADV-TM01 | apps/api/test/shifts.test.ts<br>apps/mobile/test/i18n.test.ts<br>packages/domain/test/shifts.test.ts |
+| ADV-TM02 | apps/api/test/reports.test.ts<br>packages/domain/test/reports.test.ts |
 | ADV-TM03 | apps/api/test/shifts.test.ts |
 | ADV-U01 | apps/web/test/live-model.test.ts<br>packages/domain/test/tracking.test.ts |
 | ADV-U02 | apps/mobile/test/app-status.test.ts |
 | ADV-U03 | apps/mobile/test/app-status.test.ts<br>apps/mobile/test/presenter.test.ts |
 | ADV-U04 | packages/domain/test/tracking.test.ts |
 | ADV-W01 | apps/web/test/plain-text.test.tsx |
+| ADV-W02 | apps/api/test/exports.test.ts<br>packages/domain/test/reports.test.ts |
 | ADV-W03 | apps/api/test/csrf.test.ts |
 | ADV-X01 | packages/db/test/schema-lint.test.ts |
 | ADV-X02 | scripts/negative-controls.ts |

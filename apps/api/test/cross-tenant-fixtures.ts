@@ -161,10 +161,31 @@ export const CROSS_TENANT_FIXTURES: Readonly<Record<string, Coverage>> = {
     covered: 'test',
     test: "reports.test.ts: another organization's shifts never appear; its site is not found",
   },
-  'GET /api/v1/reports/attendance/export': {
+
+  // Phase 9
+  'GET /api/v1/reports/patrols': {
     covered: 'test',
-    test: "reports.test.ts: another organization's shifts never appear; its site is not found",
+    test: "reports.test.ts › ADV-T03 (every report: another organization's site or guard is not found)",
   },
+  'GET /api/v1/reports/incidents': {
+    covered: 'test',
+    test: "reports.test.ts › ADV-T03 (every report: another organization's site or guard is not found)",
+  },
+  'GET /api/v1/reports/locations': {
+    covered: 'test',
+    test: "reports.test.ts › ADV-T03 (every report: another organization's site or guard is not found)",
+  },
+  'GET /api/v1/reports/site-activity': {
+    covered: 'test',
+    test: "reports.test.ts › ADV-T03 (every report: another organization's site or guard is not found)",
+  },
+  'POST /api/v1/exports': {
+    covered: 'test',
+    test: "exports.test.ts › ADV-T03 (an export naming another organization's IDs is refused and holds none of its data)",
+  },
+  'GET /api/v1/exports': T01,
+  'GET /api/v1/exports/:id': T01,
+  'POST /api/v1/exports/:id/download': T01,
 
   // Phase 8
   'PUT /api/v1/members/:id/alert-phone': T01,

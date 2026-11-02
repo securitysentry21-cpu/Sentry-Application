@@ -1010,3 +1010,68 @@ fieldset.checks legend {
     font-size: 18px;
   }
 }
+
+/* ── Reports and exports (Phase 9) ─────────────────────────────────────────────────────────── */
+
+/* The report tabs: the current one has its own border and background, not only a colour. On a phone
+   they scroll sideways. */
+.tabs {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  padding-bottom: 2px;
+}
+
+.tabs a {
+  padding: 6px 12px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--fg-muted);
+  font-weight: 550;
+  white-space: nowrap;
+}
+
+.tabs a:hover {
+  background: var(--surface-2);
+  color: var(--fg);
+  text-decoration: none;
+}
+
+.tabs a[aria-current='page'] {
+  background: var(--surface-3);
+  border-color: var(--accent);
+  color: var(--fg);
+}
+
+/* A shift's excursions open in place. */
+td details summary {
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.excursions {
+  margin: 6px 0 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 2px;
+  white-space: nowrap;
+}
+
+/* A short notice that goes by itself: above the page and its dialogs, below the SOS alarm. */
+.toast {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: 150;
+  width: min(380px, calc(100vw - 32px));
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid rgb(47 191 113 / 55%);
+  border-radius: var(--radius);
+  background: #142a1f;
+  box-shadow: var(--shadow);
+  overflow-wrap: anywhere;
+}

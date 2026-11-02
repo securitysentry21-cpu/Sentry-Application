@@ -922,7 +922,8 @@ A job every 15 s selects OPEN alerts with `next_escalation_at ≤ now`, applies 
 - `GET /dashboard/snapshot` (live states, open alerts, coverage, server time) · `GET /stream`
 
 **Reports and exports**
-- `GET /reports/attendance` · `/patrols` · `/incidents` · `/locations` · `/site-activity` [reports.read] (location report audited)
+- `GET /reports/attendance` · `/patrols` · `/incidents` · `/site-activity` [reports.read] · `GET /reports/locations` [location.history.read and reports.read] (audited `LOCATION_REPORT_VIEWED`, with the D-21 reason)
+- `POST /exports` [exports.create; per kind: location kinds also location.history.read, a guard's data exports.guard_data] audited (`EXPORT_REQUESTED`; `LOCATION_HISTORY_EXPORTED` too for location) · `GET /exports` · `GET /exports/:id` · `POST /exports/:id/download` (a 15-minute link; audited `EXPORT_DOWNLOADED`, the reason again for location)
 - `POST /exports` · `GET /exports/:id` · `GET /exports/:id/download` [exports.create] audited
 
 **Audit and settings**
@@ -1247,6 +1248,9 @@ Status: **OPEN** unless marked APPROVED or REJECTED; `docs/DECISIONS.md` holds t
 | ATTACHMENT_TYPE_NOT_ALLOWED | 415 | content does not match an allowed type |
 | ATTACHMENT_LIMIT_REACHED | 409 | the incident already has 5 photos |
 | EXPORT_RANGE_TOO_LARGE | 422 | export range > 92 days |
+| EXPORT_ALREADY_RUNNING | 409 | one export at a time per person; wait for the running one |
+| EXPORT_NOT_READY | 409 | the export has not finished, or failed |
+| EXPORT_EXPIRED | 410 | the export file was deleted after 7 days |
 | APP_VERSION_UNSUPPORTED | 426 | below minimum (not returned for SOS or queued uploads unless revoked) |
 | RATE_LIMITED | 429 | with `Retry-After` |
 | INTERNAL_ERROR | 500 | no internals exposed |
