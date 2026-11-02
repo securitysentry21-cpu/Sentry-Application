@@ -355,6 +355,9 @@ sites
   country (ISO 3166-1 alpha-2), timezone (IANA), latitude, longitude,
   geofence_radius_meters int CHECK (50..5000), status ACTIVE|INACTIVE|ARCHIVED, notes, version, created/updated (+by)
 
+checkpoint_retired_labels    (append-only; Q-22)
+  id, organization_id, checkpoint_id → checkpoints, qr_token_hash bytea UNIQUE, qr_token_version, retired_at
+
 checkpoints
   id, organization_id, site_id → sites, name, description, latitude NULL, longitude NULL,
   verification_radius_meters int CHECK (10..500),
@@ -747,7 +750,7 @@ Per device: 60 requests/min sustained, burst 120 (SEC §9). On overload return `
 - Token: `HMAC-SHA256(QR_TOKEN_SECRET, checkpoint_id ‖ qr_token_version)`, truncated to 128 bits, base64url (22 chars). QR content `SG1:<token>` (final prefix TBD): versioned, not a URL, no internal IDs.
 - Lookup: `qr_token_hash = SHA-256(token)`, unique-indexed. A slow password hash is unnecessary for 128-bit tokens and would prevent indexed lookup.
 - Reprinting: the print endpoint (Owner/Admin, audited `CHECKPOINT_QR_PRINTED`) recomputes the token from the secret. Nothing is stored encrypted, so there is no ciphertext column or decrypt path.
-- Rotation: `qr_token_version + 1` produces a new token; the old one is invalid immediately; audited.
+- Rotation: `qr_token_version + 1` produces a new token; the old one is invalid immediately; audited. The old token's hash is kept in `checkpoint_retired_labels`, so a later scan of it says "Old QR code" (Q-22).
 - Secret rotation: documented runbook; requires reprinting all labels (or a dual-lookup period with `hash_v2` alongside `hash_v1` until relabelled).
 - Tokens never appear in logs, analytics, error reports or audit metadata.
 
@@ -755,7 +758,7 @@ Per device: 60 requests/min sustained, burst 120 (SEC §9). On overload return `
 
 Input: token, scan `recorded_at`/`mono_ms`, fix (lat, lon, accuracy, fix age, is_mock), authenticated guard and device.
 
-1. Look up `HMAC(token)`. Not found, archived, or another organization → `INVALID_QR` (identical response; never reveal existence).
+1. Look up `HMAC(token)`. Not found, archived, or another organization → `INVALID_QR` (identical response; never reveal existence). One of the organization's own retired labels, looked up in its tenant context → `INVALID_QR` with reason `OLD_LABEL` ("Old QR code", Q-22).
 2. Active shift covering scan `captured_at` → else `NO_ACTIVE_SHIFT`, stored without coordinates (INV-08).
 3. `checkpoint.site_id = shift.site_id` → else `WRONG_SITE`.
 4. Same checkpoint already counted in the same run within `checkpoint.duplicate_window_s` → `DUPLICATE`. (Retrying the same `client_event_id` returns the original result, not DUPLICATE.)

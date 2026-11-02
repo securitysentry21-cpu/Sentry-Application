@@ -66,9 +66,8 @@ describe('checkpoint scans on the phone (PROD §7.7)', () => {
       text: 'Not verified: about 85 m from this checkpoint',
       tone: 'danger',
     });
-    expect(judged({ outcome: 'INVALID_QR' }).text).toBe(
-      'QR code not recognised. If this label is at your site, it may be old: tell your supervisor.',
-    );
+    expect(judged({ outcome: 'INVALID_QR' }).text).toBe('Unknown QR code');
+    expect(judged({ outcome: 'INVALID_QR', oldLabel: true }).text).toBe('Old QR code — report to supervisor');
     expect(judged({ outcome: 'WRONG_SITE' }).text).toBe('This checkpoint belongs to another site');
     expect(judged({ outcome: 'NO_ACTIVE_SHIFT' }).text).toBe('No active shift');
     expect(judged({ outcome: 'DUPLICATE' }).text).toBe('Already scanned in this round');

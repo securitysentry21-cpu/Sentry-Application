@@ -136,6 +136,8 @@ export function scanLine(receipt: Receipt | null, sending: boolean, t: Translate
       case 'DUPLICATE':
         return { text: t('scan.DUPLICATE'), tone: 'info' };
       case 'INVALID_QR':
+        // Q-22: one of the company's replaced labels says so; any other unknown code doesn't.
+        return { text: t(scan.oldLabel === true ? 'scan.OLD_QR' : 'scan.INVALID_QR'), tone: 'danger' };
       case 'WRONG_SITE':
       case 'NO_ACTIVE_SHIFT':
         return { text: t(`scan.${scan.outcome}`), tone: 'danger' };

@@ -230,7 +230,7 @@ describe('plain text only (SEC §8)', () => {
     expect(html).toContain('out of order');
     expect(html).toContain('sent late');
     expect(html).toContain('1 of 2 (1 QR only)');
-    expect(html).toContain('Unknown or old label');
+    expect(html).toContain('Unknown label');
   });
 
   it('ADV-W01 the dashboard has no HTML sink: no innerHTML, map popup HTML or dangerouslySetInnerHTML', () => {

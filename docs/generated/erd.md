@@ -72,6 +72,14 @@ erDiagram
     timestamp_with_time_zone used_at
     timestamp_with_time_zone created_at
   }
+  checkpoint_retired_labels {
+    uuid id PK
+    uuid organization_id
+    uuid checkpoint_id
+    bytea qr_token_hash
+    integer qr_token_version
+    timestamp_with_time_zone retired_at
+  }
   checkpoint_visits {
     uuid id PK
     uuid organization_id
@@ -501,6 +509,8 @@ erDiagram
   users ||--o{ alerts : "alerts_resolved_by_fkey"
   users ||--o{ audit_logs : "audit_logs_actor_user_id_fkey"
   organizations ||--o{ audit_logs : "audit_logs_organization_id_fkey"
+  checkpoints ||--o{ checkpoint_retired_labels : "checkpoint_retired_labels_organization_id_checkpoint_id_fkey"
+  organizations ||--o{ checkpoint_retired_labels : "checkpoint_retired_labels_organization_id_fkey"
   checkpoints ||--o{ checkpoint_visits : "checkpoint_visits_organization_id_checkpoint_id_fkey"
   guard_devices ||--o{ checkpoint_visits : "checkpoint_visits_organization_id_device_id_fkey"
   organizations ||--o{ checkpoint_visits : "checkpoint_visits_organization_id_fkey"

@@ -16,7 +16,7 @@ Things only you can do, in order. Tick an item by changing `[ ]` to `[x]`, or te
 - [x] **Confirm the location-history reason rule** (D-21): confirmed 2026-11-01. A reason is asked for every time someone views a guard's location history; it is optional unless you switch it to mandatory in Settings. (D-22, guards seeing their own trail: you said no on 2026-11-01.)
 - [x] **Look at the Live map with 1,000 guards** on a computer: done 2026-11-01 ("Map looks good"). On a phone it waits for the test setup on AWS.
 - [ ] **Look at patrols in the demo** on a computer (`pnpm demo`, as for the map): the Patrols page, and Sites → a site's checkpoints and patrol routes.
-- [ ] **Answer Q-22:** what a guard sees when scanning an old (replaced) QR label. Built: one message for every label the server doesn't recognise ("…it may be old: tell your supervisor"). The alternative is a separate "Old QR code" message (`docs/OPEN_QUESTIONS.md`).
+- [x] **Answer Q-22:** answered 2026-11-02. A replaced QR label says "Old QR code — report to supervisor".
 
 ## Start now: these take weeks of waiting on others
 

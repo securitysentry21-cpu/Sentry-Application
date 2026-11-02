@@ -201,6 +201,12 @@ beforeAll(async () => {
         [run, org, shift, guard, siteRow, route],
       );
       await m.query(
+        `insert into checkpoint_retired_labels (id, organization_id, checkpoint_id, qr_token_hash, qr_token_version,
+           retired_at)
+         values ($1, $2, $3, gen_random_bytes(32), 1, now())`,
+        [randomUUID(), org, checkpoint],
+      );
+      await m.query(
         `insert into checkpoint_visits (id, organization_id, guard_id, shift_id, checkpoint_id, patrol_route_id,
            patrol_run_id, device_id, client_event_id, scanned_at_recorded, scanned_at, received_at, clock_status,
            verification_status, counted)

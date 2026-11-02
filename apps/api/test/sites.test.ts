@@ -160,7 +160,7 @@ describe('checkpoints and QR labels (ARCH §11.1)', () => {
     expect(audit).toHaveLength(1);
   });
 
-  it('ADV-Q05 an old label after rotation is INVALID_QR; the new one resolves', async () => {
+  it('ADV-Q05 an old label after rotation is INVALID_QR, marked as an old label (Q-22); the new one resolves', async () => {
     const { siteId, checkpoint } = await siteWithCheckpoint();
     const old = (await sheet(siteId)).json<{ labels: { qrContent: string }[] }>().labels[0]?.qrContent ?? '';
     expect(await resolveScannedCheckpoint(t.deps.db, orgA.id, old)).toMatchObject({
@@ -177,19 +177,24 @@ describe('checkpoints and QR labels (ARCH §11.1)', () => {
     expect(await resolveScannedCheckpoint(t.deps.db, orgA.id, old)).toEqual({
       ok: false,
       code: 'INVALID_QR',
+      oldLabel: true,
     });
     const fresh =
       (await sheet(siteId)).json<{ labels: { qrContent: string }[] }>().labels[0]?.qrContent ?? '';
     expect(fresh).not.toBe(old);
     expect(await resolveScannedCheckpoint(t.deps.db, orgA.id, fresh)).toMatchObject({ ok: true });
-    // Another organization's label answers exactly like an unknown one.
-    expect(await resolveScannedCheckpoint(t.deps.db, orgB.id, fresh)).toEqual({
-      ok: false,
-      code: 'INVALID_QR',
-    });
+    // Another organization's label, current or old, answers exactly like an unknown one (ADV-T08).
+    for (const label of [fresh, old]) {
+      expect(await resolveScannedCheckpoint(t.deps.db, orgB.id, label)).toEqual({
+        ok: false,
+        code: 'INVALID_QR',
+        oldLabel: false,
+      });
+    }
     expect(await resolveScannedCheckpoint(t.deps.db, orgA.id, 'SG1:AAAAAAAAAAAAAAAAAAAAAA')).toEqual({
       ok: false,
       code: 'INVALID_QR',
+      oldLabel: false,
     });
   });
 

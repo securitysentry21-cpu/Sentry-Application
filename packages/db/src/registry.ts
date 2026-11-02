@@ -87,4 +87,5 @@ export const TABLES: TableRegistry = {
   patrol_route_checkpoints: { kind: 'tenant' },
   patrol_runs: { kind: 'tenant' },
   checkpoint_visits: { kind: 'tenant-append-only' },
+  checkpoint_retired_labels: { kind: 'tenant-append-only' },
 };

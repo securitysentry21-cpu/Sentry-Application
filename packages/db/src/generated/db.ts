@@ -97,6 +97,15 @@ export interface AuthStates {
   used_at: Timestamp | null;
 }
 
+export interface CheckpointRetiredLabels {
+  checkpoint_id: string;
+  id: string;
+  organization_id: string;
+  qr_token_hash: Buffer;
+  qr_token_version: number;
+  retired_at: Timestamp;
+}
+
 export interface Checkpoints {
   created_at: Generated<Timestamp>;
   created_by_user_id: string | null;
@@ -545,6 +554,7 @@ export interface DB {
   alerts: Alerts;
   audit_logs: AuditLogs;
   auth_states: AuthStates;
+  checkpoint_retired_labels: CheckpointRetiredLabels;
   checkpoint_visits: CheckpointVisits;
   checkpoints: Checkpoints;
   dashboard_sessions: DashboardSessions;

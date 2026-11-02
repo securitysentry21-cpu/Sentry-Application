@@ -42,7 +42,8 @@ describe('patrol words', () => {
       'Not verified: about 85 m away',
     );
     expect(outcomeText({ ...scan, outcome: 'WRONG_SITE' })).toBe('Checkpoint of another site');
-    expect(outcomeText({ ...scan, outcome: 'INVALID_QR' })).toBe('Unknown or old label');
+    expect(outcomeText({ ...scan, outcome: 'INVALID_QR' })).toBe('Unknown label');
+    expect(outcomeText({ ...scan, outcome: 'INVALID_QR', reason: 'OLD_LABEL' })).toBe('Old label (replaced)');
     expect(outcomeText({ ...scan, outcome: 'NO_ACTIVE_SHIFT' })).toBe('No active shift');
     expect(outcomeText({ ...scan, outcome: 'DUPLICATE' })).toBe('Already scanned');
   });

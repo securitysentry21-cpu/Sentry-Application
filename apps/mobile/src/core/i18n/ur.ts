@@ -226,8 +226,8 @@ export const ur: Record<MessageKey, string> = {
   'scan.LOCATION_UNCONFIRMED': 'QR قبول — لوکیشن کی تصدیق نہیں ہو سکی',
   'scan.notCounted': 'یہ راؤنڈ میں شمار نہیں ہوگا۔',
   'scan.OUTSIDE_RADIUS': 'تصدیق نہیں ہوئی: آپ اس چیک پوائنٹ سے تقریباً {distance} میٹر دور ہیں',
-  'scan.INVALID_QR':
-    'QR کوڈ پہچانا نہیں گیا۔ اگر یہ لیبل آپ کی سائٹ پر ہے تو شاید پرانا ہے: اپنے سپروائزر کو بتائیں۔',
+  'scan.INVALID_QR': 'نامعلوم QR کوڈ',
+  'scan.OLD_QR': 'پرانا QR کوڈ — اپنے سپروائزر کو بتائیں',
   'scan.WRONG_SITE': 'یہ چیک پوائنٹ کسی اور سائٹ کا ہے',
   'scan.NO_ACTIVE_SHIFT': 'کوئی جاری شفٹ نہیں',
   'scan.DUPLICATE': 'اس راؤنڈ میں پہلے ہی اسکین ہو چکا ہے',

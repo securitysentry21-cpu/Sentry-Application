@@ -78,7 +78,7 @@
 - **The patrol report and its CSV** (Phase 9).
 - **Checkpoint calibration on site with the app** (D-24: V1.1).
 - **iOS temporary full accuracy for scans.** The pilot is Android.
-- **Q-22, the message for an old label:** built as one message for every unrecognised label. Waiting for the owner.
+- **Q-22, the message for an old label:** answered by the owner after this report ("Old QR code is good") and built in the next commit: replaced labels are remembered (migration 0009) and say "Old QR code — report to supervisor"; anything else unrecognised says "Unknown QR code".
 - **A real phone scanning a printed label:** waits for the test guard app (the Expo account).
 - `status.json` stays at Phase 3 until Phase 4's device tests have run.
 

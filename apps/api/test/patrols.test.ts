@@ -328,6 +328,7 @@ describe('checkpoint scans (ARCH §11.2)', () => {
       checkpointName: 'Main gate',
       distanceM: null,
       run: { countedCount: 1, requiredCount: 3, status: 'IN_PROGRESS' },
+      oldLabel: false,
     });
     const [first] = await runsOf(shiftId);
     const detail = await runDetail(first!.id);
@@ -437,7 +438,7 @@ describe('checkpoint scans (ARCH §11.2)', () => {
     expect(rows.rows.map((r) => r.verification_status)).toEqual(['VERIFIED', 'DUPLICATE']);
   });
 
-  it('ADV-Q05 an old label after rotation is INVALID_QR; the new one works', async () => {
+  it('ADV-Q05 an old label after rotation is INVALID_QR and says "Old QR code" (Q-22); the new one works', async () => {
     const { phone, shiftId } = await onShift();
     const old = qr('Side door');
     const rotated = await call(t.app, {
@@ -449,23 +450,28 @@ describe('checkpoint scans (ARCH §11.2)', () => {
     expect(rotated.statusCode).toBe(200);
     await loadLabels(admin, org.id, siteId);
     const stale = await scanOne(phone, scan(shiftId, old, at(north(100))));
+    // Q-22: the guard is told it is an old label ("Old QR code — report to supervisor").
     expect(stale.scan).toEqual({
       outcome: 'INVALID_QR',
       counted: false,
       checkpointName: null,
       distanceM: null,
       run: null,
+      oldLabel: true,
     });
     const fresh = await scanOne(phone, scan(shiftId, qr('Side door'), at(north(100))));
     // Side door is in no route: the scan is recorded, verified, and belongs to no run.
     expect(fresh.scan).toMatchObject({ outcome: 'VERIFIED', checkpointName: 'Side door', run: null });
     const ids = await asOwner(t.db, (c) =>
-      c.query<{ checkpoint_id: string | null }>(
-        'select checkpoint_id from checkpoint_visits where shift_id = $1 order by created_at',
+      c.query<{ checkpoint_id: string | null; verification_reason: string | null }>(
+        'select checkpoint_id, verification_reason from checkpoint_visits where shift_id = $1 order by created_at',
         [shiftId],
       ),
     );
-    expect(ids.rows.map((r) => r.checkpoint_id)).toEqual([null, cp.get('Side door')!.id]);
+    expect(ids.rows.map((r) => [r.checkpoint_id, r.verification_reason])).toEqual([
+      [null, 'OLD_LABEL'],
+      [cp.get('Side door')!.id, null],
+    ]);
   });
 
   it('ADV-Q06 a checkpoint of another site is WRONG_SITE and does not count', async () => {
@@ -477,6 +483,7 @@ describe('checkpoint scans (ARCH §11.2)', () => {
       checkpointName: null,
       distanceM: null,
       run: null,
+      oldLabel: false,
     });
   });
 
@@ -490,6 +497,7 @@ describe('checkpoint scans (ARCH §11.2)', () => {
       checkpointName: null,
       distanceM: null,
       run: null,
+      oldLabel: false,
     });
     const row = await asOwner(t.db, (c) =>
       c.query<Record<string, unknown>>('select * from checkpoint_visits where guard_id = $1', [guardId]),
@@ -569,9 +577,21 @@ describe('checkpoint scans (ARCH §11.2)', () => {
       checkpointName: null,
       distanceM: null,
       run: null,
+      oldLabel: false,
     });
     expect(unknown).toEqual({ ...foreign, clientEventId: unknown.clientEventId });
     expect(garbage).toEqual({ ...foreign, clientEventId: garbage.clientEventId });
+    // B replaces its label: B's old label is still, for A, just an unknown one (Q-22 never says
+    // "old" across organizations).
+    const replaced = await call(t.app, {
+      method: 'POST',
+      url: `/api/v1/checkpoints/${cp.get('Bravo door')!.id}/rotate-qr`,
+      cookie: adminB,
+      org: orgB.id,
+    });
+    expect(replaced.statusCode).toBe(200);
+    const foreignOld = await scanOne(phone, scan(shiftId, qr('Bravo door'), at(north(2))));
+    expect(foreignOld).toEqual({ ...foreign, clientEventId: foreignOld.clientEventId });
     // Nothing about B's checkpoint is kept on A's side, and B sees no scan at all.
     const mine = await asOwner(t.db, (c) =>
       c.query<{ checkpoint_id: string | null }>(
@@ -579,7 +599,7 @@ describe('checkpoint scans (ARCH §11.2)', () => {
         [shiftId],
       ),
     );
-    expect(mine.rows.map((r) => r.checkpoint_id)).toEqual([null, null, null]);
+    expect(mine.rows.map((r) => r.checkpoint_id)).toEqual([null, null, null, null]);
     const theirs = await asOwner(t.db, (c) =>
       c.query<{ n: number }>('select count(*)::int as n from checkpoint_visits where organization_id = $1', [
         orgB.id,

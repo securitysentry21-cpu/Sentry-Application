@@ -617,7 +617,7 @@ V1 does not promise anti-spoofing. It collects evidence (accuracy, mock-location
 | LOCATION_UNCONFIRMED | valid QR, but location could not be confirmed (no fix, stale fix, poor accuracy, checkpoint has no coordinates, or mock location under policy) | per D-17 (default yes, always labelled "QR only") |
 | OUTSIDE_RADIUS | the fix is clearly outside the checkpoint radius even allowing for accuracy | no |
 | WRONG_SITE | checkpoint belongs to a different site than the shift | no |
-| INVALID_QR | unknown, rotated, archived, or another organization's QR (same message for all) | no |
+| INVALID_QR | unknown, archived, or another organization's QR (same message for all: "Unknown QR code"); this organization's own replaced (rotated) label says "Old QR code — report to supervisor" (Q-22) | no |
 | NO_ACTIVE_SHIFT | no active shift at scan time; stored without coordinates (INV-08) | no |
 | DUPLICATE | same checkpoint already counted in this run within the duplicate window | no (recorded) |
 

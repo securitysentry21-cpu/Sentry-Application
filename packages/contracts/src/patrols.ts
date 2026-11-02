@@ -226,5 +226,10 @@ export const scanResultSchema = z.object({
   run: z
     .object({ countedCount: z.int(), requiredCount: z.int(), status: z.enum(RUN_STATUS_LIST) })
     .nullable(),
+  /**
+   * INVALID_QR only: one of the organization's own replaced labels, so the guard is told "Old QR
+   * code — report to supervisor" (Q-22). Never true for another organization's label (ADV-T08).
+   */
+  oldLabel: z.boolean().optional(),
 });
 export type ScanResult = z.infer<typeof scanResultSchema>;

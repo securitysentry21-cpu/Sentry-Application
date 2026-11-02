@@ -51,7 +51,7 @@ export const OUTCOME_LABEL: Record<ScanOutcomeName, string> = {
   LOCATION_UNCONFIRMED: 'QR only',
   OUTSIDE_RADIUS: 'Not verified',
   WRONG_SITE: 'Checkpoint of another site',
-  INVALID_QR: 'Unknown or old label',
+  INVALID_QR: 'Unknown label',
   NO_ACTIVE_SHIFT: 'No active shift',
   DUPLICATE: 'Already scanned',
 };
@@ -106,6 +106,8 @@ export function outcomeDetail(v: VisitResult): string | null {
 
 /** "Verified", "QR only: no GPS fix", "Not verified: about 85 m away", "Already scanned"… */
 export function outcomeText(v: VisitResult): string {
+  // Q-22: one of the organization's own replaced labels, still up somewhere.
+  if (v.outcome === 'INVALID_QR' && v.reason === 'OLD_LABEL') return 'Old label (replaced)';
   const detail = outcomeDetail(v);
   return detail ? `${OUTCOME_LABEL[v.outcome]}: ${detail}` : OUTCOME_LABEL[v.outcome];
 }

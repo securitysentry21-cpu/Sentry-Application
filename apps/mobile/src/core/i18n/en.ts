@@ -220,8 +220,8 @@ export const en = {
   'scan.LOCATION_UNCONFIRMED': 'QR accepted — location could not be confirmed',
   'scan.notCounted': 'It does not count for the round.',
   'scan.OUTSIDE_RADIUS': 'Not verified: about {distance} m from this checkpoint',
-  'scan.INVALID_QR':
-    'QR code not recognised. If this label is at your site, it may be old: tell your supervisor.',
+  'scan.INVALID_QR': 'Unknown QR code',
+  'scan.OLD_QR': 'Old QR code — report to supervisor',
   'scan.WRONG_SITE': 'This checkpoint belongs to another site',
   'scan.NO_ACTIVE_SHIFT': 'No active shift',
   'scan.DUPLICATE': 'Already scanned in this round',

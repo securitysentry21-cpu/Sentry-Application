@@ -158,11 +158,11 @@ The owner read how scanning will work and approved Phase 7 ("Go ahead with Phase
   - it keeps the last copy of the rounds, for viewing offline;
   - nothing is scanned, and no location taken, outside the active shift (INV-08).
 - **Not built: iOS temporary full accuracy.** The pilot is Android (D-34). An approximate fix gives "QR only", never a wrong verification.
-- **Waiting for the owner: the message for an old label.** PROD §5.4 and §7.7 show "Old QR code — report to supervisor" for a rotated label, but PROD §9.3 says the same message for unknown, rotated, archived and other organizations' labels. The server keeps only the current label's hash, so it can't tell an old label from an unknown one. Options:
-  - **(a)**, built: one message for all of them, "QR code not recognised. If this label is at your site, it may be old: tell your supervisor.";
-  - **(b)**: keep the hashes of a checkpoint's old labels, and say "Old QR code" for this organization's rotated labels. Other organizations' labels would still answer like unknown ones (ADV-T08).
-
-  Recommendation: (a). It is in `docs/OPEN_QUESTIONS.md`.
+- **Q-22 · the message for an old label · approved by the owner (2026-11-02): "Old QR code is good."** PROD §5.4 and §7.7 showed "Old QR code — report to supervisor" for a replaced (rotated) label; PROD §9.3 showed one message for every unrecognised label. The owner chose the separate message:
+  - a rotation keeps the hash of the label it replaces (`checkpoint_retired_labels`, migration 0009, append-only);
+  - a scan of one of the organization's own replaced labels is still INVALID_QR (ADV-Q05) and counts for nothing, but it is stored with the reason `OLD_LABEL`, and the guard sees "Old QR code — report to supervisor". The dashboard says "Old label (replaced)";
+  - the lookup runs in the scanning organization's tenant context, so another organization's labels, old or current, still answer exactly like unknown ones (ADV-T08). Any other unrecognised code says "Unknown QR code";
+  - labels replaced before this change were not kept, so they still say "Unknown QR code". No real checkpoint had been replaced yet.
 
 ## Phase 6 · live operations dashboard · agent-decided 2026-11-01
 
@@ -312,7 +312,7 @@ The first cell, in Terraform (`infra/`), following ARCH §19.8. The choices the 
 | — | Phase 0 engineering choices (toolchain, test database, dependency exceptions) | Agent-decided 2026-10-08; veto in the diff |
 | — | Phase 6 choices (stream client, event enrichment, revalidation, coverage, history thinning) | Agent-decided 2026-11-01; veto in the diff |
 | — | Phase 7 choices (scans through sync, verification order, run windows and changes, closing grace, late scans) | Agent-decided 2026-11-02; veto in the diff |
-| — | Message for an old (rotated) checkpoint label | PROPOSED: one message for every unrecognised label (built) |
+| Q-22 | A replaced checkpoint label says "Old QR code — report to supervisor" | APPROVED 2026-11-02 (owner) |
 
 ---
 

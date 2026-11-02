@@ -329,6 +329,45 @@ export async function updateCheckpoint(
   return result.numUpdatedRows === 1n;
 }
 
+/** Keeps the hash of a label a rotation replaces, so a later scan says "Old QR code" (Q-22). */
+export async function retireLabel(
+  trx: Database,
+  r: {
+    id: string;
+    organizationId: string;
+    checkpointId: string;
+    hash: Buffer;
+    version: number;
+    at: Date;
+  },
+): Promise<void> {
+  await trx
+    .insertInto('checkpoint_retired_labels')
+    .values({
+      id: r.id,
+      organization_id: r.organizationId,
+      checkpoint_id: r.checkpointId,
+      qr_token_hash: r.hash,
+      qr_token_version: r.version,
+      retired_at: r.at,
+    })
+    .execute();
+}
+
+/**
+ * One of this organization's replaced labels. It runs in the organization's tenant context, so
+ * another organization's old labels are never found here (ADV-T08).
+ */
+export async function isRetiredLabel(trx: Database, organizationId: string, hash: Buffer): Promise<boolean> {
+  const row = await trx
+    .selectFrom('checkpoint_retired_labels')
+    .select('id')
+    .where('organization_id', '=', organizationId)
+    .where('qr_token_hash', '=', hash)
+    .executeTakeFirst();
+  return row !== undefined;
+}
+
 /** The checkpoint a token belongs to, in any organization; the caller then checks the tenant. */
 export async function checkpointByTokenHash(db: Database, hash: Buffer) {
   const { rows } = await sql<{ id: string; organization_id: string }>`

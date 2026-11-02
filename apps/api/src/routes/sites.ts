@@ -32,6 +32,7 @@ import {
   insertSite,
   listCheckpoints,
   listSites,
+  retireLabel,
   updateCheckpoint,
   updateSite,
   type CheckpointRow,
@@ -395,6 +396,18 @@ export const siteRoutes = [
         const checkpoint = await getCheckpoint(trx, org.id, params.id, true);
         if (!checkpoint) throw notFound();
         const next = checkpoint.qrVersion + 1;
+        // The label being replaced is remembered by its hash: scanned later, it says "Old QR code"
+        // (Q-22) instead of "Unknown QR code".
+        await retireLabel(trx, {
+          id: uuidv7(deps.clock),
+          organizationId: org.id,
+          checkpointId: checkpoint.id,
+          hash: checkpointTokenHash(
+            checkpointToken(deps.config.QR_TOKEN_SECRET, checkpoint.id, checkpoint.qrVersion),
+          ),
+          version: checkpoint.qrVersion,
+          at: deps.clock.now(),
+        });
         await updateCheckpoint(trx, {
           organizationId: org.id,
           id: checkpoint.id,

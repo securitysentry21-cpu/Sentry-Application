@@ -18241,6 +18241,9 @@
                                     "type": "null"
                                   }
                                 ]
+                              },
+                              "oldLabel": {
+                                "type": "boolean"
                               }
                             },
                             "required": [

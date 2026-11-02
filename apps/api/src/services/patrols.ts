@@ -341,6 +341,7 @@ export async function processScan(
   const settings = scanSettingsFrom(ctx.settings);
   const resolution = await resolveCheckpoint(trx, org, item.token);
   const checkpoint = resolution.ok ? resolution.checkpoint : null;
+  const oldLabel = !resolution.ok && resolution.oldLabel;
 
   // The shift whose window holds the scan (judged by capture time, like locations).
   let shift: ShiftRow | null = null;
@@ -448,7 +449,7 @@ export async function processScan(
       !shift && fix && checkpoint?.location ? distanceBand(haversineM(checkpoint.location, fix)) : null,
     isMock: fix ? fix.isMock : null,
     outcome: verdict.outcome,
-    reason: verdict.reason,
+    reason: oldLabel ? 'OLD_LABEL' : verdict.reason,
     flags: verdict.flags,
     counted: verdict.counted,
     qrTokenVersion: checkpoint?.qrVersion ?? null,
@@ -498,6 +499,7 @@ export async function processScan(
       attach ? (checkpoint?.name ?? null) : null,
       verdict.distanceM,
       progress,
+      oldLabel,
     ),
   };
 }
@@ -508,6 +510,7 @@ function scanResult(
   checkpointName: string | null,
   distanceM: number | null,
   run: ScanResult['run'],
+  oldLabel: boolean,
 ): ScanResult {
   return {
     outcome,
@@ -516,11 +519,13 @@ function scanResult(
     checkpointName: SAME_SITE.has(outcome) ? checkpointName : null,
     distanceM: outcome === 'OUTSIDE_RADIUS' && distanceM !== null ? Math.round(distanceM / 5) * 5 : null,
     run,
+    // Q-22: one of the organization's own replaced labels says "Old QR code".
+    oldLabel: outcome === 'INVALID_QR' && oldLabel,
   };
 }
 
 /** The phone's view of a stored scan, for a resubmitted event. */
 async function resultOf(trx: Database, organizationId: string, v: VisitRow): Promise<ScanResult> {
   const run = v.runId ? await runCounters(trx, organizationId, v.runId) : null;
-  return scanResult(v.outcome, v.counted, v.checkpointName, v.distanceM, run);
+  return scanResult(v.outcome, v.counted, v.checkpointName, v.distanceM, run, v.reason === 'OLD_LABEL');
 }
