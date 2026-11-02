@@ -3,12 +3,22 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { join, relative } from 'node:path';
 
-import type { LiveGuard } from '@sentryops/contracts';
+import type {
+  Checkpoint,
+  CheckpointVisit,
+  LiveGuard,
+  PatrolRoute,
+  PatrolRun,
+  Site,
+} from '@sentryops/contracts';
 import type { AnchorHTMLAttributes } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 
+import { CheckpointEditor } from '../components/checkpoint-editor';
 import { GuardPanel } from '../components/guard-panel';
+import { RouteEditor, RouteTable } from '../components/patrol-routes';
+import { RunDetail, RunsTable, VisitsTable } from '../components/patrol-runs';
 import { guardView } from '../lib/live-model';
 
 vi.mock('next/link', () => ({
@@ -64,6 +74,163 @@ describe('plain text only (SEC §8)', () => {
     expect(html).not.toContain('<b>');
     expect(html).toContain('&lt;img src=x onerror=alert(1)&gt;');
     expect(html).toContain('&lt;script&gt;alert(1)&lt;/script&gt;');
+  });
+
+  it('ADV-W01 script payloads in checkpoint, route, guard and site names render as text in the patrol views and editors', () => {
+    const id = (n: number) => `0190a0d2-7c5e-7000-8000-${String(n).padStart(12, '0')}`;
+    const site: Site = {
+      id: id(1),
+      name: SCRIPT,
+      clientName: PAYLOAD,
+      addressLine1: null,
+      city: null,
+      country: 'PK',
+      timezone: 'Asia/Karachi',
+      boundary: { kind: 'CIRCLE', center: { lat: 31.47, lng: 74.4 }, radiusM: 150 },
+      center: { lat: 31.47, lng: 74.4 },
+      status: 'ACTIVE',
+      notes: null,
+      checkpointCount: 2,
+      version: 1,
+      createdAt: '2026-10-20T12:00:00Z',
+      updatedAt: '2026-10-20T12:00:00Z',
+    };
+    const gate: Checkpoint = {
+      id: id(2),
+      siteId: site.id,
+      name: PAYLOAD,
+      description: SCRIPT,
+      location: null,
+      verificationRadiusM: 30,
+      qrVersion: 1,
+      qrRotatedAt: null,
+      status: 'INACTIVE',
+      version: 1,
+    };
+    const office: Checkpoint = { ...gate, id: id(3), name: SCRIPT, location: { lat: 31.4701, lng: 74.4001 } };
+    const spare: Checkpoint = { ...gate, id: id(4), name: `${PAYLOAD} spare`, status: 'ACTIVE' };
+    const route: PatrolRoute = {
+      id: id(5),
+      siteId: site.id,
+      name: PAYLOAD,
+      description: SCRIPT,
+      enforceOrder: true,
+      schedule: { intervalMinutes: 60, firstRunOffsetMinutes: 0, completionWindowMinutes: 30 },
+      status: 'ACTIVE',
+      checkpoints: [
+        { checkpointId: gate.id, name: gate.name, sequence: 1, required: true },
+        { checkpointId: office.id, name: office.name, sequence: 2, required: false },
+      ],
+      version: 1,
+      updatedAt: '2026-10-20T12:00:00Z',
+    };
+    const run: PatrolRun = {
+      id: id(6),
+      shiftId: id(7),
+      guard: { id: id(8), displayName: PAYLOAD },
+      site: { id: site.id, name: SCRIPT, timezone: 'Asia/Karachi' },
+      route: { id: route.id, name: PAYLOAD },
+      sequenceNo: 2,
+      dueAt: '2026-10-20T16:00:00Z',
+      windowEndsAt: '2026-10-20T16:30:00Z',
+      status: 'INCOMPLETE',
+      startedAt: '2026-10-20T16:05:00Z',
+      completedAt: null,
+      closedAt: '2026-10-20T16:32:00Z',
+      requiredCount: 2,
+      countedCount: 1,
+      unconfirmedCount: 1,
+      missing: [SCRIPT],
+    };
+    const visit: CheckpointVisit = {
+      id: id(9),
+      shiftId: run.shiftId,
+      runId: run.id,
+      checkpoint: { id: gate.id, name: PAYLOAD },
+      scannedAt: '2026-10-20T16:05:00Z',
+      receivedAt: '2026-10-20T16:20:00Z',
+      outcome: 'LOCATION_UNCONFIRMED',
+      reason: 'NO_FIX',
+      counted: true,
+      distanceM: null,
+      accuracyM: null,
+      // An unknown code still renders as words, as text.
+      flags: ['OUT_OF_ORDER', '<b>NEW_FLAG</b>'],
+      late: true,
+    };
+    const stray: CheckpointVisit = {
+      ...visit,
+      id: id(10),
+      runId: null,
+      checkpoint: null,
+      outcome: 'INVALID_QR',
+    };
+    const html = renderToStaticMarkup(
+      <>
+        <RunsTable runs={[run]} onSelect={() => undefined} />
+        <RunsTable runs={[run]} showGuard={false} withDate href={(r) => `/patrols?run=${r.id}`} />
+        <RunDetail
+          detail={{
+            run,
+            enforceOrder: true,
+            checkpoints: [
+              {
+                checkpointId: gate.id,
+                name: PAYLOAD,
+                sequence: 1,
+                required: true,
+                location: null,
+                done: 'QR_ONLY',
+              },
+              {
+                checkpointId: office.id,
+                name: SCRIPT,
+                sequence: 2,
+                required: true,
+                location: office.location,
+                done: null,
+              },
+            ],
+            visits: [visit],
+          }}
+          onClose={() => undefined}
+        />
+        <VisitsTable
+          visits={[visit, stray]}
+          timezone="Asia/Karachi"
+          rounds={new Map([[run.id, `${PAYLOAD} · round 2`]])}
+        />
+        <RouteTable routes={[route]} onEdit={() => undefined} />
+        <RouteEditor
+          siteId={site.id}
+          route={route}
+          checkpoints={[gate, office, spare]}
+          routes={[route, { ...route, id: id(11), name: SCRIPT }]}
+          onClose={() => undefined}
+          onSaved={() => undefined}
+        />
+        <CheckpointEditor
+          site={site}
+          checkpoint={gate}
+          checkpoints={[gate, office, spare]}
+          routes={[route]}
+          onClose={() => undefined}
+          onSaved={() => undefined}
+        />
+      </>,
+    );
+    expect(html).not.toContain('<img');
+    expect(html).not.toContain('<script');
+    expect(html).not.toContain('<b>');
+    expect(html).toContain('&lt;img src=x onerror=alert(1)&gt;');
+    expect(html).toContain('&lt;script&gt;alert(1)&lt;/script&gt;');
+    // The words around them are there: outcomes, reasons, flags and progress.
+    expect(html).toContain('QR only');
+    expect(html).toContain('no GPS fix');
+    expect(html).toContain('out of order');
+    expect(html).toContain('sent late');
+    expect(html).toContain('1 of 2 (1 QR only)');
+    expect(html).toContain('Unknown or old label');
   });
 
   it('ADV-W01 the dashboard has no HTML sink: no innerHTML, map popup HTML or dangerouslySetInnerHTML', () => {

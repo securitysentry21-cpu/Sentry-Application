@@ -4,7 +4,9 @@ These questions are waiting for the product owner. When one is answered, record 
 
 On 2026-10-08 (round 6) the owner delegated every open question. Q-13 and Q-18–Q-21 and D-11 were decided under that delegation; `docs/DECISIONS.md` records each decision and its reason, so any of them can be reversed.
 
-No questions are open. (The last one, whether the repository stays public, was answered on 2026-10-08: public, and pushed.)
+| # | Question | Options | Recommendation |
+|---|---|---|---|
+| Q-22 | What does a guard see when scanning an old (rotated) checkpoint label? PROD §5.4 and §7.7 say "Old QR code — report to supervisor"; PROD §9.3 says the same message for every unrecognised label. | (a) one message for all: "QR code not recognised. If this label is at your site, it may be old: tell your supervisor." · (b) keep old labels' hashes and say "Old QR code" for this organization's rotated labels | (a), built in Phase 7: simpler, and it reveals nothing about which labels ever existed. `docs/DECISIONS.md`, Phase 7. |
 
 ## Owner actions (long lead times; start now)
 

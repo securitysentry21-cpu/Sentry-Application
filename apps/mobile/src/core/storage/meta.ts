@@ -17,6 +17,7 @@ export const META_KEYS = {
   lastSuccessfulSyncAtMs: 'sync.lastSuccessAtMs',
   discarded: 'outbox.discarded',
   shiftsCache: 'shifts.cache',
+  patrolsCache: 'patrols.cache',
   trackingRuntime: 'tracking.runtime',
 } as const;
 

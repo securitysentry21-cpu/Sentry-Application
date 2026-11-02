@@ -6,6 +6,7 @@ import {
   DEVICE_KEY_ALGORITHM,
   type DeviceStatus,
   type Fix,
+  type GuardPatrolsResponse,
   type GuardShift,
   type INCIDENT_SEVERITIES,
   type MobileConfig,
@@ -49,6 +50,7 @@ import {
   type QueueStats,
   type Receipt,
 } from './outbox/outbox.ts';
+import { isCheckpointLabel } from './patrol.ts';
 import type { DevicePort, LocationPort, SecureKV } from './ports.ts';
 import { ServerTime } from './server-time.ts';
 import {
@@ -162,6 +164,11 @@ export type StartResult =
   | { readonly kind: 'BLOCKED'; readonly items: readonly ReadinessItem[] }
   | { readonly kind: 'NO_FIX' }
   | { readonly kind: 'NOT_ALLOWED' };
+
+/** A checkpoint scan saved for sending, or why it wasn't (nothing is collected then). */
+export type ScanStart =
+  | { readonly kind: 'SAVED'; readonly clientEventId: string }
+  | { readonly kind: 'REFUSED'; readonly reason: 'PATROLS_OFF' | 'NOT_A_CHECKPOINT' | 'NO_SHIFT' };
 
 export type IncidentInput = {
   readonly shiftId: string;
@@ -990,6 +997,63 @@ export class GuardApp {
     this.#emit();
     void this.flush({ urgent: true });
     return clientEventId;
+  }
+
+  // ── Patrols (PROD §7.7; offered only when features.patrols is on) ─────────────────────────
+
+  /**
+   * Saves a checkpoint scan with a fresh fix and sends it at once. Only during the active shift this
+   * phone tracks: no location is taken off shift (INV-08). The server judges the scan (INV-11); its
+   * outcome arrives on the receipt (`receipt(id).scan`), or waits there while the phone is offline.
+   */
+  async scanCheckpoint(shiftId: string, content: string): Promise<ScanStart> {
+    await this.start();
+    if (!this.settings.features.patrols) return { kind: 'REFUSED', reason: 'PATROLS_OFF' };
+    if (!isCheckpointLabel(content)) return { kind: 'REFUSED', reason: 'NOT_A_CHECKPOINT' };
+    const outbox = this.#requireOutbox();
+    const partition = this.#partition() ?? this.#identityPartition();
+    const tracked = this.#trackedShift();
+    if (!partition || !tracked || tracked.shiftId !== shiftId) return { kind: 'REFUSED', reason: 'NO_SHIFT' };
+    const raw = await this.#onDemandFix();
+    const { clocks } = this.#deps;
+    const now = clocks.wall.nowMs();
+    const clientEventId = this.#ids.uuidv7();
+    await outbox.enqueue(partition, {
+      clientEventId,
+      type: 'CHECKPOINT_SCAN',
+      recordedAt: isoFromMs(now),
+      monoMs: clocks.mono.nowMs(),
+      bootId: clocks.bootId,
+      shiftId,
+      token: content.trim(),
+      fix: raw ? this.#fix(raw, captureAgeMs(raw, now)) : null,
+    });
+    await this.#refreshCounts();
+    this.#emit();
+    void this.flush({ urgent: true });
+    return { kind: 'SAVED', clientEventId };
+  }
+
+  /**
+   * The shift's rounds from the server. When it can't be reached, the last copy this phone saw for
+   * the same shift, marked as such; null when there is neither.
+   */
+  async patrols(shiftId: string): Promise<{ rounds: GuardPatrolsResponse; fromCache: boolean } | null> {
+    await this.start();
+    const session = this.#session;
+    const api = this.#api;
+    const meta = this.#meta;
+    const cached = (await meta?.getJson<GuardPatrolsResponse>(META_KEYS.patrolsCache)) ?? null;
+    const fallback = cached?.shiftId === shiftId ? { rounds: cached, fromCache: true } : null;
+    if (!session?.current || !api || !meta || !this.settings.features.patrols) return fallback;
+    try {
+      const rounds = await session.withAuth((token) => api.getMyPatrols(token, shiftId));
+      await meta.setJson(META_KEYS.patrolsCache, rounds);
+      return { rounds, fromCache: false };
+    } catch (error) {
+      await this.#readFailed('patrols', error);
+      return fallback;
+    }
   }
 
   async receipt(clientEventId: string): Promise<Receipt | null> {

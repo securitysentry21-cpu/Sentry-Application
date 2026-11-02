@@ -12,9 +12,11 @@ Things only you can do, in order. Tick an item by changing `[ ]` to `[x]`, or te
 - [ ] **Accept your dashboard invitation** with your email and an authenticator app. The link of 2026-10-09 lasted 7 days; if you didn't use it, I'll send a new one when the test setup is next switched on.
 - [ ] **Protect your AWS sign-in:** Google 2-Step Verification if you signed up with Google, otherwise settings.aws.com → Manage security and sign-in → Register device.
 - [ ] **Create a free Expo account** at expo.dev (Free plan only), then run `npx eas-cli@latest login` in the VS Code terminal.
-- [ ] **Install the test guard app** on an Android phone from the link I send, and run a test shift.
+- [ ] **Install the test guard app** on an Android phone from the link I send, and run a test shift. Print one QR label from the dashboard (Sites → Print QR labels) and scan it during the shift.
 - [x] **Confirm the location-history reason rule** (D-21): confirmed 2026-11-01. A reason is asked for every time someone views a guard's location history; it is optional unless you switch it to mandatory in Settings. (D-22, guards seeing their own trail: you said no on 2026-11-01.)
 - [x] **Look at the Live map with 1,000 guards** on a computer: done 2026-11-01 ("Map looks good"). On a phone it waits for the test setup on AWS.
+- [ ] **Look at patrols in the demo** on a computer (`pnpm demo`, as for the map): the Patrols page, and Sites → a site's checkpoints and patrol routes.
+- [ ] **Answer Q-22:** what a guard sees when scanning an old (replaced) QR label. Built: one message for every label the server doesn't recognise ("…it may be old: tell your supervisor"). The alternative is a separate "Old QR code" message (`docs/OPEN_QUESTIONS.md`).
 
 ## Start now: these take weeks of waiting on others
 

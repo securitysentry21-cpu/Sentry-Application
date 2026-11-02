@@ -2,13 +2,16 @@
 
 // Sites (D-38): posts and gates as circles, patrol beats as polygons drawn on the map. The server
 // re-validates every boundary (no self-crossing, at most 100 km²). Checkpoints and their QR labels
-// are managed per site; printing labels is a separate, audited page.
-import type { Checkpoint, Site, SiteBoundary } from '@sentryops/contracts';
+// are managed per site, each with a map pin (D-24); printing labels is a separate, audited page.
+// Patrol routes (PROD §9) are edited here too.
+import type { Checkpoint, PatrolRoute, Site, SiteBoundary } from '@sentryops/contracts';
 import { polygonAreaKm2 } from '@sentryops/domain';
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
 
+import { CheckpointEditor } from '../../../components/checkpoint-editor';
 import { BoundaryMap, type MapShape } from '../../../components/map';
+import { RouteEditor, RouteTable } from '../../../components/patrol-routes';
 import { PageHead } from '../../../components/shell';
 import { api, errorText } from '../../../lib/api';
 import { useSession } from '../../../lib/session';
@@ -133,7 +136,12 @@ export default function SitesPage() {
         </div>
       )}
       {selected && !editing ? (
-        <SiteDetail site={selected} onEdit={() => setEditing(true)} onChanged={() => void load()} />
+        <SiteDetail
+          key={selected.id}
+          site={selected}
+          onEdit={() => setEditing(true)}
+          onChanged={() => void load()}
+        />
       ) : null}
     </>
   );
@@ -282,9 +290,13 @@ function SiteEditor({
 
 function SiteDetail({ site, onEdit, onChanged }: { site: Site; onEdit: () => void; onChanged: () => void }) {
   const { can } = useSession();
+  const canRoutes = can('patrols.read');
   const [checkpoints, setCheckpoints] = useState<Checkpoint[] | null>(null);
+  const [routes, setRoutes] = useState<PatrolRoute[] | null>(null);
   const [name, setName] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [editingCheckpoint, setEditingCheckpoint] = useState<Checkpoint | null>(null);
+  const [editingRoute, setEditingRoute] = useState<PatrolRoute | 'new' | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -294,9 +306,22 @@ function SiteDetail({ site, onEdit, onChanged }: { site: Site; onEdit: () => voi
     }
   }, [site.id]);
 
+  const loadRoutes = useCallback(async () => {
+    if (!canRoutes) return;
+    try {
+      setRoutes((await api<{ routes: PatrolRoute[] }>(`/sites/${site.id}/patrol-routes`)).routes);
+    } catch (e) {
+      setError(errorText(e));
+    }
+  }, [site.id, canRoutes]);
+
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    void loadRoutes();
+  }, [loadRoutes]);
 
   async function add(event: FormEvent) {
     event.preventDefault();
@@ -340,35 +365,57 @@ function SiteDetail({ site, onEdit, onChanged }: { site: Site; onEdit: () => voi
             <thead>
               <tr>
                 <th>Name</th>
-                <th>QR version</th>
+                <th>Position</th>
                 <th>Radius</th>
+                <th>QR version</th>
                 <th />
               </tr>
             </thead>
             <tbody>
               {checkpoints.map((c) => (
                 <tr key={c.id}>
-                  <td>{c.name}</td>
-                  <td className="mono">v{c.qrVersion}</td>
+                  <td>
+                    {c.name}
+                    {c.status !== 'ACTIVE' ? (
+                      <>
+                        {' '}
+                        <span className="badge warn">{c.status.toLowerCase()}</span>
+                      </>
+                    ) : null}
+                    {c.description ? <div className="faint">{c.description}</div> : null}
+                  </td>
+                  <td>
+                    {c.location ? (
+                      <span className="badge ok">Pinned</span>
+                    ) : (
+                      <span className="badge warn">No pin</span>
+                    )}
+                  </td>
                   <td className="muted">{c.verificationRadiusM} m</td>
+                  <td className="mono">v{c.qrVersion}</td>
                   <td>
                     {can('checkpoints.write') ? (
-                      <button
-                        className="btn small"
-                        onClick={() => {
-                          if (
-                            window.confirm(
-                              `Replace the QR label of ${c.name}? The printed label stops working at once.`,
-                            )
-                          ) {
-                            void api(`/checkpoints/${c.id}/rotate-qr`, { method: 'POST' })
-                              .then(load)
-                              .catch((e: unknown) => setError(errorText(e)));
-                          }
-                        }}
-                      >
-                        New QR label
-                      </button>
+                      <div className="row">
+                        <button className="btn small" onClick={() => setEditingCheckpoint(c)}>
+                          Edit
+                        </button>
+                        <button
+                          className="btn small"
+                          onClick={() => {
+                            if (
+                              window.confirm(
+                                `Replace the QR label of ${c.name}? The printed label stops working at once.`,
+                              )
+                            ) {
+                              void api(`/checkpoints/${c.id}/rotate-qr`, { method: 'POST' })
+                                .then(load)
+                                .catch((e: unknown) => setError(errorText(e)));
+                            }
+                          }}
+                        >
+                          New QR label
+                        </button>
+                      </div>
                     ) : null}
                   </td>
                 </tr>
@@ -377,6 +424,11 @@ function SiteDetail({ site, onEdit, onChanged }: { site: Site; onEdit: () => voi
           </table>
         </div>
       )}
+      {checkpoints?.some((c) => !c.location) ? (
+        <p className="faint">
+          Without a pin a checkpoint's scans can only be “QR only”: the location can't be confirmed.
+        </p>
+      ) : null}
       {can('checkpoints.write') ? (
         <form className="row" onSubmit={(e) => void add(e)}>
           <input
@@ -388,6 +440,55 @@ function SiteDetail({ site, onEdit, onChanged }: { site: Site; onEdit: () => voi
           />
           <button className="btn">Add checkpoint</button>
         </form>
+      ) : null}
+      {canRoutes ? (
+        <>
+          <div className="card-head">
+            <h3>Patrol routes</h3>
+            {can('patrols.write') && checkpoints ? (
+              <button className="btn small" onClick={() => setEditingRoute('new')}>
+                Add route
+              </button>
+            ) : null}
+          </div>
+          <p className="faint">Rounds are per shift: each guard on duty here walks their own rounds.</p>
+          {routes === null ? (
+            <div className="loading">Loading…</div>
+          ) : routes.length === 0 ? (
+            <div className="empty">No patrol routes yet.</div>
+          ) : (
+            <RouteTable routes={routes} onEdit={can('patrols.write') ? setEditingRoute : undefined} />
+          )}
+        </>
+      ) : null}
+      {editingCheckpoint && checkpoints ? (
+        <CheckpointEditor
+          site={site}
+          checkpoint={editingCheckpoint}
+          checkpoints={checkpoints}
+          routes={routes ?? []}
+          onClose={() => setEditingCheckpoint(null)}
+          onSaved={() => {
+            setEditingCheckpoint(null);
+            void load();
+            // Routes show checkpoint names; the site list counts checkpoints.
+            void loadRoutes();
+            onChanged();
+          }}
+        />
+      ) : null}
+      {editingRoute && checkpoints ? (
+        <RouteEditor
+          siteId={site.id}
+          route={editingRoute === 'new' ? null : editingRoute}
+          checkpoints={checkpoints}
+          routes={routes ?? []}
+          onClose={() => setEditingRoute(null)}
+          onSaved={() => {
+            setEditingRoute(null);
+            void loadRoutes();
+          }}
+        />
       ) : null}
     </div>
   );

@@ -117,6 +117,35 @@ export interface Checkpoints {
   version: Generated<number>;
 }
 
+export interface CheckpointVisits {
+  accuracy_m: number | null;
+  checkpoint_id: string | null;
+  client_event_id: string;
+  clock_status: string;
+  counted: Generated<boolean>;
+  created_at: Generated<Timestamp>;
+  device_id: string;
+  distance_band: string | null;
+  distance_m: number | null;
+  fix_age_s: number | null;
+  flags: Generated<string[]>;
+  guard_id: string;
+  id: string;
+  is_mock: boolean | null;
+  latitude: number | null;
+  longitude: number | null;
+  organization_id: string;
+  patrol_route_id: string | null;
+  patrol_run_id: string | null;
+  qr_token_version: number | null;
+  received_at: Timestamp;
+  scanned_at: Timestamp;
+  scanned_at_recorded: Timestamp;
+  shift_id: string | null;
+  verification_reason: string | null;
+  verification_status: string;
+}
+
 export interface DashboardSessions {
   absolute_expires_at: Timestamp;
   created_at: Generated<Timestamp>;
@@ -303,6 +332,55 @@ export interface Outbox {
   topic: string;
 }
 
+export interface PatrolRouteCheckpoints {
+  checkpoint_id: string;
+  id: string;
+  organization_id: string;
+  patrol_route_id: string;
+  required: Generated<boolean>;
+  sequence: number;
+  site_id: string;
+}
+
+export interface PatrolRoutes {
+  completion_window_minutes: number | null;
+  created_at: Generated<Timestamp>;
+  created_by_user_id: string | null;
+  description: string | null;
+  enforce_order: Generated<boolean>;
+  first_run_offset_minutes: Generated<number>;
+  id: string;
+  interval_minutes: number | null;
+  name: string;
+  organization_id: string;
+  site_id: string;
+  status: Generated<string>;
+  updated_at: Generated<Timestamp>;
+  updated_by_user_id: string | null;
+  version: Generated<number>;
+}
+
+export interface PatrolRuns {
+  closed_at: Timestamp | null;
+  completed_at: Timestamp | null;
+  counted_count: Generated<number>;
+  created_at: Generated<Timestamp>;
+  due_at: Timestamp;
+  guard_id: string;
+  id: string;
+  organization_id: string;
+  patrol_route_id: string;
+  required_count: number;
+  sequence_no: number;
+  shift_id: string;
+  site_id: string;
+  started_at: Timestamp | null;
+  status: Generated<string>;
+  unconfirmed_count: Generated<number>;
+  updated_at: Generated<Timestamp>;
+  window_ends_at: Timestamp;
+}
+
 export interface QuarantinedItems {
   batch_id: string;
   client_event_id: string;
@@ -467,6 +545,7 @@ export interface DB {
   alerts: Alerts;
   audit_logs: AuditLogs;
   auth_states: AuthStates;
+  checkpoint_visits: CheckpointVisits;
   checkpoints: Checkpoints;
   dashboard_sessions: DashboardSessions;
   device_status_events: DeviceStatusEvents;
@@ -479,6 +558,9 @@ export interface DB {
   organization_settings: OrganizationSettings;
   organizations: Organizations;
   outbox: Outbox;
+  patrol_route_checkpoints: PatrolRouteCheckpoints;
+  patrol_routes: PatrolRoutes;
+  patrol_runs: PatrolRuns;
   quarantined_items: QuarantinedItems;
   realtime_events: RealtimeEvents;
   schema_migrations: SchemaMigrations;

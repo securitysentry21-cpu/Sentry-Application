@@ -1,6 +1,6 @@
 // One shift (PROD §6.4–§6.6, §7.5–§7.6): start, end, resume; honest states ("waiting to confirm"
 // until the server confirmed, INV-16); tracking health and sync lines; interruptions; the readiness
-// check before start; incidents and SOS during the shift.
+// check before start; patrol rounds, incidents and SOS during the shift.
 import { useState } from 'react';
 
 import type { StartResult } from '../../core/app.ts';
@@ -128,6 +128,10 @@ export function ShiftScreen({ shiftId, navigate }: { shiftId: string; navigate: 
           label={t('shift.callSupervisor')}
           onPress={() => void openDialer(snap.settings.support.emergencyCallNumber)}
         />
+      ) : null}
+
+      {tracking && snap.settings.features.patrols ? (
+        <Button icon="▣" label={t('patrol.button')} onPress={() => navigate({ name: 'patrol', shiftId })} />
       ) : null}
 
       {tracking && snap.settings.features.incidents ? (

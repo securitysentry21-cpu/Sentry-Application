@@ -40,6 +40,7 @@ export const alertKey = {
   offSiteStart: (shiftId: string) => `off_site_start:${shiftId}`,
   overrun: (shiftId: string) => `overrun:${shiftId}`,
   suspicious: (shiftId: string) => `suspicious:${shiftId}`,
+  patrolRun: (runId: string) => `patrol_run:${runId}`,
 } as const;
 
 export type FreshnessAlertSettings = {

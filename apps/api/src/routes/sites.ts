@@ -24,6 +24,7 @@ import { auditActor, orgOf, userOf } from '../context.ts';
 import { AppError, notFound } from '../errors.ts';
 import { uuidv7 } from '../ids.ts';
 import { recordAudit } from '../repositories/audit.ts';
+import { activeRoutesWithCheckpoint } from '../repositories/patrols.ts';
 import {
   getCheckpoint,
   getSite,
@@ -325,6 +326,18 @@ export const siteRoutes = [
         const checkpoint = await getCheckpoint(trx, org.id, params.id, true);
         if (!checkpoint) throw notFound();
         const { version, ...changes } = body;
+        // Its label would be refused while its routes still ask for it, so their rounds could never
+        // complete: take it off the routes first (Phase 7).
+        if (changes.status !== undefined && changes.status !== 'ACTIVE') {
+          const routes = await activeRoutesWithCheckpoint(trx, org.id, checkpoint.id);
+          if (routes.length > 0) {
+            throw new AppError(
+              'VALIDATION_FAILED',
+              `This checkpoint is a stop of ${routes.join(', ')}. Take it off the route first.`,
+              [{ path: 'status', issue: 'checkpoint is in an active patrol route' }],
+            );
+          }
+        }
         const ok = await updateCheckpoint(trx, {
           organizationId: org.id,
           id: checkpoint.id,

@@ -1,15 +1,16 @@
 'use client';
 
 // Guard detail (PROD §14.4): the guard, their current shift and site, tracking health and location
-// age (PROD §8.3), the phone's own report and devices, the disclosure they accepted, recent shifts and
-// alerts. The live part follows the realtime stream. Location history opens on its own, audited
-// page. Patrols and incidents join with Phases 7 and 8.
-import type { Alert, Guard, LiveGuard, Shift } from '@sentryops/contracts';
+// age (PROD §8.3), the phone's own report and devices, the disclosure they accepted, recent shifts,
+// patrol rounds and alerts. The live part follows the realtime stream. Location history opens on its
+// own, audited page; each round and shift opens on the Patrols page. Incidents join with Phase 8.
+import type { Alert, Guard, LiveGuard, PatrolRun, Shift } from '@sentryops/contracts';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
 
 import { GuardPanel } from '../../../../components/guard-panel';
+import { RunsTable } from '../../../../components/patrol-runs';
 import { PageHead } from '../../../../components/shell';
 import { api, errorText } from '../../../../lib/api';
 import { ALERT_TYPE_LABEL, formatDateTime, formatRelative, siteTime } from '../../../../lib/format';
@@ -36,6 +37,8 @@ type Location = {
 };
 
 const DAY = 86_400_000;
+/** Patrol history: the latest rounds due in the last week. */
+const PATROL_HISTORY = { days: 7, limit: 20 } as const;
 const STATUS_BADGE: Record<string, string> = {
   ACTIVE: 'ok',
   SCHEDULED: 'info',
@@ -53,8 +56,10 @@ export default function GuardDetailPage() {
   const [devices, setDevices] = useState<Device[] | null>(null);
   const [shifts, setShifts] = useState<Shift[] | null>(null);
   const [alerts, setAlerts] = useState<Alert[] | null>(null);
+  const [runs, setRuns] = useState<PatrolRun[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const canHistory = can('location.history.read');
+  const canPatrols = can('patrols.read');
 
   useEffect(() => {
     let cancelled = false;
@@ -76,6 +81,16 @@ export default function GuardDetailPage() {
       void guarded(api<{ alerts: Alert[] }>(`/alerts?status=all&guardId=${id}&limit=20`), (r) =>
         setAlerts(r.alerts),
       );
+    if (can('patrols.read')) {
+      // Rounds already due: the ones still ahead in a shift are not history yet.
+      const query = new URLSearchParams({
+        guardId: id,
+        from: new Date(now - PATROL_HISTORY.days * DAY).toISOString(),
+        to: new Date(now).toISOString(),
+        limit: String(PATROL_HISTORY.limit),
+      });
+      void guarded(api<{ runs: PatrolRun[] }>(`/patrol-runs?${query.toString()}`), (r) => setRuns(r.runs));
+    }
     return () => {
       cancelled = true;
     };
@@ -170,7 +185,7 @@ export default function GuardDetailPage() {
                     <th>Site</th>
                     <th>Scheduled</th>
                     <th>Status</th>
-                    {canHistory ? <th /> : null}
+                    {canHistory || canPatrols ? <th /> : null}
                   </tr>
                 </thead>
                 <tbody>
@@ -185,12 +200,24 @@ export default function GuardDetailPage() {
                           {s.status.toLowerCase()}
                         </span>
                       </td>
-                      {canHistory ? (
+                      {canHistory || canPatrols ? (
                         <td>
                           {s.actualStartedAt ? (
-                            <Link className="btn small" href={`/guards/${guard.id}/history?shift=${s.id}`}>
-                              History
-                            </Link>
+                            <div className="row">
+                              {canHistory ? (
+                                <Link
+                                  className="btn small"
+                                  href={`/guards/${guard.id}/history?shift=${s.id}`}
+                                >
+                                  History
+                                </Link>
+                              ) : null}
+                              {canPatrols ? (
+                                <Link className="btn small" href={`/patrols?shiftId=${s.id}`}>
+                                  Patrols
+                                </Link>
+                              ) : null}
+                            </div>
                           ) : null}
                         </td>
                       ) : null}
@@ -199,6 +226,29 @@ export default function GuardDetailPage() {
                 </tbody>
               </table>
             </div>
+          )}
+        </div>
+      ) : null}
+      {runs ? (
+        <div className="card">
+          <div className="card-head">
+            <h2>Patrol history</h2>
+            <Link className="btn small" href={`/patrols?guardId=${guard.id}`}>
+              All patrols
+            </Link>
+          </div>
+          <p className="faint">
+            Rounds due in the last {PATROL_HISTORY.days} days, latest first (up to {PATROL_HISTORY.limit}).
+          </p>
+          {runs.length === 0 ? (
+            <div className="empty">No rounds in this period.</div>
+          ) : (
+            <RunsTable
+              runs={runs}
+              showGuard={false}
+              withDate
+              href={(r) => `/patrols?shiftId=${r.shiftId}&run=${r.id}`}
+            />
           )}
         </div>
       ) : null}

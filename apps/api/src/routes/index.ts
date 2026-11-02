@@ -9,6 +9,7 @@ import { liveRoutes } from './live.ts';
 import { meRoutes } from './me.ts';
 import { memberRoutes } from './members.ts';
 import { mobileRoutes } from './mobile.ts';
+import { patrolRoutes } from './patrols.ts';
 import type { RouteDefinition } from './registry.ts';
 import { reportRoutes } from './reports.ts';
 import { settingsRoutes } from './settings.ts';
@@ -29,6 +30,7 @@ export const ROUTES: readonly RouteDefinition[] = [
   ...enrollmentRoutes,
   ...mobileRoutes,
   ...siteRoutes,
+  ...patrolRoutes,
   ...shiftRoutes,
   ...syncRoutes,
   ...liveRoutes,

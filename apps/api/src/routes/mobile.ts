@@ -67,8 +67,8 @@ export const mobileRoutes = [
           startMaxFixAgeSeconds: setting(settings, 'shift.start_max_fix_age_seconds'),
           requireBackgroundPermission: requireBackground,
         },
-        // Patrol scans arrive with Phase 7 and incidents with Phase 8; until then the app hides them.
-        features: { sos: deps.config.FEATURE_SOS, patrols: false, incidents: false },
+        // Incidents arrive with Phase 8; until then the app hides them.
+        features: { sos: deps.config.FEATURE_SOS, patrols: true, incidents: false },
         support: {
           emergencyCallNumber:
             typeof settings['sos.emergency_call_number'] === 'string'

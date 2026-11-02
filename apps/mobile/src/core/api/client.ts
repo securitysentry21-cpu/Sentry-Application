@@ -5,6 +5,7 @@
 import {
   enrollmentRedeemResponseSchema,
   errorEnvelopeSchema,
+  guardPatrolsResponseSchema,
   meShiftsResponseSchema,
   mobileConfigSchema,
   sessionRefreshResponseSchema,
@@ -13,6 +14,7 @@ import {
   type EnrollmentRedeemRequest,
   type EnrollmentRedeemResponse,
   type ErrorCode,
+  type GuardPatrolsResponse,
   type MobileConfig,
   type SessionTokens,
   type SyncBatchRequest,
@@ -178,6 +180,14 @@ export class ApiClient {
     return this.request('GET', '/me/shifts', {
       auth: { kind: 'bearer', token },
       schema: meShiftsResponseSchema,
+    });
+  }
+
+  /** The guard's rounds in their own shift (PROD §7.7). */
+  getMyPatrols(token: string, shiftId: string): Promise<GuardPatrolsResponse> {
+    return this.request('GET', `/me/patrols?shiftId=${encodeURIComponent(shiftId)}`, {
+      auth: { kind: 'bearer', token },
+      schema: guardPatrolsResponseSchema,
     });
   }
 

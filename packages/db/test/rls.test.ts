@@ -115,10 +115,11 @@ beforeAll(async () => {
          values ($1, $2, 'Gate', 'Asia/Karachi', 'CIRCLE', 31.5, 74.3, 100)`,
         [siteRow, org],
       );
+      const checkpoint = randomUUID();
       await m.query(
         `insert into checkpoints (id, organization_id, site_id, name, qr_token_hash)
          values ($1, $2, $3, 'North gate', gen_random_bytes(32))`,
-        [randomUUID(), org, siteRow],
+        [checkpoint, org, siteRow],
       );
       // Phase 3 tables.
       const shift = randomUUID();
@@ -179,6 +180,33 @@ beforeAll(async () => {
         `insert into stream_connections (id, organization_id, user_id, client, instance_id, connected_at, last_seen_at)
          values ($1, $2, $3, 'DESKTOP', 'test', now(), now())`,
         [randomUUID(), org, user],
+      );
+      // Phase 7 tables.
+      const route = randomUUID();
+      const run = randomUUID();
+      await m.query(
+        `insert into patrol_routes (id, organization_id, site_id, name, interval_minutes, completion_window_minutes)
+         values ($1, $2, $3, 'Night round', 60, 20)`,
+        [route, org, siteRow],
+      );
+      await m.query(
+        `insert into patrol_route_checkpoints (id, organization_id, site_id, patrol_route_id, checkpoint_id, sequence)
+         values ($1, $2, $3, $4, $5, 1)`,
+        [randomUUID(), org, siteRow, route, checkpoint],
+      );
+      await m.query(
+        `insert into patrol_runs (id, organization_id, shift_id, guard_id, site_id, patrol_route_id, sequence_no,
+           due_at, window_ends_at, required_count)
+         values ($1, $2, $3, $4, $5, $6, 1, now(), now() + interval '20 minutes', 1)`,
+        [run, org, shift, guard, siteRow, route],
+      );
+      await m.query(
+        `insert into checkpoint_visits (id, organization_id, guard_id, shift_id, checkpoint_id, patrol_route_id,
+           patrol_run_id, device_id, client_event_id, scanned_at_recorded, scanned_at, received_at, clock_status,
+           verification_status, counted)
+         values ($1, $2, $3, $4, $5, $6, $7, $8, $9, now(), now(), now(), 'VERIFIED_MONOTONIC',
+           'LOCATION_UNCONFIRMED', true)`,
+        [randomUUID(), org, guard, shift, checkpoint, route, run, device, randomUUID()],
       );
     }
   });

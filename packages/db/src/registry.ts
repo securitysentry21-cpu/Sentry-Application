@@ -81,4 +81,10 @@ export const TABLES: TableRegistry = {
   outbox: { kind: 'tenant' },
   realtime_events: { kind: 'tenant' },
   stream_connections: { kind: 'tenant' },
+
+  // Phase 7: patrols.
+  patrol_routes: { kind: 'tenant' },
+  patrol_route_checkpoints: { kind: 'tenant' },
+  patrol_runs: { kind: 'tenant' },
+  checkpoint_visits: { kind: 'tenant-append-only' },
 };

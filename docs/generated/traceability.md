@@ -7,7 +7,7 @@ Current phase: 3. IDs due through this phase: ADV-X01, ADV-X02, ADV-X07, ADV-T01
 |---|---|
 | ADV-A01 | apps/api/test/enrollment.test.ts |
 | ADV-A02 | apps/api/test/members.test.ts<br>packages/domain/test/members.test.ts |
-| ADV-A03 | apps/api/test/shifts.test.ts |
+| ADV-A03 | apps/api/test/patrols.test.ts<br>apps/api/test/shifts.test.ts |
 | ADV-A04 | apps/api/test/live.test.ts |
 | ADV-A05 | apps/api/test/members.test.ts<br>packages/domain/test/members.test.ts |
 | ADV-A06 | apps/api/test/members.test.ts<br>packages/domain/test/members.test.ts |
@@ -38,7 +38,7 @@ Current phase: 3. IDs due through this phase: ADV-X01, ADV-X02, ADV-X07, ADV-T01
 | ADV-L08 | apps/api/test/sync.test.ts |
 | ADV-L09 | apps/api/test/sync.test.ts |
 | ADV-L10 | packages/domain/test/tracking.test.ts |
-| ADV-L11 | apps/api/test/alerts.test.ts |
+| ADV-L11 | apps/api/test/alerts.test.ts<br>packages/domain/test/patrols.test.ts |
 | ADV-L12 | apps/mobile/test/backoff.test.ts<br>apps/mobile/test/sync-engine.test.ts |
 | ADV-O01 | apps/mobile/test/sync-engine.test.ts |
 | ADV-O02 | apps/mobile/test/app-flows.test.ts<br>apps/mobile/test/local-shift.test.ts<br>apps/mobile/test/presenter.test.ts |
@@ -51,7 +51,15 @@ Current phase: 3. IDs due through this phase: ADV-X01, ADV-X02, ADV-X07, ADV-T01
 | ADV-P01 | apps/api/test/sync.test.ts |
 | ADV-P02 | apps/api/test/live.test.ts |
 | ADV-P05 | apps/api/test/sync.test.ts |
-| ADV-Q05 | apps/api/test/sites.test.ts |
+| ADV-Q01 | apps/api/test/patrols.test.ts<br>packages/domain/test/patrols.test.ts |
+| ADV-Q02 | apps/api/test/patrols.test.ts<br>packages/domain/test/patrols.test.ts |
+| ADV-Q03 | apps/api/test/patrols.test.ts<br>packages/domain/test/patrols.test.ts |
+| ADV-Q04 | apps/api/test/patrols.test.ts |
+| ADV-Q05 | apps/api/test/patrols.test.ts<br>apps/api/test/sites.test.ts<br>packages/domain/test/patrols.test.ts |
+| ADV-Q06 | apps/api/test/patrols.test.ts |
+| ADV-Q07 | apps/api/test/patrols.test.ts |
+| ADV-Q08 | apps/api/test/patrols.test.ts<br>packages/domain/test/patrols.test.ts |
+| ADV-Q09 | apps/api/test/patrols.test.ts |
 | ADV-S02 | apps/mobile/test/sos.test.ts |
 | ADV-S11 | apps/mobile/test/device-key.test.ts<br>apps/mobile/test/sos.test.ts |
 | ADV-SH01 | packages/domain/test/shifts.test.ts |
@@ -62,10 +70,11 @@ Current phase: 3. IDs due through this phase: ADV-X01, ADV-X02, ADV-X07, ADV-T01
 | ADV-SH06 | apps/api/test/shifts.test.ts<br>packages/domain/test/shifts.test.ts |
 | ADV-T01 | apps/api/test/tenancy.test.ts |
 | ADV-T02 | apps/api/test/realtime.test.ts |
-| ADV-T04 | apps/api/test/sites.test.ts<br>packages/db/test/rls.test.ts |
+| ADV-T04 | apps/api/test/patrols.test.ts<br>apps/api/test/sites.test.ts<br>packages/db/test/rls.test.ts |
 | ADV-T05 | apps/api/test/sites.test.ts |
 | ADV-T06 | packages/db/test/kysely.test.ts<br>packages/db/test/rls.test.ts |
 | ADV-T07 | apps/api/test/shifts.test.ts |
+| ADV-T08 | apps/api/test/patrols.test.ts |
 | ADV-T09 | apps/api/test/tenancy.test.ts |
 | ADV-TM01 | apps/api/test/shifts.test.ts<br>apps/mobile/test/i18n.test.ts<br>packages/domain/test/shifts.test.ts |
 | ADV-TM03 | apps/api/test/shifts.test.ts |
@@ -86,12 +95,12 @@ Current phase: 3. IDs due through this phase: ADV-X01, ADV-X02, ADV-X07, ADV-T01
 | INV-05 | packages/db/test/rls.test.ts |
 | INV-06 | apps/mobile/test/ids.test.ts<br>apps/mobile/test/outbox.test.ts<br>apps/mobile/test/sync-engine.test.ts |
 | INV-07 | packages/domain/test/tracking.test.ts |
-| INV-08 | apps/api/test/sync.test.ts<br>apps/mobile/test/app-flows.test.ts<br>apps/mobile/test/app-status.test.ts<br>apps/mobile/test/local-shift.test.ts |
+| INV-08 | apps/api/test/patrols.test.ts<br>apps/api/test/sync.test.ts<br>apps/mobile/test/app-flows.test.ts<br>apps/mobile/test/app-status.test.ts<br>apps/mobile/test/local-shift.test.ts<br>apps/mobile/test/patrol.test.ts |
 | INV-09 | apps/mobile/test/presenter.test.ts<br>apps/web/test/live-model.test.ts<br>packages/domain/test/tracking.test.ts |
 | INV-10 | apps/mobile/test/presenter.test.ts<br>apps/mobile/test/sos.test.ts |
 | INV-12 | apps/api/test/route-registry.test.ts |
 | INV-13 | packages/db/test/rls.test.ts |
 | INV-14 | apps/api/test/live.test.ts |
 | INV-15 | apps/mobile/test/device-key.test.ts<br>apps/mobile/test/sos.test.ts |
-| INV-16 | apps/mobile/test/app-status.test.ts<br>apps/mobile/test/local-shift.test.ts<br>apps/mobile/test/presenter.test.ts |
+| INV-16 | apps/mobile/test/app-status.test.ts<br>apps/mobile/test/local-shift.test.ts<br>apps/mobile/test/patrol.test.ts<br>apps/mobile/test/presenter.test.ts |
 | INV-17 | apps/api/test/tenancy.test.ts |

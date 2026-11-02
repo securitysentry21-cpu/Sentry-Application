@@ -97,7 +97,7 @@ export const SETTINGS = {
   'checkpoint.max_usable_accuracy_m': s(int(10, 200), 50, '10–200'),
   'checkpoint.duplicate_window_s': s(int(0, 3600), 300, '0–3,600'),
   'checkpoint.max_plausible_speed_mps': s(int(2, 50), 15, '2–50'),
-  'patrol.count_unconfirmed_as_completed': s(z.boolean(), true, 'D-17'),
+  'patrol.count_unconfirmed_as_completed': s(z.boolean(), true, 'D-17', { dashboardEditable: true }),
   'patrol.treat_mock_as_unconfirmed': s(z.boolean(), true, ''),
   'alerts.reopen_suppression_s': s(int(0, 1800), 120, '0–1,800'),
   'alerts.incident_high_enabled': s(z.boolean(), true, ''),

@@ -72,6 +72,34 @@ erDiagram
     timestamp_with_time_zone used_at
     timestamp_with_time_zone created_at
   }
+  checkpoint_visits {
+    uuid id PK
+    uuid organization_id
+    uuid guard_id
+    uuid shift_id
+    uuid checkpoint_id
+    uuid patrol_route_id
+    uuid patrol_run_id
+    uuid device_id
+    uuid client_event_id
+    timestamp_with_time_zone scanned_at_recorded
+    timestamp_with_time_zone scanned_at
+    timestamp_with_time_zone received_at
+    text clock_status
+    double_precision latitude
+    double_precision longitude
+    double_precision accuracy_m
+    double_precision fix_age_s
+    integer distance_m
+    text distance_band
+    boolean is_mock
+    text verification_status
+    text verification_reason
+    text__ flags
+    boolean counted
+    integer qr_token_version
+    timestamp_with_time_zone created_at
+  }
   checkpoints {
     uuid id PK
     uuid organization_id
@@ -266,6 +294,52 @@ erDiagram
     timestamp_with_time_zone processed_at
     integer attempts
   }
+  patrol_route_checkpoints {
+    uuid id PK
+    uuid organization_id
+    uuid site_id
+    uuid patrol_route_id
+    uuid checkpoint_id
+    integer sequence
+    boolean required
+  }
+  patrol_routes {
+    uuid id PK
+    uuid organization_id
+    uuid site_id
+    text name
+    text description
+    boolean enforce_order
+    integer interval_minutes
+    integer first_run_offset_minutes
+    integer completion_window_minutes
+    text status
+    integer version
+    timestamp_with_time_zone created_at
+    timestamp_with_time_zone updated_at
+    uuid created_by_user_id
+    uuid updated_by_user_id
+  }
+  patrol_runs {
+    uuid id PK
+    uuid organization_id
+    uuid shift_id
+    uuid guard_id
+    uuid site_id
+    uuid patrol_route_id
+    integer sequence_no
+    timestamp_with_time_zone due_at
+    timestamp_with_time_zone window_ends_at
+    text status
+    timestamp_with_time_zone started_at
+    timestamp_with_time_zone completed_at
+    timestamp_with_time_zone closed_at
+    integer required_count
+    integer counted_count
+    integer unconfirmed_count
+    timestamp_with_time_zone created_at
+    timestamp_with_time_zone updated_at
+  }
   quarantined_items {
     uuid id PK
     uuid organization_id
@@ -427,6 +501,13 @@ erDiagram
   users ||--o{ alerts : "alerts_resolved_by_fkey"
   users ||--o{ audit_logs : "audit_logs_actor_user_id_fkey"
   organizations ||--o{ audit_logs : "audit_logs_organization_id_fkey"
+  checkpoints ||--o{ checkpoint_visits : "checkpoint_visits_organization_id_checkpoint_id_fkey"
+  guard_devices ||--o{ checkpoint_visits : "checkpoint_visits_organization_id_device_id_fkey"
+  organizations ||--o{ checkpoint_visits : "checkpoint_visits_organization_id_fkey"
+  guards ||--o{ checkpoint_visits : "checkpoint_visits_organization_id_guard_id_fkey"
+  patrol_routes ||--o{ checkpoint_visits : "checkpoint_visits_organization_id_patrol_route_id_fkey"
+  patrol_runs ||--o{ checkpoint_visits : "checkpoint_visits_organization_id_patrol_run_id_fkey"
+  shifts ||--o{ checkpoint_visits : "checkpoint_visits_organization_id_shift_id_fkey"
   users ||--o{ checkpoints : "checkpoints_created_by_user_id_fkey"
   organizations ||--o{ checkpoints : "checkpoints_organization_id_fkey"
   sites ||--o{ checkpoints : "checkpoints_organization_id_site_id_fkey"
@@ -460,6 +541,17 @@ erDiagram
   organizations ||--o{ organization_settings : "organization_settings_organization_id_fkey"
   users ||--o{ organization_settings : "organization_settings_updated_by_user_id_fkey"
   organizations ||--o{ outbox : "outbox_organization_id_fkey"
+  organizations ||--o{ patrol_route_checkpoints : "patrol_route_checkpoints_organization_id_fkey"
+  checkpoints ||--o{ patrol_route_checkpoints : "patrol_route_checkpoints_organization_id_site_id_checkpoin_fkey"
+  patrol_routes ||--o{ patrol_route_checkpoints : "patrol_route_checkpoints_organization_id_site_id_patrol_ro_fkey"
+  users ||--o{ patrol_routes : "patrol_routes_created_by_user_id_fkey"
+  organizations ||--o{ patrol_routes : "patrol_routes_organization_id_fkey"
+  sites ||--o{ patrol_routes : "patrol_routes_organization_id_site_id_fkey"
+  users ||--o{ patrol_routes : "patrol_routes_updated_by_user_id_fkey"
+  organizations ||--o{ patrol_runs : "patrol_runs_organization_id_fkey"
+  guards ||--o{ patrol_runs : "patrol_runs_organization_id_guard_id_fkey"
+  shifts ||--o{ patrol_runs : "patrol_runs_organization_id_shift_id_fkey"
+  patrol_routes ||--o{ patrol_runs : "patrol_runs_organization_id_site_id_patrol_route_id_fkey"
   guard_devices ||--o{ quarantined_items : "quarantined_items_organization_id_device_id_fkey"
   organizations ||--o{ quarantined_items : "quarantined_items_organization_id_fkey"
   organizations ||--o{ realtime_events : "realtime_events_organization_id_fkey"

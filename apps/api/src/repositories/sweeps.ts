@@ -37,3 +37,18 @@ export async function organizationsWithLiveShifts(
      limit ${limit}`.execute(sweep);
   return rows.map((r) => r.organization_id);
 }
+
+/** Organizations with patrol runs whose window ended before the time and that are still open. */
+export async function organizationsWithRunsToClose(
+  sweep: Database,
+  before: Date,
+  limit: number,
+): Promise<string[]> {
+  const { rows } = await sql<{ organization_id: string }>`
+    select distinct organization_id
+      from patrol_runs
+     where status in ('PENDING', 'IN_PROGRESS') and window_ends_at < ${before}
+     order by organization_id
+     limit ${limit}`.execute(sweep);
+  return rows.map((r) => r.organization_id);
+}

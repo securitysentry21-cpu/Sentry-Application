@@ -44,6 +44,8 @@ export class FakeLocation implements LocationPort {
   stops = 0;
   /** What the next on-demand fix returns. */
   nextFix: RawFix | null = null;
+  /** How many on-demand fixes were asked for. */
+  fixRequests = 0;
   failStart = false;
 
   startUpdates(options: LocationUpdateOptions): Promise<void> {
@@ -61,6 +63,7 @@ export class FakeLocation implements LocationPort {
     return Promise.resolve(this.running);
   }
   currentFix(): Promise<RawFix | null> {
+    this.fixRequests++;
     return Promise.resolve(this.nextFix);
   }
 }

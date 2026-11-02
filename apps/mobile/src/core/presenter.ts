@@ -113,6 +113,43 @@ export function receiptLine(receipt: Receipt | null, t: Translate): Line {
     : { text: base, tone };
 }
 
+/**
+ * A checkpoint scan, worded as PROD §7.7 lists the results. Until the server answers, the scan is
+ * only saved: the phone never claims a verification it hasn't received (INV-16). `sending` says an
+ * upload is under way, so "Checking…" rather than "will verify when online".
+ */
+export function scanLine(receipt: Receipt | null, sending: boolean, t: Translate): Line {
+  if (!receipt || receipt.status === 'QUEUED') {
+    return sending ? { text: t('scan.checking'), tone: 'info' } : { text: t('scan.saved'), tone: 'warning' };
+  }
+  const scan = receipt.scan;
+  if ((receipt.status === 'ACCEPTED' || receipt.status === 'DUPLICATE') && scan) {
+    switch (scan.outcome) {
+      case 'VERIFIED':
+        return { text: t('scan.VERIFIED', { name: scan.checkpointName ?? '' }), tone: 'ok' };
+      case 'LOCATION_UNCONFIRMED':
+        return scan.counted
+          ? { text: t('scan.LOCATION_UNCONFIRMED'), tone: 'warning' }
+          : { text: `${t('scan.LOCATION_UNCONFIRMED')}. ${t('scan.notCounted')}`, tone: 'warning' };
+      case 'OUTSIDE_RADIUS':
+        return { text: t('scan.OUTSIDE_RADIUS', { distance: scan.distanceM ?? '?' }), tone: 'danger' };
+      case 'DUPLICATE':
+        return { text: t('scan.DUPLICATE'), tone: 'info' };
+      case 'INVALID_QR':
+      case 'WRONG_SITE':
+      case 'NO_ACTIVE_SHIFT':
+        return { text: t(`scan.${scan.outcome}`), tone: 'danger' };
+    }
+  }
+  return receiptLine(receipt, t);
+}
+
+/** "Round: 3 of 6 done", once the server counted a scan toward a round. */
+export function scanProgress(receipt: Receipt | null, t: Translate): string | null {
+  const run = receipt?.scan?.run;
+  return run ? t('scan.progress', { counted: run.countedCount, required: run.requiredCount }) : null;
+}
+
 /** Only the server's answer moves the SOS beyond "waiting for network" (INV-10). */
 export function sosLine(sos: SosState, t: Translate): Line {
   switch (sos.phase) {

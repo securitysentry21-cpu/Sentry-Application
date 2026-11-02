@@ -14,8 +14,10 @@
 //   never sent, until the feature is on.
 import {
   MAX_BATCH_ITEMS,
+  scanResultSchema,
   sosRequestSchema,
   syncItemSchema,
+  type ScanResult,
   type SyncItem,
   type SyncItemStatus,
 } from '@sentryops/contracts';
@@ -69,6 +71,8 @@ export type Receipt = {
   status: ReceiptStatus;
   errorCode: string | null;
   serverRef: string | null;
+  /** A checkpoint scan's outcome, as the server judged it (PROD §7.7); null until it answers. */
+  scan: ScanResult | null;
   createdAtMs: number;
   updatedAtMs: number;
 };
@@ -149,6 +153,7 @@ type ReceiptRow = {
   status: ReceiptStatus;
   error_code: string | null;
   server_ref: string | null;
+  detail: string | null;
   created_at_ms: number;
   updated_at_ms: number;
 };
@@ -179,9 +184,20 @@ function toReceipt(row: ReceiptRow): Receipt {
     status: row.status,
     errorCode: row.error_code,
     serverRef: row.server_ref,
+    scan: parseScan(row.detail),
     createdAtMs: row.created_at_ms,
     updatedAtMs: row.updated_at_ms,
   };
+}
+
+function parseScan(detail: string | null): ScanResult | null {
+  if (!detail) return null;
+  try {
+    const parsed = scanResultSchema.safeParse(JSON.parse(detail));
+    return parsed.success ? parsed.data : null;
+  } catch {
+    return null;
+  }
 }
 
 const utf8Length = (text: string): number => new TextEncoder().encode(text).length;
@@ -370,9 +386,17 @@ export class Outbox {
    */
   async completeBatch(
     batchId: string,
-    results: readonly { clientEventId: string; status: SyncItemStatus; code?: string | undefined }[],
+    results: readonly {
+      clientEventId: string;
+      status: SyncItemStatus;
+      code?: string | undefined;
+      scan?: ScanResult | undefined;
+    }[],
   ): Promise<ItemOutcome[]> {
-    const byId = new Map<string, { status: SyncItemStatus; code?: string | undefined }>();
+    const byId = new Map<
+      string,
+      { status: SyncItemStatus; code?: string | undefined; scan?: ScanResult | undefined }
+    >();
     for (const r of results) if (!byId.has(r.clientEventId)) byId.set(r.clientEventId, r);
     const now = this.#now();
     return this.#db.transaction(async (tx) => {
@@ -393,8 +417,8 @@ export class Outbox {
         } else {
           await tx.run('DELETE FROM outbox WHERE seq = ?', [row.seq]);
           await tx.run(
-            `UPDATE receipts SET status = ?, error_code = ?, updated_at_ms = ? WHERE client_event_id = ?`,
-            [status, errorCode, now, row.client_event_id],
+            `UPDATE receipts SET status = ?, error_code = ?, detail = ?, updated_at_ms = ? WHERE client_event_id = ?`,
+            [status, errorCode, result?.scan ? JSON.stringify(result.scan) : null, now, row.client_event_id],
           );
         }
         outcomes.push({

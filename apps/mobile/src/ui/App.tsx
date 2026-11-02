@@ -19,6 +19,7 @@ import { EnrollmentScreen } from './screens/Enrollment.tsx';
 import { HomeScreen } from './screens/Home.tsx';
 import { IncidentScreen } from './screens/Incident.tsx';
 import { LanguageScreen } from './screens/Language.tsx';
+import { PatrolScreen } from './screens/Patrol.tsx';
 import { ShiftScreen } from './screens/Shift.tsx';
 import { SignedOutScreen } from './screens/SignedOut.tsx';
 import { SosScreen } from './screens/Sos.tsx';
@@ -28,6 +29,7 @@ export type Route =
   | { readonly name: 'home' }
   | { readonly name: 'shift'; readonly shiftId: string }
   | { readonly name: 'incident'; readonly shiftId: string }
+  | { readonly name: 'patrol'; readonly shiftId: string }
   | { readonly name: 'sos' }
   | { readonly name: 'diagnostics' }
   | { readonly name: 'language' };
@@ -108,7 +110,11 @@ function Root() {
   useEffect(() => {
     const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
       if (route.name === 'home') return false;
-      setRoute(route.name === 'incident' ? { name: 'shift', shiftId: route.shiftId } : { name: 'home' });
+      setRoute(
+        route.name === 'incident' || route.name === 'patrol'
+          ? { name: 'shift', shiftId: route.shiftId }
+          : { name: 'home' },
+      );
       return true;
     });
     return () => subscription.remove();
@@ -162,6 +168,12 @@ function Root() {
       return <ShiftScreen shiftId={route.shiftId} navigate={setRoute} />;
     case 'incident':
       return <IncidentScreen shiftId={route.shiftId} navigate={setRoute} />;
+    case 'patrol':
+      return snap.settings.features.patrols ? (
+        <PatrolScreen shiftId={route.shiftId} navigate={setRoute} />
+      ) : (
+        <ShiftScreen shiftId={route.shiftId} navigate={setRoute} />
+      );
     case 'language':
       return <LanguageScreen onDone={() => setRoute({ name: 'home' })} />;
     default:

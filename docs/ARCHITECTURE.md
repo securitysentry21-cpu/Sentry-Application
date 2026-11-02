@@ -759,16 +759,17 @@ Input: token, scan `recorded_at`/`mono_ms`, fix (lat, lon, accuracy, fix age, is
 2. Active shift covering scan `captured_at` → else `NO_ACTIVE_SHIFT`, stored without coordinates (INV-08).
 3. `checkpoint.site_id = shift.site_id` → else `WRONG_SITE`.
 4. Same checkpoint already counted in the same run within `checkpoint.duplicate_window_s` → `DUPLICATE`. (Retrying the same `client_event_id` returns the original result, not DUPLICATE.)
-5. Location:
-   - checkpoint without coordinates, no fix, fix age > `checkpoint.max_fix_age_s`, accuracy > `checkpoint.max_usable_accuracy_m`, or mock under policy → `LOCATION_UNCONFIRMED`;
+5. Location (`packages/domain/patrols.ts`):
+   - checkpoint without coordinates, no fix, fix age > `checkpoint.max_fix_age_s`, or mock under policy → `LOCATION_UNCONFIRMED`;
+   - distance − accuracy > radius → `OUTSIDE_RADIUS`, however poor the accuracy: clearly outside (PROD §9.3, ADV-Q02; Phase 7 decision);
+   - accuracy unknown or > `checkpoint.max_usable_accuracy_m` → `LOCATION_UNCONFIRMED`;
    - distance ≤ radius → `VERIFIED`;
-   - distance − accuracy > radius → `OUTSIDE_RADIUS`;
    - otherwise → `LOCATION_UNCONFIRMED`.
 6. Implied speed from the previous counting visit in the shift > `checkpoint.max_plausible_speed_mps` → flag `IMPLAUSIBLE_TRAVEL` and open/retrigger `SUSPICIOUS_LOCATION`.
 7. `counted` = VERIFIED, or LOCATION_UNCONFIRMED when `patrol.count_unconfirmed_as_completed`.
 8. Attach to the open run of the checkpoint's scheduled route whose window contains `captured_at`; update run counters and status.
 
-Endpoint: `POST /api/v1/checkpoint-scans` with the token in the body. This replaces Revision 1's `POST /checkpoints/:id/verify`, which would have required the QR to contain an internal ID.
+Scans arrive as `CHECKPOINT_SCAN` items in `POST /api/v1/sync/batch`, online and offline alike, in the main lane, so a scan never overtakes a shift start still queued on the phone (Phase 7 decision). The token is in the item; the reply carries each scan's outcome. This replaces Revision 1's `POST /checkpoints/:id/verify`, which would have required the QR to contain an internal ID.
 
 ### 11.3 Patrol runs
 
@@ -888,8 +889,8 @@ A job every 15 s selects OPEN alerts with `next_escalation_at ≤ now`, applies 
 - `GET /sites/:id/checkpoints` · `POST /sites/:id/checkpoints` · `PATCH /checkpoints/:id` · `POST /checkpoints/:id/rotate-qr` [checkpoints.write] audited
 - `GET /sites/:id/checkpoints/print-sheet` [checkpoints.qr.print] audited
 - `GET /sites/:id/patrol-routes` · `POST /sites/:id/patrol-routes` · `PATCH /patrol-routes/:id` [patrols.*] audited
-- `GET /patrol-runs?shiftId=|siteId=&from=&to=` [patrols.read]
-- `POST /checkpoint-scans` [guard self]
+- `GET /patrol-runs?shiftId=|siteId=|guardId=&status=&from=&to=` · `GET /patrol-runs/:id` · `GET /checkpoint-visits?shiftId=` [patrols.read]
+- `GET /me/patrols?shiftId=` [guard self, `patrols.read.assigned`]; scans arrive through `POST /sync/batch` (§11.2)
 
 **Shifts**
 - `GET /shifts` · `POST /shifts` · `POST /shifts/bulk?preview=true|false` · `GET /shifts/:id` · `PATCH /shifts/:id` [shifts.*] audited

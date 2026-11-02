@@ -25,13 +25,15 @@ async function seedB(sql: string, params: unknown[]): Promise<void> {
   await asOwner(t.db, (c) => c.query(sql, params));
 }
 
-const B: { guard: string; device: string; site: string; checkpoint: string; shift: string; alert: string } = {
+const B = {
   guard: randomUUID(),
   device: randomUUID(),
   site: randomUUID(),
   checkpoint: randomUUID(),
   shift: randomUUID(),
   alert: randomUUID(),
+  route: randomUUID(),
+  run: randomUUID(),
 };
 
 async function seedBResources(): Promise<void> {
@@ -63,6 +65,22 @@ async function seedBResources(): Promise<void> {
        opened_at, last_triggered_at)
      values ($1, $2, 'DEVICE_OFFLINE', 'MEDIUM', $3, 'Device offline', $4, $5, $6, now(), now())`,
     [B.alert, orgB.id, `offline:${B.shift}`, B.guard, B.site, B.shift],
+  );
+  await seedB(
+    `insert into patrol_routes (id, organization_id, site_id, name, interval_minutes, completion_window_minutes)
+     values ($1, $2, $3, 'Bravo round', 60, 20)`,
+    [B.route, orgB.id, B.site],
+  );
+  await seedB(
+    `insert into patrol_route_checkpoints (id, organization_id, site_id, patrol_route_id, checkpoint_id, sequence)
+     values ($1, $2, $3, $4, $5, 1)`,
+    [randomUUID(), orgB.id, B.site, B.route, B.checkpoint],
+  );
+  await seedB(
+    `insert into patrol_runs (id, organization_id, shift_id, guard_id, site_id, patrol_route_id, sequence_no,
+       due_at, window_ends_at, required_count)
+     values ($1, $2, $3, $4, $5, $6, 1, now(), now() + interval '20 minutes', 1)`,
+    [B.run, orgB.id, B.shift, B.guard, B.site, B.route],
   );
 }
 
@@ -105,6 +123,13 @@ const CROSS_TENANT_RESOURCES: Record<string, Probe> = {
   'GET /api/v1/sites/:id/checkpoints/print-sheet': { id: fixed(() => B.site) },
   'PATCH /api/v1/checkpoints/:id': { id: fixed(() => B.checkpoint), body: { name: 'Changed', version: 1 } },
   'POST /api/v1/checkpoints/:id/rotate-qr': { id: fixed(() => B.checkpoint) },
+  'GET /api/v1/sites/:id/patrol-routes': { id: fixed(() => B.site) },
+  'POST /api/v1/sites/:id/patrol-routes': {
+    id: fixed(() => B.site),
+    body: { name: 'Sneaky', schedule: null, checkpoints: [] },
+  },
+  'PATCH /api/v1/patrol-routes/:id': { id: fixed(() => B.route), body: { name: 'Changed', version: 1 } },
+  'GET /api/v1/patrol-runs/:id': { id: fixed(() => B.run) },
   'GET /api/v1/shifts/:id': { id: fixed(() => B.shift) },
   'PATCH /api/v1/shifts/:id': { id: fixed(() => B.shift), body: { notes: 'x', version: 1 } },
   'POST /api/v1/shifts/:id/cancel': { id: fixed(() => B.shift), body: { reason: 'x' } },
@@ -219,6 +244,31 @@ describe('cross-tenant resources (SEC §4.2 rule 4)', () => {
     expect(
       invitations.json<{ invitations: { email: string }[] }>().invitations.map((i) => i.email),
     ).not.toContain('x@b.test');
+    // Patrol runs: another organization's never listed, even when asked for by its shift.
+    for (const query of ['', `?shiftId=${B.shift}`, `?siteId=${B.site}`, `?guardId=${B.guard}`]) {
+      const runs = await call(t.app, {
+        method: 'GET',
+        url: `/api/v1/patrol-runs${query}`,
+        cookie: ownerA,
+        org: orgA.id,
+      });
+      expect(runs.statusCode, query).toBe(200);
+      expect(
+        runs.json<{ runs: { id: string }[] }>().runs.map((r) => r.id),
+        query,
+      ).not.toContain(B.run);
+    }
+  });
+
+  it("ADV-T01 another organization's shift is not found when its scans are asked for", async () => {
+    const res = await call(t.app, {
+      method: 'GET',
+      url: `/api/v1/checkpoint-visits?shiftId=${B.shift}`,
+      cookie: ownerA,
+      org: orgA.id,
+    });
+    expect(res.statusCode).toBe(404);
+    expect(errorCode(res)).toBe('NOT_FOUND');
   });
 
   it('ADV-A10 identity fields in a body are rejected, never applied', async () => {

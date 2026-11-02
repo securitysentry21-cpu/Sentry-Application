@@ -41,7 +41,7 @@ Defaults and scope of every organization setting (PROD Appendix B). "Dashboard" 
 | `checkpoint.max_usable_accuracy_m` | `50` | organization | no | 10–200 |
 | `checkpoint.duplicate_window_s` | `300` | organization | no | 0–3,600 |
 | `checkpoint.max_plausible_speed_mps` | `15` | organization | no | 2–50 |
-| `patrol.count_unconfirmed_as_completed` | `true` | organization | no | D-17 |
+| `patrol.count_unconfirmed_as_completed` | `true` | organization | yes | D-17 |
 | `patrol.treat_mock_as_unconfirmed` | `true` | organization | no |  |
 | `alerts.reopen_suppression_s` | `120` | organization | no | 0–1,800 |
 | `alerts.incident_high_enabled` | `true` | organization | no |  |

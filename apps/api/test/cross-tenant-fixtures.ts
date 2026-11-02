@@ -130,6 +130,24 @@ export const CROSS_TENANT_FIXTURES: Readonly<Record<string, Coverage>> = {
     test: 'sites.test.ts › ADV-T05 and tenancy.test.ts › ADV-T01',
   },
 
+  // Phase 7
+  'GET /api/v1/sites/:id/patrol-routes': T01,
+  'POST /api/v1/sites/:id/patrol-routes': T01,
+  'PATCH /api/v1/patrol-routes/:id': T01,
+  'GET /api/v1/patrol-runs': {
+    covered: 'test',
+    test: "tenancy.test.ts › ADV-T01 lists (another organization's runs are never listed)",
+  },
+  'GET /api/v1/patrol-runs/:id': T01,
+  'GET /api/v1/checkpoint-visits': {
+    covered: 'test',
+    test: "tenancy.test.ts › ADV-T01 (another organization's shift is not found)",
+  },
+  'GET /api/v1/me/patrols': {
+    covered: 'test',
+    test: "patrols.test.ts › ADV-A03 (another guard's shift is not found)",
+  },
+
   // Phase 5
   'GET /api/v1/alerts': {
     covered: 'test',

@@ -5,6 +5,7 @@ import { z } from 'zod';
 
 import { errorCodeSchema } from './errors.ts';
 import { latitudeSchema, longitudeSchema, siteBoundarySchema } from './geo.ts';
+import { scanResultSchema } from './patrols.ts';
 
 const uuid = z.uuid();
 const instant = z.iso.datetime({ offset: true });
@@ -261,6 +262,8 @@ export const syncBatchResponseSchema = z.object({
       clientEventId: z.string(),
       status: z.enum(SYNC_ITEM_STATUSES),
       code: errorCodeSchema.optional(),
+      /** A checkpoint scan's outcome, when the item was one (ACCEPTED or DUPLICATE). */
+      scan: scanResultSchema.optional(),
     }),
   ),
   /** Server state wins (ARCH §8.8): the phone reconciles its local shifts with these. */

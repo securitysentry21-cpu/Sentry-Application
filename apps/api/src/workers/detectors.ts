@@ -15,8 +15,14 @@ import {
   staleNotStartedAlerts,
 } from '../repositories/alerts.ts';
 import { numberSetting, organizationSettings } from '../repositories/organizations.ts';
-import { dueShifts, organizationsWithLiveShifts, type DueShift } from '../repositories/sweeps.ts';
+import {
+  dueShifts,
+  organizationsWithLiveShifts,
+  organizationsWithRunsToClose,
+  type DueShift,
+} from '../repositories/sweeps.ts';
 import { clearAlert, ensureAlert, reopenSuppressionMs } from '../services/alerts.ts';
+import { closeDueRuns, RUN_CLOSE_GRACE_MS } from '../services/patrols.ts';
 import { systemTransition } from '../services/shifts.ts';
 
 export type DetectorDeps = AppDeps & { readonly sweep: Database };
@@ -176,6 +182,16 @@ export async function alertsForOrganization(
       );
     }
   });
+}
+
+/** The patrol-run closer (ARCH §16.2, every 60 s): open runs whose window ended, per organization. */
+export async function runPatrolCloser(deps: DetectorDeps): Promise<{ closed: number }> {
+  const before = new Date(deps.clock.now().getTime() - RUN_CLOSE_GRACE_MS);
+  let closed = 0;
+  for (const organizationId of await organizationsWithRunsToClose(deps.sweep, before, BATCH)) {
+    closed += await closeDueRuns(deps, organizationId);
+  }
+  return { closed };
 }
 
 export async function runAlertDetectors(deps: DetectorDeps): Promise<{ organizations: number }> {

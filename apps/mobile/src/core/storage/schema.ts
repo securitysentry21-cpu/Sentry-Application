@@ -78,6 +78,13 @@ CREATE INDEX receipts_recent ON receipts (partition_key, updated_at_ms);
 ALTER TABLE outbox ADD COLUMN next_attempt_at_ms INTEGER NOT NULL DEFAULT 0;
 `,
   },
+  {
+    version: 3,
+    name: "the server's answer beyond the status, e.g. a checkpoint scan's outcome (Phase 7)",
+    sql: `
+ALTER TABLE receipts ADD COLUMN detail TEXT;
+`,
+  },
 ];
 
 export const SCHEMA_VERSION = MIGRATIONS.at(-1)?.version ?? 0;

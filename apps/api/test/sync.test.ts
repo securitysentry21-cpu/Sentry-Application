@@ -61,7 +61,7 @@ async function send(phone: EnrolledPhone, items: Item[]) {
   });
   if (res.statusCode !== 200) throw new Error(`sync failed: ${res.statusCode} ${res.body}`);
   return res.json<{
-    results: { clientEventId: string; status: string; code?: string }[];
+    results: { clientEventId: string; status: string; code?: string; scan?: { outcome: string } }[];
     shifts: { shiftId: string; status: string }[];
   }>();
 }
@@ -409,6 +409,8 @@ describe('no coordinates outside a shift (INV-08)', () => {
   // Generated over the contract: every sync item type that can carry a fix needs a case here, so a
   // new coordinate-carrying item can't skip the check. Each is sent where no shift window is open.
   const SECRET = { lat: 33.123457, lon: 73.654321, accuracyM: 6 };
+  /** A real checkpoint label of the organization, so the scan takes the full path (Phase 7). */
+  let label = 'SG1:unknown';
   const cases: Record<string, (shiftId: string) => Item> = {
     SHIFT_START: (shiftId) =>
       item('SHIFT_START', {
@@ -419,7 +421,7 @@ describe('no coordinates outside a shift (INV-08)', () => {
     SHIFT_END: (shiftId) => item('SHIFT_END', { shiftId, fix: { ...SECRET, fixAgeS: 1 } }),
     LOCATION: (shiftId) => item('LOCATION', { shiftId, fix: SECRET }),
     CHECKPOINT_SCAN: () =>
-      item('CHECKPOINT_SCAN', { shiftId: null, token: 'SG1:unknown', fix: { ...SECRET, fixAgeS: 1 } }),
+      item('CHECKPOINT_SCAN', { shiftId: null, token: label, fix: { ...SECRET, fixAgeS: 1 } }),
     INCIDENT: () =>
       item('INCIDENT', {
         shiftId: null,
@@ -440,6 +442,26 @@ describe('no coordinates outside a shift (INV-08)', () => {
       .map((o) => o.shape.type.value)
       .sort();
     expect(Object.keys(cases).sort()).toEqual(withFix);
+
+    const checkpoint = await call(t.app, {
+      method: 'POST',
+      url: `/api/v1/sites/${siteId}/checkpoints`,
+      cookie: admin,
+      org: org.id,
+      body: { name: 'P05 door', location: { lat: 31.4702, lng: 74.4001 } },
+    });
+    expect(checkpoint.statusCode).toBe(201);
+    const sheet = await call(t.app, {
+      method: 'GET',
+      url: `/api/v1/sites/${siteId}/checkpoints/print-sheet`,
+      cookie: admin,
+      org: org.id,
+    });
+    label =
+      sheet
+        .json<{ labels: { name: string; qrContent: string }[] }>()
+        .labels.find((l) => l.name === 'P05 door')?.qrContent ?? '';
+    expect(label).toMatch(/^SG1:/);
 
     const number = `+9230022${String(20_000 + seq++).padStart(5, '0')}`;
     const guardId = await createGuard(t.app, admin, org.id, {
@@ -467,7 +489,12 @@ describe('no coordinates outside a shift (INV-08)', () => {
       phone,
       withFix.map((type) => cases[type]!(shiftId)),
     );
-    expect(res.results.map((r) => r.status)).toEqual(withFix.map(() => 'REJECTED'));
+    // A scan outside a shift is kept as a fact without coordinates (PROD §9.3, SEC §16.1); every other
+    // item with a fix is refused.
+    expect(res.results.map((r) => r.status)).toEqual(
+      withFix.map((type) => (type === 'CHECKPOINT_SCAN' ? 'ACCEPTED' : 'REJECTED')),
+    );
+    expect(res.results[withFix.indexOf('CHECKPOINT_SCAN')]?.scan?.outcome).toBe('NO_ACTIVE_SHIFT');
 
     // Every tenant table, every column, as text: the coordinates appear nowhere.
     for (const table of tenantTables(TABLES)) {

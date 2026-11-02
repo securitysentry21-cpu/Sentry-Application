@@ -2,7 +2,15 @@ import { describe, expect, it } from 'vitest';
 
 import { translator } from '../src/core/i18n/index.ts';
 import type { Receipt } from '../src/core/outbox/outbox.ts';
-import { receiptLine, shiftLine, sosLine, syncLine, trackingLine } from '../src/core/presenter.ts';
+import {
+  receiptLine,
+  scanLine,
+  scanProgress,
+  shiftLine,
+  sosLine,
+  syncLine,
+  trackingLine,
+} from '../src/core/presenter.ts';
 import { newLocalShift, shiftReducer } from '../src/core/shift/local-shift.ts';
 import { newSos } from '../src/core/sos/machine.ts';
 
@@ -16,8 +24,83 @@ const receipt = (status: Receipt['status'], errorCode: string | null = null): Re
   status,
   errorCode,
   serverRef: null,
+  scan: null,
   createdAtMs: NOW,
   updatedAtMs: NOW,
+});
+
+const scanReceipt = (status: Receipt['status'], scan: Receipt['scan']): Receipt => ({
+  ...receipt(status),
+  type: 'CHECKPOINT_SCAN',
+  scan,
+});
+
+describe('checkpoint scans on the phone (PROD §7.7)', () => {
+  const judged = (
+    scan: Partial<NonNullable<Receipt['scan']>> & Pick<NonNullable<Receipt['scan']>, 'outcome'>,
+  ) =>
+    scanLine(
+      scanReceipt('ACCEPTED', { counted: false, checkpointName: null, distanceM: null, run: null, ...scan }),
+      false,
+      t,
+    );
+
+  it('INV-16 a scan reads “Saved — will verify when online” (“Checking…” while sending) until the server answers', () => {
+    expect(scanLine(null, false, t)).toEqual({ text: 'Saved — will verify when online', tone: 'warning' });
+    expect(scanLine(scanReceipt('QUEUED', null), false, t).text).toBe('Saved — will verify when online');
+    expect(scanLine(scanReceipt('QUEUED', null), true, t)).toEqual({ text: 'Checking…', tone: 'info' });
+  });
+
+  it('words each outcome the way PROD §7.7 lists them', () => {
+    expect(judged({ outcome: 'VERIFIED', counted: true, checkpointName: 'Main gate' })).toEqual({
+      text: '✓ Verified: Main gate',
+      tone: 'ok',
+    });
+    expect(judged({ outcome: 'LOCATION_UNCONFIRMED', counted: true }).text).toBe(
+      'QR accepted — location could not be confirmed',
+    );
+    expect(judged({ outcome: 'LOCATION_UNCONFIRMED', counted: false }).text).toBe(
+      'QR accepted — location could not be confirmed. It does not count for the round.',
+    );
+    expect(judged({ outcome: 'OUTSIDE_RADIUS', distanceM: 85 })).toEqual({
+      text: 'Not verified: about 85 m from this checkpoint',
+      tone: 'danger',
+    });
+    expect(judged({ outcome: 'INVALID_QR' }).text).toBe(
+      'QR code not recognised. If this label is at your site, it may be old: tell your supervisor.',
+    );
+    expect(judged({ outcome: 'WRONG_SITE' }).text).toBe('This checkpoint belongs to another site');
+    expect(judged({ outcome: 'NO_ACTIVE_SHIFT' }).text).toBe('No active shift');
+    expect(judged({ outcome: 'DUPLICATE' }).text).toBe('Already scanned in this round');
+  });
+
+  it('a resubmitted scan shows its first answer; a refusal shows the reason', () => {
+    const first = {
+      outcome: 'VERIFIED' as const,
+      counted: true,
+      checkpointName: 'Main gate',
+      distanceM: null,
+      run: null,
+    };
+    expect(scanLine(scanReceipt('DUPLICATE', first), false, t).text).toBe('✓ Verified: Main gate');
+    expect(scanLine({ ...scanReceipt('REJECTED', null), errorCode: 'NOT_FOUND' }, false, t)).toEqual({
+      text: 'Not accepted by server: The server does not know this shift.',
+      tone: 'danger',
+    });
+  });
+
+  it("shows a round's progress only once the server counted the scan toward it", () => {
+    expect(scanProgress(null, t)).toBeNull();
+    expect(scanProgress(scanReceipt('QUEUED', null), t)).toBeNull();
+    const counted = scanReceipt('ACCEPTED', {
+      outcome: 'VERIFIED',
+      counted: true,
+      checkpointName: 'Store room',
+      distanceM: null,
+      run: { countedCount: 2, requiredCount: 6, status: 'IN_PROGRESS' },
+    });
+    expect(scanProgress(counted, t)).toBe('Round: 2 of 6 done');
+  });
 });
 
 describe('honest words on the phone (PROD §7.6)', () => {

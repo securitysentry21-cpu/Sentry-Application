@@ -112,6 +112,58 @@ The owner read how scanning will work and approved Phase 7 ("Go ahead with Phase
 - **D-17 · QR-only scans count, always labelled:** a valid scan whose location can't be confirmed counts and is labelled "QR only". An organization can turn this off (`patrol.count_unconfirmed_as_completed`).
 - **D-24 · map pin in V1:** a checkpoint's position is set with a map pin in the dashboard; calibrating it on site with the app is V1.1.
 
+**Agent-decided while building Phase 7 (2026-11-02).** These fill gaps the spec left, each with the simplest option that keeps its rules. Review and veto in the diff.
+
+- **Scans arrive only through `POST /sync/batch`,** in the main lane, online and offline alike. ARCH §15 also listed `POST /checkpoint-scans`; it isn't built:
+  - a scan sent beside the queue could overtake an offline shift start still waiting in it (ARCH §8.6), and be judged against no shift;
+  - one path keeps verification identical online and offline (ARCH §11.2).
+
+  The sync reply carries each scan's outcome (`results[].scan`), and the phone keeps it on the scan's receipt. ARCH §11.2 and §15 are updated.
+- **"Clearly outside" is checked before "poor accuracy".** ARCH §11.2 listed poor accuracy first, which would count a scan made 2 km away with a 100 m fix as "QR only". PROD §9.3 defines OUTSIDE_RADIUS as "clearly outside the checkpoint radius even allowing for accuracy", and ADV-Q02 says a photographed label scanned far away doesn't count; both rank above ARCH. So:
+  - a fix with known accuracy whose distance minus accuracy is beyond the radius is OUTSIDE_RADIUS, however poor that accuracy;
+  - a stale fix, a fake one (by policy), unknown accuracy, or a checkpoint without a position still give LOCATION_UNCONFIRMED.
+
+  ARCH §11.2 is updated.
+- **Run windows.** A run takes scans captured from its due time to the end of its window. A checkpoint's scan attaches to the run of its one active scheduled route whose window holds the capture time. Scans outside every window, of on-demand routes, or of checkpoints in no route are recorded with their outcome but count toward no run.
+- **Route limits:**
+  - an interval of 10–720 minutes;
+  - a completion window of at least 5 minutes and no longer than the interval, so a route's runs never overlap;
+  - a first-run offset of 0–720 minutes;
+  - at most 200 checkpoints;
+  - a scheduled route needs at least one required checkpoint.
+- **Run changes:**
+  - runs not yet due are replaced when the shift is extended or the route changes, and their numbers continue;
+  - runs already due are never touched;
+  - a route created mid-shift gets runs from then on, not for the hours already passed;
+  - a run under way when its route's checkpoints change continues against the new list;
+  - a route that stops being scheduled (made on demand or inactive, or left with no required checkpoint) cancels its run under way, so an administrator's change never raises an alert against the guard. CANCELLED therefore also means "no longer owed", not only "the shift ended before it was due" (PROD §9.2).
+- **An active route's checkpoints are active.** An inactive checkpoint can't be added to an active route, and a checkpoint can't be switched off while it is a stop of one. Its label would be refused (INVALID_QR), so those rounds could never complete. To retire a checkpoint, take it off its routes first. (Found while reviewing the dashboard.)
+- **Closing:**
+  - the worker closes a run 2 minutes after its window ends, so a scan made at the last moment can still arrive;
+  - at shift end, runs not yet due are CANCELLED, and the one under way closes with what was scanned.
+- **Late scans.** Offline scans that arrive after their run closed still update it (e.g. MISSED → COMPLETED). Its CHECKPOINT_MISSED alert stays open: PROD §12.1 says that alert never resolves by itself, so a person sees it next to the run's final state.
+- **Duplicates without a run** (on-demand routes): "already counted in the same run" becomes the same shift.
+- **Implausible travel** compares the positions of the two checkpoints with the time between the scans, against the previous counting scan in the shift.
+- **Rate limit** (SEC §9, 60 scans per guard per minute): counted from the scans received in the last minute. Beyond it a scan gets RETRY and the phone sends it again, so nothing is lost.
+- **What leaves the server:**
+  - a scan's result names the checkpoint only when it belongs to the guard's own site;
+  - it gives a distance, rounded to 5 m, only for OUTSIDE_RADIUS;
+  - dashboard responses carry distances and accuracy, never a guard's coordinates.
+- **Outside a shift** a scan keeps only the distance band (0–50 m … over 1,000 m), the accuracy and flags. A check constraint in the database refuses coordinates or a distance on any visit without a shift (INV-08).
+- **The D-17 setting is editable from the dashboard** (`patrol.count_unconfirmed_as_completed`), as the owner was told when approving D-17.
+- **No new realtime event.** The Patrols page reloads every 60 s and when it regains focus. CHECKPOINT_MISSED alerts reach dashboards live, as alert events.
+- **Guard app:**
+  - it reuses the enrollment scanner (the camera permission has been in the build since Phase 2) and adds a light switch;
+  - it takes the on-demand fix the way incidents do;
+  - it keeps the last copy of the rounds, for viewing offline;
+  - nothing is scanned, and no location taken, outside the active shift (INV-08).
+- **Not built: iOS temporary full accuracy.** The pilot is Android (D-34). An approximate fix gives "QR only", never a wrong verification.
+- **Waiting for the owner: the message for an old label.** PROD §5.4 and §7.7 show "Old QR code — report to supervisor" for a rotated label, but PROD §9.3 says the same message for unknown, rotated, archived and other organizations' labels. The server keeps only the current label's hash, so it can't tell an old label from an unknown one. Options:
+  - **(a)**, built: one message for all of them, "QR code not recognised. If this label is at your site, it may be old: tell your supervisor.";
+  - **(b)**: keep the hashes of a checkpoint's old labels, and say "Old QR code" for this organization's rotated labels. Other organizations' labels would still answer like unknown ones (ADV-T08).
+
+  Recommendation: (a). It is in `docs/OPEN_QUESTIONS.md`.
+
 ## Phase 6 · live operations dashboard · agent-decided 2026-11-01
 
 The owner asked for Phase 6 to start while Phase 4's device tests are still open (2026-11-01: "can you start working on phase 6 aswell to save time?"). `status.json` stays at Phase 3, as for Phase 5. These are the gaps the spec left, each filled with the simplest option that keeps its rules. Review and veto in the diff.
@@ -259,6 +311,8 @@ The first cell, in Terraform (`infra/`), following ARCH §19.8. The choices the 
 | — | Review C-01–C-13 and the remaining A, M and P items | APPROVED ("apply all") |
 | — | Phase 0 engineering choices (toolchain, test database, dependency exceptions) | Agent-decided 2026-10-08; veto in the diff |
 | — | Phase 6 choices (stream client, event enrichment, revalidation, coverage, history thinning) | Agent-decided 2026-11-01; veto in the diff |
+| — | Phase 7 choices (scans through sync, verification order, run windows and changes, closing grace, late scans) | Agent-decided 2026-11-02; veto in the diff |
+| — | Message for an old (rotated) checkpoint label | PROPOSED: one message for every unrecognised label (built) |
 
 ---
 

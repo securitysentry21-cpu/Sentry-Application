@@ -11,11 +11,13 @@ import {
   pointInPolygon,
   transition,
   type ShiftCommand,
+  type ShiftEventType,
   type ShiftSettings,
 } from '@sentryops/domain';
 
 import type { AppDeps } from '../deps.ts';
 import { onShiftChanged } from './alerts.ts';
+import { onShiftPatrols } from './patrols.ts';
 import { uuidv7 } from '../ids.ts';
 import { numberSetting, organizationSettings } from '../repositories/organizations.ts';
 import {
@@ -37,6 +39,18 @@ export type FullShiftSettings = ShiftSettings & {
   readonly startOutsideGeofence: 'ALLOW_AND_FLAG' | 'BLOCK';
   readonly outsideBufferM: number;
 };
+
+/** Everything a shift change sets off: realtime, alerts (PROD §12) and patrol runs (PROD §9.2). */
+export async function shiftChanged(
+  trx: Database,
+  deps: AppDeps,
+  organizationId: string,
+  shift: ShiftRow,
+  event: ShiftEventType,
+): Promise<void> {
+  await onShiftChanged(trx, deps, organizationId, shift);
+  await onShiftPatrols(trx, deps, organizationId, shift, event);
+}
 
 export function shiftSettingsFrom(settings: Record<string, unknown>): FullShiftSettings {
   return {
@@ -239,7 +253,7 @@ export async function guardStart(
     },
   });
   const updated = await getShift(trx, guard.organizationId, shift.id);
-  if (updated) await onShiftChanged(trx, deps, guard.organizationId, updated);
+  if (updated) await shiftChanged(trx, deps, guard.organizationId, updated, 'STARTED');
   return { status: 'ACCEPTED', shift: updated ?? shift };
 }
 
@@ -300,7 +314,7 @@ export async function guardEnd(
     payload: { offline: input.offline },
   });
   const updated = await getShift(trx, guard.organizationId, shift.id);
-  if (updated) await onShiftChanged(trx, deps, guard.organizationId, updated);
+  if (updated) await shiftChanged(trx, deps, guard.organizationId, updated, 'ENDED');
   return { status: 'ACCEPTED', shift: updated ?? shift };
 }
 
@@ -344,7 +358,7 @@ export async function systemTransition(
     payload: {},
   });
   const updated = await getShift(trx, organizationId, shift.id);
-  if (updated) await onShiftChanged(trx, deps, organizationId, updated);
+  if (updated) await shiftChanged(trx, deps, organizationId, updated, result.event);
   return true;
 }
 
@@ -380,6 +394,6 @@ export async function endShiftsForDisabledGuard(
       payload: { reason: 'guard access revoked' },
     });
     const updated = await getShift(trx, organizationId, shift.id);
-    if (updated) await onShiftChanged(trx, deps, organizationId, updated);
+    if (updated) await shiftChanged(trx, deps, organizationId, updated, 'FORCE_ENDED');
   }
 }

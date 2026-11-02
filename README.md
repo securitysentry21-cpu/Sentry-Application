@@ -33,7 +33,13 @@ The demo creates "Demo Security": five guards, a gate and a patrol beat in the c
 - Usman's battery is at 12%: "Low battery".
 - Hina's phone loses signal after two minutes. On the map she turns DELAYED, then OFFLINE, with her position marked last known; "Device offline" opens after ten minutes.
 
-The dashboard updates live, through a stream from the API. The background worker runs the shift and alert detectors every minute, and moves live updates from the database to the API every half second (`pnpm worker:dev`). The demo does both itself, so the worker isn't needed for it.
+On the Patrols page, the beat has a QR checkpoint at each corner and a round every 12 minutes, with 9 minutes to finish it:
+
+- Sana walks every round: Done.
+- Bilal, while off site, scans a photographed label: "Not verified", hundreds of metres from the checkpoint. Back on the beat he walks only half of each round: Incomplete, with a "Checkpoint run incomplete" alert.
+- Hina's silent phone sends nothing: her rounds are Missed.
+
+The dashboard updates live, through a stream from the API. The background worker runs the shift and alert detectors and closes patrol rounds every minute, and moves live updates from the database to the API every half second (`pnpm worker:dev`). The demo does all of it itself, so the worker isn't needed for it.
 
 `pnpm demo --crowd=1000` adds 1,000 more guards across 16 zones of the colony, each reporting once a minute, to see the Live map at pilot scale. Setting them up takes a few minutes.
 

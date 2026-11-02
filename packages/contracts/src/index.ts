@@ -6,6 +6,7 @@ export * from './geo.ts';
 export * from './guards.ts';
 export * from './live.ts';
 export * from './mobile.ts';
+export * from './patrols.ts';
 export * from './permissions.ts';
 export * from './reports.ts';
 export * from './routes.ts';

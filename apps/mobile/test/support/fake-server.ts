@@ -5,8 +5,10 @@ import { createHash, createPublicKey, type KeyObject, verify } from 'node:crypto
 
 import {
   type ErrorCode,
+  type GuardPatrolsResponse,
   type GuardShift,
   type MobileConfig,
+  type ScanResult,
   enrollmentRedeemRequestSchema,
   sessionRefreshRequestSchema,
   sosRequestSchema,
@@ -34,7 +36,7 @@ export type Mode =
   | { kind: 'offline' }
   | { kind: 'status'; status: number; code: ErrorCode; retryAfter?: string };
 
-export type ItemDecision = { status: SyncItemStatus; code?: ErrorCode };
+export type ItemDecision = { status: SyncItemStatus; code?: ErrorCode; scan?: ScanResult };
 
 type Session = {
   guardId: string;
@@ -128,6 +130,18 @@ export class FakeServer {
   readonly consents: { disclosureVersion: string; locale: string; guardId: string }[] = [];
   /** How each new item is answered. Default: SHIFT_START activates the shift, everything ACCEPTED. */
   decide: (item: SyncItem) => ItemDecision = () => ({ status: 'ACCEPTED' });
+  /** How an accepted checkpoint scan is judged (the real server's verdict, ARCH §11.2). */
+  scanResult: ScanResult = {
+    outcome: 'VERIFIED',
+    counted: true,
+    checkpointName: 'Main gate',
+    distanceM: null,
+    run: { countedCount: 1, requiredCount: 3, status: 'IN_PROGRESS' },
+  };
+  /** GET /me/patrols answers with these rounds (for the shift asked about). */
+  patrolRuns: GuardPatrolsResponse['runs'] = [];
+  /** Scans accepted, with the scanned content, in order. */
+  readonly scans: { shiftId: string | null; token: string; hadFix: boolean }[] = [];
   #counter = 0;
   #inFlight = 0;
   maxConcurrentBatches = 0;
@@ -198,6 +212,11 @@ export class FakeServer {
         );
       case 'POST /api/v1/sync/batch':
         return this.#authed(request, (session) => this.#batch(request, session));
+      case 'GET /api/v1/me/patrols':
+        return this.#authed(request, () => {
+          const shiftId = new URL(request.url).searchParams.get('shiftId') ?? '';
+          return this.#json(200, { serverTime: iso(this.now()), shiftId, runs: this.patrolRuns });
+        });
       case 'POST /api/v1/sos':
         return this.#sos(request);
       default:
@@ -306,7 +325,12 @@ export class FakeServer {
     this.maxConcurrentBatches = Math.max(this.maxConcurrentBatches, this.#inFlight);
     try {
       if (this.gate) await this.gate;
-      const results: { clientEventId: string; status: SyncItemStatus; code?: ErrorCode }[] = [];
+      const results: {
+        clientEventId: string;
+        status: SyncItemStatus;
+        code?: ErrorCode;
+        scan?: ScanResult;
+      }[] = [];
       const touched = new Set<string>();
       for (const raw of parsed.data.items) {
         const item = syncItemSchema.safeParse(raw);
@@ -325,10 +349,22 @@ export class FakeServer {
         }
         if (decision.status === 'ACCEPTED') this.#applyToShift(item.data, session);
         if (item.data.shiftId) touched.add(item.data.shiftId);
+        const scan =
+          item.data.type === 'CHECKPOINT_SCAN' && decision.status === 'ACCEPTED'
+            ? (decision.scan ?? this.scanResult)
+            : undefined;
+        if (scan && item.data.type === 'CHECKPOINT_SCAN') {
+          this.scans.push({
+            shiftId: item.data.shiftId,
+            token: item.data.token,
+            hadFix: item.data.fix !== null,
+          });
+        }
         results.push({
           clientEventId,
           status: decision.status,
           ...(decision.code ? { code: decision.code } : {}),
+          ...(scan ? { scan } : {}),
         });
       }
       const shifts = this.shifts

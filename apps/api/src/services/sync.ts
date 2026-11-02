@@ -6,6 +6,7 @@
 import {
   syncItemSchema,
   type ErrorCode,
+  type ScanResult,
   type SyncBatchRequest,
   type SyncBatchResponse,
   type SyncItem,
@@ -33,10 +34,11 @@ import {
 } from '../repositories/tracking.ts';
 import { deviceReportAlerts, raiseAlert, reopenSuppressionMs } from './alerts.ts';
 import { evaluateGeofence } from './geofence.ts';
+import { processScan } from './patrols.ts';
 import { publish } from './realtime.ts';
 import { guardEnd, guardStart, type GuardOutcome, type GuardRef } from './shifts.ts';
 
-type Result = { clientEventId: string; status: SyncItemStatus; code?: ErrorCode };
+type Result = { clientEventId: string; status: SyncItemStatus; code?: ErrorCode; scan?: ScanResult };
 
 const MAX_ACCURACY_M = 50_000;
 const IMPLAUSIBLE_SPEED_MPS = 70;
@@ -395,8 +397,14 @@ async function processItem(
       return { status: 'ACCEPTED' };
     }
     case 'CHECKPOINT_SCAN':
+      // Online and offline scans alike, judged by capture time (ARCH §11.2, ADV-Q09).
+      return processScan(trx, deps, guard, item, {
+        estimate,
+        receivedAt: limits.receivedAt,
+        settings: limits.settings,
+      });
     case 'INCIDENT':
-      // Patrols (Phase 7) and incidents (Phase 8) are off in /mobile/config; the app doesn't send them.
+      // Incidents (Phase 8) are off in /mobile/config; the app doesn't send them.
       return { status: 'REJECTED', code: 'VALIDATION_FAILED' };
   }
 }
