@@ -1,0 +1,7 @@
+# Secret-scan findings reviewed and confirmed harmless (the CI "secrets" job scans the whole
+# history, so a finding stays in the commit that introduced it; each is listed by its fingerprint).
+#
+# A public Web Push (VAPID) key from the Web Push examples, used as test input. Public by design.
+e73f68863702bb3b3dc881bb6d7b97a8e2615d7b:apps/web/test/service-worker.test.ts:generic-api-key:173
+# A Terraform reference to the key pair Terraform generates (tls_private_key.vapid), not a key.
+e73f68863702bb3b3dc881bb6d7b97a8e2615d7b:infra/terraform/cell/secrets.tf:generic-api-key:61

@@ -58,7 +58,7 @@ resource "aws_secretsmanager_secret_version" "worker" {
     SWEEP_DATABASE_URL             = local.db_url.system_worker
     QR_TOKEN_SECRET                = random_password.qr_token_secret.result
     OIDC_CLIENT_SECRET             = aws_cognito_user_pool_client.dashboard.client_secret
-    WEB_PUSH_VAPID_PRIVATE_KEY_PEM = tls_private_key.vapid.private_key_pem_pkcs8
+    WEB_PUSH_VAPID_PRIVATE_KEY_PEM = tls_private_key.vapid.private_key_pem_pkcs8 # gitleaks:allow (a reference, not a key)
   }, local.worker_optional_secrets))
 }
 

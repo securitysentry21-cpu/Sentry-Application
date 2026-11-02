@@ -170,7 +170,8 @@ describe('the dashboard service worker (public/sw.js)', () => {
 
 describe('subscribing (PROD §11.5)', () => {
   it("reads the server's VAPID public key (base64url, unpadded) into the 65 bytes of an uncompressed P-256 key", () => {
-    const key = 'BEl62iUYgUivxIkv69yViEuiBIa-Ib9-SkvMeAtA3LFgDzkrxZJjSgSnfckjBJuBkr3qBUYIHBQFLXYp5Nksh8U';
+    // A public VAPID key from the Web Push examples (public by design).
+    const key = 'BEl62iUYgUivxIkv69yViEuiBIa-Ib9-SkvMeAtA3LFgDzkrxZJjSgSnfckjBJuBkr3qBUYIHBQFLXYp5Nksh8U'; // gitleaks:allow
     const bytes = vapidKeyBytes(key);
     expect(bytes).toHaveLength(65);
     expect(bytes[0]).toBe(4);
