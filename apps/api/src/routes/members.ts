@@ -8,6 +8,7 @@
 // Changes take effect on the member's next request (SEC §6 rule 7).
 import {
   errorEnvelopeSchema,
+  memberAlertPhoneRequestSchema,
   memberListResponseSchema,
   memberPatchRequestSchema,
   memberSchema,
@@ -18,7 +19,9 @@ import { z } from 'zod';
 
 import { auditActor, orgOf, userOf } from '../context.ts';
 import { AppError, notFound } from '../errors.ts';
+import { maskPhone } from '../mask.ts';
 import { recordAudit } from '../repositories/audit.ts';
+import { setMemberAlertPhone } from '../repositories/notifications.ts';
 import {
   getMember,
   listMembers,
@@ -36,6 +39,7 @@ export function memberDto(m: MemberRow) {
     email: m.email,
     role: m.role,
     status: m.status,
+    alertPhone: m.alertPhone,
     version: m.version,
     createdAt: m.createdAt.toISOString(),
     updatedAt: m.updatedAt.toISOString(),
@@ -149,6 +153,53 @@ export const memberRoutes = [
             resourceType: 'member',
             resourceId: target.id,
             metadata: { from: target.status, to: status },
+          });
+        }
+        const updated = await getMember(trx, org.id, target.id);
+        if (!updated) throw notFound();
+        return memberDto(updated);
+      });
+    },
+  }),
+
+  defineRoute({
+    method: 'PUT',
+    url: '/api/v1/members/:id/alert-phone',
+    summary: "Sets or clears the number a member's SOS texts go to in this organization (PROD §11.4).",
+    policy: {
+      access: { kind: 'permission', permission: 'members.manage' },
+      ownership: 'organization',
+      rateLimit: 'default',
+      audit: 'MEMBER_PHONE_CHANGED',
+    },
+    params: z.object({ id: z.uuid() }),
+    body: memberAlertPhoneRequestSchema,
+    responses: { 200: memberSchema, 403: errorEnvelopeSchema, 404: errorEnvelopeSchema },
+    handler: async ({ deps, ctx, params, body }) => {
+      const org = orgOf(ctx);
+      const actor = userOf(ctx);
+      return withTenantTransaction(deps.db, org.id, async (trx) => {
+        const activeOwners = await lockActiveOwners(trx, org.id);
+        const target = await getMember(trx, org.id, params.id, { forUpdate: true });
+        if (!target || target.status === 'REMOVED' || target.role === 'GUARD') throw notFound();
+        // Owners' and administrators' numbers are managed by an owner, as their roles are (SEC §6
+        // rule 3); anyone may set their own.
+        const own = target.userId === actor.userId;
+        if (
+          !own &&
+          (target.role === 'OWNER' || target.role === 'ADMIN') &&
+          !activeOwners.includes(org.memberId)
+        ) {
+          throw new AppError('FORBIDDEN', MESSAGES.FORBIDDEN);
+        }
+        if (target.alertPhone !== body.phone) {
+          await setMemberAlertPhone(trx, org.id, target.id, body.phone, deps.clock.now());
+          // SEC §17.2: a change of a phone number is recorded masked.
+          await recordAudit(trx, deps.clock, org.id, auditActor(ctx), {
+            action: 'MEMBER_PHONE_CHANGED',
+            resourceType: 'member',
+            resourceId: target.id,
+            metadata: { from: maskPhone(target.alertPhone), to: maskPhone(body.phone) },
           });
         }
         const updated = await getMember(trx, org.id, target.id);

@@ -118,10 +118,18 @@ export function useSession(): Session {
   return session;
 }
 
-/** Blocking: a control-room screen must never keep showing data after the session ended. */
+/**
+ * Blocking: a control-room screen must never keep showing data after the session ended. It sits
+ * above everything, the SOS alarm included: acknowledging needs a session.
+ */
 function SignedOutOverlay() {
   return (
-    <div className="overlay" role="alertdialog" aria-modal="true" aria-labelledby="signed-out-title">
+    <div
+      className="overlay signed-out-overlay"
+      role="alertdialog"
+      aria-modal="true"
+      aria-labelledby="signed-out-title"
+    >
       <div className="dialog">
         <h2 id="signed-out-title">Signed out — live monitoring stopped</h2>
         <p className="muted">

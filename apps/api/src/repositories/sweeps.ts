@@ -38,6 +38,22 @@ export async function organizationsWithLiveShifts(
   return rows.map((r) => r.organization_id);
 }
 
+/** Organizations with scheduled shifts starting before `until` (shift reminders, PROD §13). */
+export async function organizationsWithShiftsStartingBefore(
+  sweep: Database,
+  now: Date,
+  until: Date,
+  limit: number,
+): Promise<string[]> {
+  const { rows } = await sql<{ organization_id: string }>`
+    select distinct organization_id
+      from shifts
+     where status = 'SCHEDULED' and starts_at > ${now} and starts_at <= ${until}
+     order by organization_id
+     limit ${limit}`.execute(sweep);
+  return rows.map((r) => r.organization_id);
+}
+
 /** Organizations with patrol runs whose window ended before the time and that are still open. */
 export async function organizationsWithRunsToClose(
   sweep: Database,

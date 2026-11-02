@@ -48,6 +48,17 @@ export const alertSchema = z.object({
   detectedLate: z.boolean(),
   /** False for SOS and critical incidents (PROD §12.2). */
   dismissible: z.boolean(),
+  sosEventId: uuid.nullable(),
+  incidentId: uuid.nullable(),
+  /** A drill (PROD §11.10): only its participants are alarmed; everyone sees it marked DRILL. */
+  isDrill: z.boolean(),
+  /**
+   * The drill window it belongs to (GET /sos-drills/:id names who takes part). Null on a drill alert
+   * means a demo or canary organization, where every SOS is a drill that reaches every member.
+   */
+  drillId: uuid.nullable(),
+  /** The escalation step reached (PROD §11.4); 0 until the first step runs. */
+  escalationLevel: z.int(),
   version: z.int(),
 });
 export type Alert = z.infer<typeof alertSchema>;

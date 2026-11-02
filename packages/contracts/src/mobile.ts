@@ -5,6 +5,7 @@ import { z } from 'zod';
 
 import { errorCodeSchema } from './errors.ts';
 import { latitudeSchema, longitudeSchema, siteBoundarySchema } from './geo.ts';
+import { INCIDENT_SEVERITIES, INCIDENT_TYPES } from './incidents.ts';
 import { scanResultSchema } from './patrols.ts';
 
 const uuid = z.uuid();
@@ -172,8 +173,6 @@ export const deviceStatusSchema = z.strictObject({
 });
 export type DeviceStatus = z.infer<typeof deviceStatusSchema>;
 
-export const INCIDENT_SEVERITIES = ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'] as const;
-
 const itemBase = {
   /** UUIDv7 made on the phone; the idempotency key (INV-06). */
   clientEventId: uuid,
@@ -196,6 +195,7 @@ export const SYNC_ITEM_TYPES = [
   'DEVICE_STATUS',
   'CHECKPOINT_SCAN',
   'INCIDENT',
+  'INCIDENT_NOTE',
 ] as const;
 export type SyncItemType = (typeof SYNC_ITEM_TYPES)[number];
 
@@ -227,16 +227,34 @@ export const syncItemSchema = z.discriminatedUnion('type', [
   z.strictObject({
     ...itemBase,
     type: z.literal('INCIDENT'),
+    /** A hint only: the server finds the shift (or open SOS) whose window holds the capture time. */
     shiftId: uuid.nullable(),
     incident: z.strictObject({
-      type: z.string().max(40),
+      type: z.enum(INCIDENT_TYPES),
       severity: z.enum(INCIDENT_SEVERITIES),
-      title: text(120),
+      /** The app asks for a type, not a title; the server names untitled reports by their type. */
+      title: text(120).optional(),
       description: z.string().trim().max(4000),
+      /** PROD §10.1: up to 24 hours back, never later than the report itself. */
       occurredAt: instant,
+      /** "Checkpoint problem" (PROD §7.7): the damaged or missing label's checkpoint. */
+      checkpointId: uuid.optional(),
     }),
     fix: fixSchema.nullable(),
   }),
+  z
+    .strictObject({
+      ...itemBase,
+      type: z.literal('INCIDENT_NOTE'),
+      shiftId: uuid.nullable(),
+      /** The guard's own report, by its server id, or by the phone's id when it was filed offline. */
+      incidentId: uuid.optional(),
+      incidentClientEventId: uuid.optional(),
+      body: text(4000),
+    })
+    .refine((n) => (n.incidentId === undefined) !== (n.incidentClientEventId === undefined), {
+      message: 'give incidentId or incidentClientEventId',
+    }),
 ]);
 export type SyncItem = z.infer<typeof syncItemSchema>;
 
@@ -264,6 +282,8 @@ export const syncBatchResponseSchema = z.object({
       code: errorCodeSchema.optional(),
       /** A checkpoint scan's outcome, when the item was one (ACCEPTED or DUPLICATE). */
       scan: scanResultSchema.optional(),
+      /** The incident the server stored, when the item was one: photos upload against its id. */
+      incident: z.object({ id: uuid, referenceNumber: z.string() }).optional(),
     }),
   ),
   /** Server state wins (ARCH §8.8): the phone reconciles its local shifts with these. */
@@ -271,7 +291,7 @@ export const syncBatchResponseSchema = z.object({
 });
 export type SyncBatchResponse = z.infer<typeof syncBatchResponseSchema>;
 
-// ── SOS (ARCH §13.1) ─────────────────────────────────────────────────────────────────────────
+// ── SOS (ARCH §13.1, PROD §11) ───────────────────────────────────────────────────────────────
 
 export const sosRequestSchema = z.strictObject({
   clientEventId: uuid,
@@ -279,11 +299,77 @@ export const sosRequestSchema = z.strictObject({
   monoMs: z.int().min(0),
   bootId: z.string().min(1).max(64),
   fix: fixSchema.nullable(),
+  /** The monotonic clock when sent, so the server can estimate when it was pressed (ARCH §8.7). */
+  sentMonoMs: z.int().min(0).optional(),
 });
+export type SosRequest = z.infer<typeof sosRequestSchema>;
 export const SOS_STATUSES = ['ACTIVE', 'ACKNOWLEDGED', 'RESOLVED'] as const;
 export const sosResponseSchema = z.object({
   sosEventId: uuid,
   /** RECEIVED means stored on the server, nothing more (INV-10). */
   status: z.literal('RECEIVED'),
   serverTime: instant,
+  /** A drill (PROD §11.10): the phone says so. Optional for older servers. */
+  isDrill: z.boolean().optional(),
+});
+export type SosResponse = z.infer<typeof sosResponseSchema>;
+
+/**
+ * What the server can confirm about an SOS, in order (PROD §11.3). Each one needs its own fact:
+ * ALERT_SENT a provider accepting a push or text; NOTIFIED a dashboard showing the alarm or a
+ * person's phone confirming the push arrived; ACKNOWLEDGED a person; RESOLVED a supervisor (INV-10).
+ */
+export const SOS_PHASES = ['RECEIVED', 'ALERT_SENT', 'NOTIFIED', 'ACKNOWLEDGED', 'RESOLVED'] as const;
+export type SosPhase = (typeof SOS_PHASES)[number];
+
+export const sosStatusResponseSchema = z.object({
+  sosEventId: uuid,
+  serverTime: instant,
+  phase: z.enum(SOS_PHASES),
+  isDrill: z.boolean(),
+  /** People a provider accepted a push or text for (ALERT_SENT: "Alert sent to 4 supervisors"). */
+  alertSentTo: z.int().min(0),
+  /** A connected dashboard showed the alarm ("Alert showing in the control room"). */
+  shownInControlRoom: z.boolean(),
+  /** People whose phones confirmed the alert arrived ("Alert reached 2 supervisors' phones"). */
+  reachedPhones: z.int().min(0),
+  acknowledgedBy: z.string().nullable(),
+  acknowledgedAt: instant.nullable(),
+  resolvedAt: instant.nullable(),
+  cancelRequestedAt: instant.nullable(),
+  /** SOS tracking stops here unless the SOS is resolved first (PROD §11.2: 4 hours). */
+  trackingUntil: instant,
+  trackingIntervalS: z.int(),
+});
+export type SosStatusResponse = z.infer<typeof sosStatusResponseSchema>;
+
+/** SOS tracking points (PROD §11.2), sent on the SOS lane, never behind the main queue. */
+export const sosLocationsRequestSchema = z.strictObject({
+  bootId: z.string().min(1).max(64),
+  sentMonoMs: z.int().min(0),
+  points: z
+    .array(z.strictObject({ ...itemBase, fix: fixSchema }))
+    .min(1)
+    .max(100),
+});
+export type SosLocationsRequest = z.infer<typeof sosLocationsRequestSchema>;
+export const sosLocationsResponseSchema = z.object({
+  serverTime: instant,
+  results: z.array(
+    z.object({
+      clientEventId: z.string(),
+      status: z.enum(SYNC_ITEM_STATUSES),
+      code: errorCodeSchema.optional(),
+    }),
+  ),
+});
+
+/** "I'm safe / false alarm": noted on the SOS; it never resolves it or stops escalation (PROD §11.8). */
+export const sosCancelRequestSchema = z.strictObject({ clientEventId: uuid, recordedAt: instant });
+
+// ── Push to the guard app (D-26) ─────────────────────────────────────────────────────────────
+
+export const guardPushTokenRequestSchema = z.strictObject({
+  provider: z.literal('FCM'),
+  token: z.string().min(20).max(4096),
 });

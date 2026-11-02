@@ -31,16 +31,21 @@ type Live = {
   readonly disconnectedMs: number;
   readonly error: string | null;
   readonly reload: () => void;
+  /** An alert the server just returned (after an acknowledgement): into the picture at once. */
+  readonly mergeAlert: (alert: Alert) => void;
+  /** Every stream event as it arrives, for a page that follows one record (an SOS, an incident). */
+  readonly subscribe: (listener: (event: Envelope) => void) => () => void;
 };
 
 const LiveContext = createContext<Live | null>(null);
 const RELOAD_DEBOUNCE_MS = 500;
 /** How long a started shift may take to arrive by itself before the snapshot is reloaded for it. */
 const MISSING_GRACE_MS = 3_000;
-/** Counts alone (shifts not started) refresh at most this often. */
+/** Counts alone (shifts not started, open incidents) refresh at most this often. */
 const COUNTS_EVERY_MS = 60_000;
 
-function clientKind(): 'desktop' | 'phone' {
+/** A desktop or a phone, for monitoring coverage, display receipts and push (PROD §11.5). */
+export function clientKind(): 'desktop' | 'phone' {
   try {
     return window.matchMedia('(max-width: 700px), (pointer: coarse)').matches ? 'phone' : 'desktop';
   } catch {
@@ -65,11 +70,35 @@ export function LiveProvider({ children }: { children: ReactNode }) {
   // Events that arrive while a snapshot is loading are applied on top of it.
   const pending = useRef<Envelope[] | null>(null);
   const wasDown = useRef(false);
+  const listeners = useRef(new Set<(event: Envelope) => void>());
 
   const commit = useCallback((next: LiveModel | null) => {
     modelRef.current = next;
     setModel(next);
   }, []);
+
+  const subscribe = useCallback((listener: (event: Envelope) => void) => {
+    listeners.current.add(listener);
+    return () => {
+      listeners.current.delete(listener);
+    };
+  }, []);
+
+  const mergeAlert = useCallback(
+    (alert: Alert) => {
+      const current = modelRef.current;
+      if (!current) return;
+      // Applied like a stream event without a position: an older copy never wins (version).
+      const event: Envelope = {
+        id: null,
+        type: 'alert.updated',
+        occurredAt: alert.lastTriggeredAt,
+        data: { alertId: alert.id, alert },
+      };
+      commit(applyEvent(current, event).model);
+    },
+    [commit],
+  );
 
   const load = useCallback(async () => {
     pending.current = [];
@@ -141,10 +170,12 @@ export function LiveProvider({ children }: { children: ReactNode }) {
         onEvent: (event) => {
           pending.current?.push(event);
           const current = modelRef.current;
-          if (!current) return;
-          const applied = applyEvent(current, event);
-          commit(applied.model);
-          handleReload(applied.reload);
+          if (current) {
+            const applied = applyEvent(current, event);
+            commit(applied.model);
+            handleReload(applied.reload);
+          }
+          for (const listener of listeners.current) listener(event);
         },
         onStatus: (next) => {
           setStatus(next);
@@ -182,8 +213,10 @@ export function LiveProvider({ children }: { children: ReactNode }) {
       disconnectedMs: downSince === null ? 0 : Math.max(0, tick - downSince),
       error,
       reload: () => void load(),
+      mergeAlert,
+      subscribe,
     }),
-    [model, tick, offsetMs, status, downSince, error, load],
+    [model, tick, offsetMs, status, downSince, error, load, mergeAlert, subscribe],
   );
   return <LiveContext.Provider value={value}>{children}</LiveContext.Provider>;
 }
@@ -192,4 +225,57 @@ export function useLive(): Live {
   const live = useContext(LiveContext);
   if (!live) throw new Error('useLive outside LiveProvider');
   return live;
+}
+
+/** Calls `handler` for every stream event while the component is mounted. */
+export function useLiveEvents(handler: (event: Envelope) => void): void {
+  const { subscribe } = useLive();
+  const current = useRef(handler);
+  current.current = handler;
+  useEffect(() => subscribe((event) => current.current(event)), [subscribe]);
+}
+
+/**
+ * Runs `load` again a moment after `matches` says a stream event concerns the page, coalescing a
+ * burst into one load, and once more if events arrive while one is running. For pages that follow
+ * one record (an SOS, an incident) instead of polling.
+ */
+export function useReloadOn(matches: (event: Envelope) => boolean, load: () => Promise<void>): void {
+  const timer = useRef<number | null>(null);
+  const running = useRef(false);
+  const again = useRef(false);
+  const latest = useRef(load);
+  latest.current = load;
+
+  const run = useCallback(async () => {
+    if (running.current) {
+      again.current = true;
+      return;
+    }
+    running.current = true;
+    try {
+      do {
+        again.current = false;
+        await latest.current();
+      } while (again.current);
+    } finally {
+      running.current = false;
+    }
+  }, []);
+
+  useLiveEvents((event) => {
+    if (!matches(event) || timer.current !== null) return;
+    timer.current = window.setTimeout(() => {
+      timer.current = null;
+      void run();
+    }, RELOAD_DEBOUNCE_MS);
+  });
+
+  useEffect(
+    () => () => {
+      if (timer.current !== null) window.clearTimeout(timer.current);
+      timer.current = null;
+    },
+    [],
+  );
 }

@@ -43,14 +43,23 @@ resource "aws_secretsmanager_secret" "worker" {
   recovery_window_in_days = 7
 }
 
+# The worker alone sends notifications, so only its secret holds the push keys (notifications.tf).
+locals {
+  worker_optional_secrets = merge(
+    var.fcm_service_account != "" ? { FCM_SERVICE_ACCOUNT = var.fcm_service_account } : {},
+    var.canary_enabled ? { CANARY_DEVICE_KEY = var.canary_device_key } : {},
+  )
+}
+
 resource "aws_secretsmanager_secret_version" "worker" {
   secret_id = aws_secretsmanager_secret.worker.id
-  secret_string = jsonencode({
-    DATABASE_URL       = local.db_url.app_runtime
-    SWEEP_DATABASE_URL = local.db_url.system_worker
-    QR_TOKEN_SECRET    = random_password.qr_token_secret.result
-    OIDC_CLIENT_SECRET = aws_cognito_user_pool_client.dashboard.client_secret
-  })
+  secret_string = jsonencode(merge({
+    DATABASE_URL                   = local.db_url.app_runtime
+    SWEEP_DATABASE_URL             = local.db_url.system_worker
+    QR_TOKEN_SECRET                = random_password.qr_token_secret.result
+    OIDC_CLIENT_SECRET             = aws_cognito_user_pool_client.dashboard.client_secret
+    WEB_PUSH_VAPID_PRIVATE_KEY_PEM = tls_private_key.vapid.private_key_pem_pkcs8
+  }, local.worker_optional_secrets))
 }
 
 # Read only by the one-off database task, which sets these passwords on the roles.

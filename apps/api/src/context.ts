@@ -7,13 +7,27 @@ import type { FastifyRequest } from 'fastify';
 
 import { withTenantTransaction } from '@sentryops/db';
 
+import { parseDeviceSignature, verifyDeviceSignature } from './auth/device-signature.ts';
 import { readSessionCookie } from './cookies.ts';
 import type { AppDeps } from './deps.ts';
 import { AppError, forbidden } from './errors.ts';
 import type { AuditActor } from './repositories/audit.ts';
-import { loadSession, sessionIdByAccess, touchDevice } from './repositories/guards.ts';
+import {
+  deviceForSignature,
+  guardOnDevice,
+  loadSession,
+  sessionIdByAccess,
+  touchDevice,
+} from './repositories/guards.ts';
 import { userMemberships } from './repositories/memberships.ts';
 import { resolveSession } from './repositories/sessions.ts';
+
+declare module 'fastify' {
+  interface FastifyRequest {
+    /** The SOS routes' JSON body exactly as received (app.ts keeps it), for the device-key signature (ADV-S11). */
+    rawBody?: string;
+  }
+}
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -36,6 +50,8 @@ export type GuardActor = {
   readonly preferredLocale: 'en' | 'ur';
   /** Set while a phone REPLACED by a new one drains its queue: only data captured before this. */
   readonly replacedAt: Date | null;
+  /** How this request proved the phone: its session, or its device key (SOS only, INV-15). */
+  readonly auth: 'SESSION' | 'DEVICE_SIGNATURE';
 };
 
 /** ARCH §5.4: a replaced phone's pre-replacement uploads are accepted for 72 hours. */
@@ -73,9 +89,14 @@ async function resolveGuard(
   base: Pick<RequestContext, 'requestId' | 'ip' | 'userAgent'>,
   token: string,
 ): Promise<RequestContext> {
-  if (!ACCESS_TOKEN.test(token)) throw unauthenticated();
+  // An SOS whose session can't be used falls back to the device-key signature when it carries one.
+  const fallback = () =>
+    policy.sos && request.headers['x-device-signature'] !== undefined
+      ? resolveSignedDevice(request, policy, deps, base)
+      : Promise.reject(unauthenticated());
+  if (!ACCESS_TOKEN.test(token)) return fallback();
   const found = await sessionIdByAccess(deps.db, token);
-  if (!found) throw unauthenticated();
+  if (!found) return fallback();
   const now = deps.clock.now();
   const session = await withTenantTransaction(deps.db, found.organization_id, async (trx) => {
     const row = await loadSession(trx, found.organization_id, found.id);
@@ -87,21 +108,25 @@ async function resolveGuard(
   if (request.headers['x-device-id'] !== session.device_id) {
     throw new AppError('DEVICE_NOT_REGISTERED', 'This phone is not registered for this session.');
   }
-  const draining =
+  const replacedInGrace =
     session.device_status === 'REVOKED' &&
     session.device_revoked_reason === 'REPLACED' &&
     session.device_revoked_at !== null &&
-    now.getTime() - session.device_revoked_at.getTime() <= REPLACED_DRAIN_MS &&
-    policy.replacedDeviceDrain === true;
+    now.getTime() - session.device_revoked_at.getTime() <= REPLACED_DRAIN_MS;
+  // ARCH §5.3, §5.4: a replaced phone may drain its queue, and may still send an SOS, for 72 hours.
+  const draining = replacedInGrace && (policy.replacedDeviceDrain === true || policy.sos === true);
   if (session.device_status !== 'ACTIVE' && !draining) {
     throw new AppError('DEVICE_REVOKED', 'This phone was signed out by your organization.');
   }
-  if (session.revoked_at || session.access_expires_at <= now) throw unauthenticated();
+  if (session.revoked_at || session.access_expires_at <= now) return fallback();
   if (session.guard_status !== 'ACTIVE') throw unauthenticated();
-  if (session.organization_status === 'SUSPENDED') {
+  // INV-15: an SOS is accepted from a suspended organization.
+  if (session.organization_status === 'SUSPENDED' && !policy.sos) {
     throw new AppError('ORG_SUSPENDED', 'This organization is suspended.');
   }
-  if (session.organization_status !== 'ACTIVE') throw forbidden();
+  if (session.organization_status !== 'ACTIVE' && session.organization_status !== 'SUSPENDED') {
+    throw forbidden();
+  }
   const permissions = ROLE_PERMISSIONS.GUARD;
   if (policy.access.kind === 'permission' && !permissions.has(policy.access.permission)) throw forbidden();
   return {
@@ -115,10 +140,77 @@ async function resolveGuard(
       name: session.display_name,
       preferredLocale: session.preferred_locale === 'ur' ? 'ur' : 'en',
       replacedAt: draining ? session.device_revoked_at : null,
+      auth: 'SESSION',
     },
     org: {
       id: found.organization_id,
       name: session.organization_name,
+      role: 'GUARD',
+      memberId: '',
+      permissions,
+    },
+  };
+}
+
+/**
+ * An SOS route with no usable session (INV-15, ADV-S11): the request is signed with the phone's
+ * device key. Accepted from an ACTIVE phone, or one REPLACED within its 72 hours, whatever the
+ * organization's status; anything else is refused.
+ */
+async function resolveSignedDevice(
+  request: FastifyRequest,
+  policy: RoutePolicy,
+  deps: AppDeps,
+  base: Pick<RequestContext, 'requestId' | 'ip' | 'userAgent'>,
+): Promise<RequestContext> {
+  if (!policy.sos) throw unauthenticated();
+  const header = request.headers['x-device-id'];
+  const signature = parseDeviceSignature(request.headers['x-device-signature']);
+  if (typeof header !== 'string' || !UUID.test(header) || !signature) throw unauthenticated();
+  const deviceId = header.toLowerCase();
+  const device = await deviceForSignature(deps.db, deviceId);
+  if (!device) throw unauthenticated();
+  const now = deps.clock.now();
+  const valid = verifyDeviceSignature({
+    publicKeySpki: device.public_key,
+    method: request.method,
+    path: request.url.split('?')[0] ?? '',
+    body: Buffer.from(request.rawBody ?? '', 'utf8'),
+    signature,
+    nowMs: now.getTime(),
+  });
+  if (!valid) throw unauthenticated();
+  const replacedInGrace =
+    device.status === 'REVOKED' &&
+    device.revoked_reason === 'REPLACED' &&
+    device.revoked_at !== null &&
+    now.getTime() - device.revoked_at.getTime() <= REPLACED_DRAIN_MS;
+  if (device.status !== 'ACTIVE' && !replacedInGrace) {
+    throw new AppError('DEVICE_REVOKED', 'This phone was signed out by your organization.');
+  }
+  const guard = await withTenantTransaction(deps.db, device.organization_id, (trx) =>
+    guardOnDevice(trx, device.organization_id, deviceId),
+  );
+  if (!guard || guard.guard_status !== 'ACTIVE') throw unauthenticated();
+  if (guard.organization_status !== 'ACTIVE' && guard.organization_status !== 'SUSPENDED') throw forbidden();
+  const permissions = ROLE_PERMISSIONS.GUARD;
+  if (policy.access.kind === 'permission' && !permissions.has(policy.access.permission)) throw forbidden();
+  return {
+    ...base,
+    actor: {
+      kind: 'guard',
+      userId: guard.user_id,
+      guardId: guard.guard_id,
+      deviceId,
+      sessionId: '',
+      name: guard.display_name,
+      preferredLocale: guard.preferred_locale === 'ur' ? 'ur' : 'en',
+      replacedAt: replacedInGrace ? device.revoked_at : null,
+      auth: 'DEVICE_SIGNATURE',
+    },
+    org: {
+      id: device.organization_id,
+      name: guard.organization_name,
       role: 'GUARD',
       memberId: '',
       permissions,
@@ -143,6 +235,9 @@ export async function resolveContext(
   const authorization = request.headers.authorization;
   if (typeof authorization === 'string' && authorization.startsWith('Bearer ')) {
     return resolveGuard(request, policy, deps, base, authorization.slice('Bearer '.length).trim());
+  }
+  if (policy.sos && request.headers['x-device-signature'] !== undefined) {
+    return resolveSignedDevice(request, policy, deps, base);
   }
 
   const token = readSessionCookie(request, deps.config);

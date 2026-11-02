@@ -22,6 +22,7 @@ import { SECURITY_HEADERS } from '../headers.ts';
 import { uuidv7 } from '../ids.ts';
 import { MAX_STREAMS_PER_USER, sseFrame, type StreamClient } from '../realtime/hub.ts';
 import { recordAudit } from '../repositories/audit.ts';
+import { openIncidentCount } from '../repositories/incidents.ts';
 import { getGuard } from '../repositories/guards.ts';
 import { organizationSettings } from '../repositories/organizations.ts';
 import {
@@ -84,6 +85,7 @@ export const liveRoutes = [
           freshness,
           guards: rows.map((r) => liveGuardDto(r, now, freshness)),
           shiftsNotStarted: await countShiftsNotStarted(trx, org.id, now),
+          openIncidents: await openIncidentCount(trx, org.id),
           coverage: await coverageCounts(trx, org.id, new Date(now.getTime() - STREAM_STALE_MS)),
         };
       });

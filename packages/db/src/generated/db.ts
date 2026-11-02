@@ -49,8 +49,11 @@ export interface Alerts {
   dismissed_at: Timestamp | null;
   dismissed_by: string | null;
   escalation_level: Generated<number>;
+  escalation_started_at: Timestamp | null;
   guard_id: string | null;
   id: string;
+  incident_id: string | null;
+  is_drill: Generated<boolean>;
   last_triggered_at: Timestamp;
   next_escalation_at: Timestamp | null;
   opened_at: Timestamp;
@@ -62,6 +65,7 @@ export interface Alerts {
   severity: string;
   shift_id: string | null;
   site_id: string | null;
+  sos_event_id: string | null;
   status: Generated<string>;
   summary: string;
   trigger_count: Generated<number>;
@@ -210,6 +214,8 @@ export interface GuardDevices {
   os_version: string | null;
   platform: string;
   public_key: Buffer;
+  push_token: string | null;
+  push_token_updated_at: Timestamp | null;
   revoked_at: Timestamp | null;
   revoked_by_user_id: string | null;
   revoked_reason: string | null;
@@ -230,6 +236,95 @@ export interface Guards {
   updated_at: Generated<Timestamp>;
   updated_by_user_id: string | null;
   user_id: string | null;
+  version: Generated<number>;
+}
+
+export interface IncidentAttachments {
+  capture_source: string;
+  client_event_id: string;
+  completed_at: Timestamp | null;
+  created_at: Generated<Timestamp>;
+  declared_size: number;
+  declared_type: string;
+  detected_type: string | null;
+  device_id: string | null;
+  exif_captured_at: Timestamp | null;
+  exif_latitude: number | null;
+  exif_longitude: number | null;
+  guard_id: string | null;
+  height: number | null;
+  id: string;
+  incident_id: string;
+  organization_id: string;
+  original_key: string;
+  processed_at: Timestamp | null;
+  rejection_reason: string | null;
+  sha256: Buffer | null;
+  size_bytes: number | null;
+  status: Generated<string>;
+  updated_at: Generated<Timestamp>;
+  upload_expires_at: Timestamp;
+  view_key: string;
+  width: number | null;
+}
+
+export interface IncidentCounters {
+  id: string;
+  next_value: Generated<number>;
+  organization_id: string;
+}
+
+export interface IncidentEvents {
+  actor_guard_id: string | null;
+  actor_type: string;
+  actor_user_id: string | null;
+  body: string | null;
+  client_event_id: string | null;
+  created_at: Generated<Timestamp>;
+  device_id: string | null;
+  from_value: string | null;
+  id: string;
+  incident_id: string;
+  organization_id: string;
+  payload: Generated<Json>;
+  to_value: string | null;
+  type: string;
+}
+
+export interface Incidents {
+  accuracy_m: number | null;
+  acknowledged_at: Timestamp | null;
+  acknowledged_by: string | null;
+  checkpoint_id: string | null;
+  client_event_id: string | null;
+  created_at: Generated<Timestamp>;
+  description: Generated<string>;
+  device_id: string | null;
+  fix_age_s: number | null;
+  guard_id: string | null;
+  id: string;
+  is_drill: Generated<boolean>;
+  is_mock: boolean | null;
+  latitude: number | null;
+  longitude: number | null;
+  occurred_at: Timestamp;
+  organization_id: string;
+  received_at: Timestamp;
+  reference_number: number;
+  reported_at: Timestamp;
+  reported_at_recorded: Timestamp | null;
+  reported_by_user_id: string | null;
+  resolution_note: string | null;
+  resolved_at: Timestamp | null;
+  resolved_by: string | null;
+  severity: string;
+  shift_id: string | null;
+  site_id: string | null;
+  sos_event_id: string | null;
+  status: Generated<string>;
+  title: string;
+  type: string;
+  updated_at: Generated<Timestamp>;
   version: Generated<number>;
 }
 
@@ -274,6 +369,7 @@ export interface LocationPoints {
   received_at: Timestamp;
   recorded_at: Timestamp;
   shift_id: string | null;
+  sos_event_id: string | null;
   source: string;
   speed_mps: number | null;
   sync_batch_id: string | null;
@@ -297,7 +393,41 @@ export interface MobileSessions {
   rotated_at: Timestamp | null;
 }
 
+export interface NotificationDeliveries {
+  alert_id: string | null;
+  attempt: Generated<number>;
+  body: string;
+  channel: string;
+  created_at: Generated<Timestamp>;
+  dedupe_key: string;
+  delivered_at: Timestamp | null;
+  error_code: string | null;
+  escalation_level: Generated<number>;
+  failed_at: Timestamp | null;
+  id: string;
+  is_drill: Generated<boolean>;
+  link_path: string | null;
+  locked_until: Timestamp | null;
+  max_attempts: number;
+  next_attempt_at: Timestamp;
+  organization_id: string;
+  provider: string | null;
+  provider_message_id: string | null;
+  recipient_device_id: string | null;
+  recipient_guard_id: string | null;
+  recipient_member_id: string | null;
+  recipient_phone: string | null;
+  sent_at: Timestamp | null;
+  sos_event_id: string | null;
+  status: Generated<string>;
+  subscription_id: string | null;
+  title: string;
+  topic: string;
+  updated_at: Generated<Timestamp>;
+}
+
 export interface OrganizationMembers {
+  alert_phone: string | null;
   created_at: Generated<Timestamp>;
   id: string;
   organization_id: string;
@@ -313,6 +443,7 @@ export interface Organizations {
   data_region: string;
   default_locale: Generated<string>;
   id: string;
+  kind: Generated<string>;
   legal_name: string | null;
   name: string;
   status: Generated<string>;
@@ -515,6 +646,82 @@ export interface Sites {
   version: Generated<number>;
 }
 
+export interface SosDrillGuards {
+  drill_id: string;
+  guard_id: string;
+  id: string;
+  organization_id: string;
+}
+
+export interface SosDrillMembers {
+  drill_id: string;
+  id: string;
+  member_id: string;
+  organization_id: string;
+}
+
+export interface SosDrills {
+  created_at: Generated<Timestamp>;
+  ended_at: Timestamp | null;
+  ended_by_user_id: string | null;
+  ends_at: Timestamp;
+  id: string;
+  note: string | null;
+  organization_id: string;
+  started_at: Timestamp;
+  started_by_user_id: string;
+  updated_at: Generated<Timestamp>;
+}
+
+export interface SosEvents {
+  accuracy_m: number | null;
+  acknowledged_at: Timestamp | null;
+  acknowledged_by: string | null;
+  activated_at: Timestamp;
+  activated_at_recorded: Timestamp;
+  alert_sent_at: Timestamp | null;
+  client_event_id: string;
+  clock_status: string;
+  created_at: Generated<Timestamp>;
+  device_id: string;
+  drill_id: string | null;
+  guard_cancel_requested_at: Timestamp | null;
+  guard_id: string;
+  id: string;
+  is_drill: Generated<boolean>;
+  last_triggered_at: Timestamp;
+  latitude: number | null;
+  location_captured_at: Timestamp | null;
+  longitude: number | null;
+  notified_at: Timestamp | null;
+  organization_id: string;
+  received_at: Timestamp;
+  resolution: string | null;
+  resolution_note: string | null;
+  resolved_at: Timestamp | null;
+  resolved_by: string | null;
+  shift_id: string | null;
+  site_id: string | null;
+  status: Generated<string>;
+  trigger_count: Generated<number>;
+  updated_at: Generated<Timestamp>;
+  version: Generated<number>;
+}
+
+export interface SosPresses {
+  auth: string;
+  client_event_id: string;
+  created_at: Generated<Timestamp>;
+  device_id: string;
+  guard_id: string;
+  id: string;
+  organization_id: string;
+  pressed_at: Timestamp;
+  pressed_at_recorded: Timestamp;
+  received_at: Timestamp;
+  sos_event_id: string;
+}
+
 export interface StreamConnections {
   client: string;
   connected_at: Timestamp;
@@ -549,6 +756,22 @@ export interface Users {
   updated_at: Generated<Timestamp>;
 }
 
+export interface WebPushSubscriptions {
+  auth: string;
+  client: string;
+  created_at: Generated<Timestamp>;
+  endpoint: string;
+  failure_count: Generated<number>;
+  id: string;
+  last_success_at: Timestamp | null;
+  member_id: string;
+  organization_id: string;
+  p256dh: string;
+  status: Generated<string>;
+  updated_at: Generated<Timestamp>;
+  user_id: string;
+}
+
 export interface DB {
   alert_events: AlertEvents;
   alerts: Alerts;
@@ -561,9 +784,14 @@ export interface DB {
   device_status_events: DeviceStatusEvents;
   guard_devices: GuardDevices;
   guards: Guards;
+  incident_attachments: IncidentAttachments;
+  incident_counters: IncidentCounters;
+  incident_events: IncidentEvents;
+  incidents: Incidents;
   invitations: Invitations;
   location_points: LocationPoints;
   mobile_sessions: MobileSessions;
+  notification_deliveries: NotificationDeliveries;
   organization_members: OrganizationMembers;
   organization_settings: OrganizationSettings;
   organizations: Organizations;
@@ -578,7 +806,13 @@ export interface DB {
   shift_live_state: ShiftLiveState;
   shifts: Shifts;
   sites: Sites;
+  sos_drill_guards: SosDrillGuards;
+  sos_drill_members: SosDrillMembers;
+  sos_drills: SosDrills;
+  sos_events: SosEvents;
+  sos_presses: SosPresses;
   stream_connections: StreamConnections;
   tracking_consents: TrackingConsents;
   users: Users;
+  web_push_subscriptions: WebPushSubscriptions;
 }

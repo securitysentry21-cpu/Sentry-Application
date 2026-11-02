@@ -16,22 +16,36 @@
 //   - Bilal, off site, scans a photographed label: "Not verified", hundreds of metres away. Back on
 //     the beat he walks half of each round: Incomplete, with "Checkpoint run incomplete".
 //   - Hina's silent phone sends nothing: her rounds are Missed.
-// The demo runs the alert detectors and the patrol-run closer itself every minute, and moves live
-// updates to the dashboard every second (the outbox dispatcher), so the worker is not needed.
+// Incidents and SOS (Phase 8):
+//   - Usman reports a motorbike circling the gate, with a photo, two minutes in: "Incident (high)" on
+//     the Alerts page, and the report with its photo on the Incidents page.
+//   - Ali presses SOS at three minutes: the full-screen alarm on every open dashboard (click "Enable
+//     alarm sound" to hear it), and his SOS page. His phone sends its position every 10 s and prints
+//     what the server tells it (received, shown in the control room, acknowledged, closed) until
+//     someone resolves the SOS on its page. The ladder escalates every minute or so while nobody
+//     acknowledges. Without push keys or an SMS provider nothing leaves the computer.
+// The demo runs the alert detectors and the patrol-run closer itself every minute, the SOS ladder,
+// the notification sender and the photo check every 10 s, and moves live updates to the dashboard
+// every second (the outbox dispatcher), so the worker is not needed.
 //
 // `pnpm demo --crowd=1000` adds that many more guards, spread over 16 zones across the colony and
 // reporting once a minute, to check the Live map at pilot scale (ARCH §22, Phase 6), also on a phone.
 //
 // Run `pnpm db:up` and `pnpm api:dev` first, then sign in to the dashboard as owner@demo.test.
-import { generateKeyPairSync, randomUUID } from 'node:crypto';
+import { createHash, generateKeyPairSync, randomUUID } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 
-import { createPool, verifyRuntimeRole } from '@sentryops/db';
+import { createPool, verifyRuntimeRole, withTenantTransaction } from '@sentryops/db';
 import { haversineM } from '@sentryops/domain';
 import type { InjectOptions } from 'fastify';
+import sharp from 'sharp';
 
 import { buildApp } from '../src/app.ts';
+import { alertsDueEscalation } from '../src/repositories/alerts.ts';
+import { attachmentsToProcess } from '../src/repositories/incidents.ts';
+import { processAttachment } from '../src/services/attachments.ts';
+import { claimDue, escalateDue, recordSend, sendOne, sendTarget } from '../src/services/notifications.ts';
 import { alertsForOrganization } from '../src/workers/detectors.ts';
 import { dispatchOrganization } from '../src/workers/outbox.ts';
 import { loadConfig } from '../src/config.ts';
@@ -429,7 +443,9 @@ for (const g of GUARDS) {
 }
 
 async function sync(phone: Phone, items: Record<string, unknown>[]) {
-  return call<{ results: { status: string; code?: string }[] }>({
+  return call<{
+    results: { status: string; code?: string; incident?: { id: string; referenceNumber: string } }[];
+  }>({
     method: 'POST',
     url: '/api/v1/sync/batch',
     token: phone.access,
@@ -540,6 +556,163 @@ const scanAt = (p: Phone, name: string) =>
 let permissionState: 'ok' | 'off' | 'restored' = 'ok';
 let batteryReported = false;
 
+// ── Incidents and SOS (Phase 8) ─────────────────────────────────────────────────────────────
+const REPORTER = phones.find((p) => p.name === 'Usman Tariq');
+const SOS_GUARD = phones.find((p) => p.name === 'Ali Raza');
+let reported = false;
+let sos: { id: string; shown: string } | null = null;
+let sosDone = false;
+const fixOf = (p: Phone) => ({ lat: p.position.lat, lon: p.position.lng, accuracyM: 6, fixAgeS: 1 });
+const message = (e: unknown) => (e instanceof Error ? e.message : 'unknown');
+
+/** A report through the sync queue, as the app files it, then its photo through a signed slot. */
+async function fileReport(p: Phone): Promise<void> {
+  const res = await sync(p, [
+    item('INCIDENT', {
+      shiftId: p.shiftId,
+      fix: fixOf(p),
+      incident: {
+        type: 'SUSPICIOUS_ACTIVITY',
+        severity: 'HIGH',
+        title: 'Motorbike circling the gate',
+        description:
+          'Two men on a red motorbike passed the gate four times in ten minutes, slowing down each time.',
+        occurredAt: new Date(Date.now() - 5 * 60_000).toISOString(),
+      },
+    }),
+  ]);
+  const result = res.results[0];
+  if (!result?.incident) throw new Error(`report ${result?.status ?? 'not answered'}`);
+  // A picture the demo draws: a grey street with a red mark, as a JPEG like the app's.
+  const photo = await sharp({ create: { width: 1280, height: 960, channels: 3, background: '#5b6770' } })
+    .composite([
+      {
+        input: Buffer.from(
+          '<svg width="1280" height="960"><rect x="520" y="560" width="260" height="120" rx="30" fill="#b3261e"/>' +
+            '<text x="60" y="100" font-size="56" fill="#ffffff">Demo photo: main gate</text></svg>',
+        ),
+      },
+    ])
+    .jpeg({ quality: 80 })
+    .toBuffer();
+  const slot = await call<{
+    attachmentId: string;
+    upload: { url: string; headers: Record<string, string> } | null;
+  }>({
+    method: 'POST',
+    url: `/api/v1/incidents/${result.incident.id}/attachments`,
+    token: p.access,
+    device: p.deviceId,
+    payload: {
+      clientEventId: randomUUID(),
+      contentType: 'image/jpeg',
+      sizeBytes: photo.length,
+      captureSource: 'IN_APP_CAMERA',
+    },
+  });
+  if (slot.upload) {
+    const put = await app.inject({
+      method: 'PUT',
+      url: new URL(slot.upload.url).pathname,
+      headers: slot.upload.headers,
+      payload: photo,
+    });
+    if (put.statusCode !== 200) throw new Error(`photo upload: ${put.statusCode}`);
+  }
+  await call({
+    method: 'POST',
+    url: `/api/v1/attachments/${slot.attachmentId}/complete`,
+    token: p.access,
+    device: p.deviceId,
+    payload: { sha256: createHash('sha256').update(photo).digest('hex') },
+  });
+  console.log(`${p.name}: reported ${result.incident.referenceNumber}, with a photo`);
+}
+
+/** The SOS: pressed once, then a position every 10 s and the phone's view of it, until resolved. */
+async function sosStep(p: Phone): Promise<void> {
+  if (!sos) {
+    const pressed = await call<{ sosEventId: string }>({
+      method: 'POST',
+      url: '/api/v1/sos',
+      token: p.access,
+      device: p.deviceId,
+      payload: {
+        clientEventId: randomUUID(),
+        recordedAt: new Date().toISOString(),
+        monoMs: mono(),
+        bootId,
+        fix: fixOf(p),
+        sentMonoMs: mono(),
+      },
+    });
+    sos = { id: pressed.sosEventId, shown: 'RECEIVED' };
+    console.log(`${p.name}: SOS pressed. The dashboard alarms now; resolve it on its SOS page.`);
+    return;
+  }
+  await call({
+    method: 'POST',
+    url: `/api/v1/sos/${sos.id}/locations`,
+    token: p.access,
+    device: p.deviceId,
+    payload: {
+      bootId,
+      sentMonoMs: mono(),
+      points: [
+        {
+          clientEventId: randomUUID(),
+          recordedAt: new Date().toISOString(),
+          monoMs: mono(),
+          bootId,
+          fix: fixOf(p),
+        },
+      ],
+    },
+  });
+  const seen = await call<{ phase: string; acknowledgedBy: string | null }>({
+    method: 'GET',
+    url: `/api/v1/sos/${sos.id}/status`,
+    token: p.access,
+    device: p.deviceId,
+  });
+  if (seen.phase !== sos.shown) {
+    sos.shown = seen.phase;
+    console.log(`${p.name}'s phone: ${seen.phase}${seen.acknowledgedBy ? ` (${seen.acknowledgedBy})` : ''}`);
+  }
+  if (seen.phase === 'RESOLVED') sosDone = true;
+}
+
+/** What the worker does for SOS and photos, for this organization only. */
+async function phase8Jobs(organizationId: string): Promise<void> {
+  const now = deps.clock.now();
+  await withTenantTransaction(deps.db, organizationId, async (trx) =>
+    escalateDue(trx, deps, organizationId, await alertsDueEscalation(trx, organizationId, now)),
+  );
+  const claimed = await withTenantTransaction(deps.db, organizationId, async (trx) =>
+    Promise.all(
+      (await claimDue(trx, deps, organizationId)).map(async (d) => ({
+        d,
+        target: await sendTarget(trx, deps, organizationId, d),
+      })),
+    ),
+  );
+  for (const { d, target } of claimed) {
+    const result = await sendOne(deps, organizationId, d, target);
+    await withTenantTransaction(deps.db, organizationId, (trx) =>
+      recordSend(trx, deps, organizationId, d, result),
+    );
+  }
+  for (;;) {
+    const done = await withTenantTransaction(deps.db, organizationId, async (trx) => {
+      const [next] = await attachmentsToProcess(trx, organizationId, 1);
+      if (!next) return false;
+      await processAttachment(trx, deps, organizationId, next);
+      return true;
+    });
+    if (!done) break;
+  }
+}
+
 // Live updates: committed changes move from the outbox to the dashboards every second, as the
 // worker's dispatcher does (ARCH §14).
 const dispatcher = setInterval(() => {
@@ -615,17 +788,27 @@ while (!stopping) {
       extra.push(item('DEVICE_STATUS', { shiftId: p.shiftId, status: status({ batteryPct: 12 }) }));
       batteryReported = true;
     }
+    if (p === REPORTER && !reported && elapsed > 2 * 60_000) {
+      reported = true;
+      await fileReport(p).catch((e: unknown) => console.error(`${p.name}: report failed: ${message(e)}`));
+    }
+    const inSos = p === SOS_GUARD && !sosDone && elapsed > 3 * 60_000;
+    if (inSos) await sosStep(p).catch((e: unknown) => console.error(`${p.name}: SOS: ${message(e)}`));
     try {
       await sync(p, [
-        item('LOCATION', {
-          shiftId: p.shiftId,
-          fix: {
-            lat: p.position.lat,
-            lon: p.position.lng,
-            accuracyM: 5 + Math.random() * 10,
-            provider: 'FUSED',
-          },
-        }),
+        ...(inSos
+          ? []
+          : [
+              item('LOCATION', {
+                shiftId: p.shiftId,
+                fix: {
+                  lat: p.position.lat,
+                  lon: p.position.lng,
+                  accuracyM: 5 + Math.random() * 10,
+                  provider: 'FUSED',
+                },
+              }),
+            ]),
         item('HEARTBEAT', { shiftId: p.shiftId }),
         ...extra,
       ]);
@@ -640,6 +823,9 @@ while (!stopping) {
       p.refresh = fresh.session.refreshToken;
       savePhone(p.guardId, { deviceId: p.deviceId, refresh: p.refresh });
     }
+  }
+  if (org) {
+    await phase8Jobs(org).catch((e: unknown) => console.error(`SOS and photo jobs failed: ${message(e)}`));
   }
   if (Date.now() - lastDetectors >= 60_000 && org) {
     lastDetectors = Date.now();

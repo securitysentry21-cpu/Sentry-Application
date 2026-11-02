@@ -6,6 +6,16 @@ import { z } from 'zod';
 const LOG_LEVELS = ['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent'] as const;
 /** Development only; production refuses to start with it (below). */
 const DEV_QR_SECRET = 'development-only-qr-secret-do-not-use-in-production';
+const DEV_OBJECT_SECRET = 'development-only-object-link-secret-not-for-production';
+const list = z
+  .string()
+  .default('')
+  .transform((v) =>
+    v
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean),
+  );
 const flag = z
   .enum(['true', 'false'])
   .default('false')
@@ -36,21 +46,40 @@ export const configSchema = z
     /** Guard app versions (ARCH §15.2). */
     MOBILE_MIN_VERSION: z.string().default('0.0.0'),
     MOBILE_RECOMMENDED_VERSION: z.string().default('0.0.0'),
-    MOBILE_REVOKED_VERSIONS: z
-      .string()
-      .default('')
-      .transform((v) =>
-        v
-          .split(',')
-          .map((s) => s.trim())
-          .filter(Boolean),
-      ),
+    MOBILE_REVOKED_VERSIONS: list,
     /** The disclosure text version guards must accept before tracking (SEC §16.3). */
     DISCLOSURE_VERSION: z.string().default(CURRENT_DISCLOSURE_VERSION),
     /** SOS stays off for pilot guards until the Phase 8 exit tests pass (ARCH §22). */
     FEATURE_SOS: flag,
     /** SEC §9: guard codes only for +92 numbers unless the operator allows other countries. */
     ALLOW_FOREIGN_GUARD_PHONES: flag,
+    /**
+     * Where incident photos live (ARCH §12, SEC §12): a private S3 bucket in AWS; a local folder,
+     * reached through links this API signs, in development and tests only.
+     */
+    OBJECT_STORE: z.enum(['local', 's3']).default('local'),
+    OBJECT_STORE_DIR: z.string().min(1).default('.local/objects'),
+    LOCAL_OBJECT_SECRET: z.string().min(32).default(DEV_OBJECT_SECRET),
+    /** The origin the local store's links use; the dashboard's by default (it proxies /api). */
+    LOCAL_OBJECT_BASE_URL: z.url().optional(),
+    S3_BUCKET: z.string().min(3).optional(),
+    S3_REGION: z.string().min(1).optional(),
+    /** Web Push for the dashboard (D-26): the VAPID key pair, base64url. Without it nobody subscribes. */
+    WEB_PUSH_VAPID_PUBLIC_KEY: z.string().min(80).optional(),
+    WEB_PUSH_VAPID_PRIVATE_KEY: z.string().min(40).optional(),
+    /** Or the private key as a P-256 PEM (infra generates it); the public key is derived from it. */
+    WEB_PUSH_VAPID_PRIVATE_KEY_PEM: z.string().startsWith('-----BEGIN').optional(),
+    /**
+     * Or only the public half, as a PEM: for the API, which tells browsers the key but never sends.
+     * Only the worker holds the private key, so the internet-facing process can't forge a push.
+     */
+    WEB_PUSH_VAPID_PUBLIC_KEY_PEM: z.string().startsWith('-----BEGIN').optional(),
+    /** Firebase Cloud Messaging for the guard app (D-26): the service account JSON. */
+    FCM_SERVICE_ACCOUNT: z.string().min(2).optional(),
+    /** SMS (D-08): no provider until EXT-10. `memory` keeps texts in memory, for tests. */
+    SMS_PROVIDER: z.enum(['none', 'memory']).default('none'),
+    /** Outside production, texts go only to these numbers (ARCH §13.4; SEC §20 #30). */
+    SMS_ALLOWED_NUMBERS: list,
   })
   .superRefine((c, ctx) => {
     if (c.NODE_ENV !== 'production') return;
@@ -65,6 +94,12 @@ export const configSchema = z
     }
     if (!c.PUBLIC_ORIGIN.startsWith('https://')) {
       ctx.addIssue({ code: 'custom', path: ['PUBLIC_ORIGIN'], message: 'must be https in production' });
+    }
+    if (c.OBJECT_STORE !== 's3' || !c.S3_BUCKET) {
+      ctx.addIssue({ code: 'custom', path: ['OBJECT_STORE'], message: 'production keeps photos in S3' });
+    }
+    if (c.SMS_PROVIDER === 'memory') {
+      ctx.addIssue({ code: 'custom', path: ['SMS_PROVIDER'], message: 'memory is for tests' });
     }
   });
 

@@ -2,12 +2,12 @@
 
 Operations platform for private security companies. Guards carry an Android app that tracks them during their shifts. The control room, supervisors and duty officers use a web dashboard. Each company's data is kept separate from every other company's, enforced by the database (row-level security), not only by the application.
 
-| Part                                     | Where         | Status                                                                                                                                                     |
-| ---------------------------------------- | ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| API (Fastify, PostgreSQL 17)             | `apps/api`    | Phases 1–6: identity, guards and devices, sites and QR checkpoints, shifts, sync and live state, geofence and alerts, realtime stream, location history    |
-| Web dashboard (Next.js 16)               | `apps/web`    | Overview (exceptions first), Live map (live updates), guard detail, location history, Alerts, Shifts, Guards, Sites, Reports, Members, Settings, Audit log |
-| Guard app (Expo SDK 57, Android first)   | `apps/mobile` | Framework: enrollment, consent, shifts, background tracking with an offline outbox, sync, SOS client (off for the pilot). See `apps/mobile/README.md`      |
-| Shared contracts, domain rules, database | `packages/*`  |                                                                                                                                                            |
+| Part                                     | Where         | Status                                                                                                                                                                                                                                            |
+| ---------------------------------------- | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| API (Fastify, PostgreSQL 17)             | `apps/api`    | Phases 1–8: identity, guards and devices, sites and QR checkpoints, shifts, sync and live state, geofence and alerts, realtime stream, location history, patrols, incidents with photos, SOS with its escalation ladder, notifications and drills |
+| Web dashboard (Next.js 16)               | `apps/web`    | Overview (exceptions first), Live map (live updates), guard detail, location history, Alerts, the SOS alarm and SOS pages, Incidents, Patrols, Shifts, Guards, Sites, Drills, Reports, Members, Settings, Audit log                               |
+| Guard app (Expo SDK 57, Android first)   | `apps/mobile` | Enrollment, consent, shifts, background tracking with an offline outbox, sync, patrol scans, incident reports with photos, SOS (off for the pilot). See `apps/mobile/README.md`                                                                   |
+| Shared contracts, domain rules, database | `packages/*`  |                                                                                                                                                                                                                                                   |
 
 Read `CLAUDE.md` first, then `docs/SECURITY_AND_INVARIANTS.md` (it wins every conflict), `docs/DECISIONS.md`, `docs/PRODUCT_SPEC.md` and `docs/ARCHITECTURE.md`. Phase plans and reports are in `docs/phases/`.
 
@@ -39,7 +39,12 @@ On the Patrols page, the beat has a QR checkpoint at each corner and a round eve
 - Bilal, while off site, scans a photographed label: "Not verified", hundreds of metres from the checkpoint. Back on the beat he walks only half of each round: Incomplete, with a "Checkpoint run incomplete" alert.
 - Hina's silent phone sends nothing: her rounds are Missed.
 
-The dashboard updates live, through a stream from the API. The background worker runs the shift and alert detectors and closes patrol rounds every minute, and moves live updates from the database to the API every half second (`pnpm worker:dev`). The demo does all of it itself, so the worker isn't needed for it.
+Incidents and SOS:
+
+- At two minutes Usman reports a motorbike circling the gate, with a photo: "Incident (high)" on the Alerts page, and the report on the Incidents page.
+- At three minutes Ali presses SOS. Every open dashboard shows the full-screen alarm; click "Enable alarm sound" to hear it. His phone sends its position every 10 s, and the demo prints what the server tells it, until someone resolves the SOS on its page. Without push keys or an SMS provider, nothing leaves the computer.
+
+The dashboard updates live, through a stream from the API. The background worker runs the shift and alert detectors and closes patrol rounds every minute. It runs the SOS ladder, sends notifications and checks uploaded photos, and moves live updates from the database to the API every half second (`pnpm worker:dev`). The demo does all of it itself, so the worker isn't needed for it.
 
 `pnpm demo --crowd=1000` adds 1,000 more guards across 16 zones of the colony, each reporting once a minute, to see the Live map at pilot scale. Setting them up takes a few minutes.
 

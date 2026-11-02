@@ -5,12 +5,18 @@ import { createHash, createPublicKey, type KeyObject, verify } from 'node:crypto
 
 import {
   type ErrorCode,
+  type GuardIncidentsResponse,
   type GuardPatrolsResponse,
   type GuardShift,
   type MobileConfig,
   type ScanResult,
+  type SosStatusResponse,
+  attachmentCompleteRequestSchema,
+  attachmentSlotRequestSchema,
   enrollmentRedeemRequestSchema,
   sessionRefreshRequestSchema,
+  sosCancelRequestSchema,
+  sosLocationsRequestSchema,
   sosRequestSchema,
   syncBatchRequestSchema,
   syncItemSchema,
@@ -126,6 +132,19 @@ export class FakeServer {
   /** The guard whose session carried each entry of `batches`. */
   readonly batchGuards: string[] = [];
   readonly sos = new Map<string, { sosEventId: string; auth: 'bearer' | 'signature' }>();
+  /** What GET /sos/:id/status answers, per SOS (PROD §11.3); RECEIVED with nothing sent by default. */
+  readonly sosStatus = new Map<string, Partial<SosStatusResponse>>();
+  /** SOS tracking points and "I'm safe" requests that reached the server, in order. */
+  readonly sosPoints: { sosEventId: string; clientEventId: string; auth: 'bearer' | 'signature' }[] = [];
+  readonly sosCancels: { sosEventId: string; clientEventId: string }[] = [];
+  /** Incident photos: slots handed out (by the phone's id) and the hashes completed. */
+  readonly photoSlots = new Map<
+    string,
+    { attachmentId: string; incidentId: string; sizeBytes: number; captureSource: string }
+  >();
+  readonly photoCompletes: { attachmentId: string; sha256: string }[] = [];
+  /** GET /me/incidents answers with these reports. */
+  myIncidents: GuardIncidentsResponse['incidents'] = [];
   readonly requests: { method: string; path: string; headers: Record<string, string> }[] = [];
   readonly consents: { disclosureVersion: string; locale: string; guardId: string }[] = [];
   /** How each new item is answered. Default: SHIFT_START activates the shift, everything ACCEPTED. */
@@ -219,9 +238,111 @@ export class FakeServer {
         });
       case 'POST /api/v1/sos':
         return this.#sos(request);
+      case 'GET /api/v1/me/incidents':
+        return this.#authed(request, () =>
+          this.#json(200, { serverTime: iso(this.now()), incidents: this.myIncidents }),
+        );
       default:
-        return this.#error(404, 'NOT_FOUND');
+        return this.#routes(request, path);
     }
+  }
+
+  /** The routes with an ID in the path. */
+  async #routes(request: HttpRequest, path: string): Promise<HttpResponse> {
+    const sos = /^\/api\/v1\/sos\/([^/]+)\/(status|locations|cancel-request)$/.exec(path);
+    if (sos?.[1] && sos[2]) {
+      const sosEventId = sos[1];
+      const bodyText = request.body ?? '';
+      const auth = this.#findSession(request)
+        ? 'bearer'
+        : request.headers['X-Device-Signature'] && this.#signatureValid(request, bodyText)
+          ? 'signature'
+          : null;
+      if (!auth) return this.#error(401, 'UNAUTHENTICATED');
+      if (![...this.sos.values()].some((s) => s.sosEventId === sosEventId))
+        return this.#error(404, 'NOT_FOUND');
+      if (sos[2] === 'locations' && request.method === 'POST') {
+        const body = sosLocationsRequestSchema.safeParse(JSON.parse(bodyText || '{}'));
+        if (!body.success) return this.#error(400, 'VALIDATION_FAILED');
+        const results = body.data.points.map((point) => {
+          const seen = this.sosPoints.some((p) => p.clientEventId === point.clientEventId);
+          if (!seen) this.sosPoints.push({ sosEventId, clientEventId: point.clientEventId, auth });
+          return { clientEventId: point.clientEventId, status: seen ? 'DUPLICATE' : 'ACCEPTED' };
+        });
+        return this.#json(200, { serverTime: iso(this.now()), results });
+      }
+      if (sos[2] === 'cancel-request' && request.method === 'POST') {
+        const body = sosCancelRequestSchema.safeParse(JSON.parse(bodyText || '{}'));
+        if (!body.success) return this.#error(400, 'VALIDATION_FAILED');
+        this.sosCancels.push({ sosEventId, clientEventId: body.data.clientEventId });
+        this.sosStatus.set(sosEventId, {
+          ...this.sosStatus.get(sosEventId),
+          cancelRequestedAt: iso(this.now()),
+        });
+        return this.#json(200, this.#sosStatusOf(sosEventId));
+      }
+      if (sos[2] === 'status' && request.method === 'GET')
+        return this.#json(200, this.#sosStatusOf(sosEventId));
+    }
+    const slot = /^\/api\/v1\/incidents\/([^/]+)\/attachments$/.exec(path);
+    if (slot?.[1] && request.method === 'POST') {
+      const incidentId = slot[1];
+      return this.#authed(request, () => {
+        const body = attachmentSlotRequestSchema.safeParse(JSON.parse(request.body ?? '{}'));
+        if (!body.success) return this.#error(400, 'VALIDATION_FAILED');
+        const existing = this.photoSlots.get(body.data.clientEventId);
+        const attachmentId = existing?.attachmentId ?? this.#id();
+        this.photoSlots.set(body.data.clientEventId, {
+          attachmentId,
+          incidentId,
+          sizeBytes: body.data.sizeBytes,
+          captureSource: body.data.captureSource,
+        });
+        const done = this.photoCompletes.some((c) => c.attachmentId === attachmentId);
+        return this.#json(200, {
+          attachmentId,
+          status: done ? 'PROCESSING' : 'PENDING_UPLOAD',
+          upload: done
+            ? null
+            : {
+                url: `https://photos.example/${attachmentId}`,
+                method: 'PUT',
+                headers: { 'content-type': 'image/jpeg', 'content-length': String(body.data.sizeBytes) },
+                expiresAt: iso(this.now() + 15 * 60_000),
+              },
+        });
+      });
+    }
+    const complete = /^\/api\/v1\/attachments\/([^/]+)\/complete$/.exec(path);
+    if (complete?.[1] && request.method === 'POST') {
+      const attachmentId = complete[1];
+      return this.#authed(request, () => {
+        const body = attachmentCompleteRequestSchema.safeParse(JSON.parse(request.body ?? '{}'));
+        if (!body.success) return this.#error(400, 'VALIDATION_FAILED');
+        this.photoCompletes.push({ attachmentId, sha256: body.data.sha256 });
+        return this.#json(200, { attachmentId, status: 'PROCESSING' });
+      });
+    }
+    return this.#error(404, 'NOT_FOUND');
+  }
+
+  #sosStatusOf(sosEventId: string): SosStatusResponse {
+    return {
+      sosEventId,
+      serverTime: iso(this.now()),
+      phase: 'RECEIVED',
+      isDrill: false,
+      alertSentTo: 0,
+      shownInControlRoom: false,
+      reachedPhones: 0,
+      acknowledgedBy: null,
+      acknowledgedAt: null,
+      resolvedAt: null,
+      cancelRequestedAt: null,
+      trackingUntil: iso(this.now() + 4 * 3_600_000),
+      trackingIntervalS: 10,
+      ...this.sosStatus.get(sosEventId),
+    };
   }
 
   #response(status: number, body: unknown, headers: Record<string, string> = {}): HttpResponse {
@@ -330,6 +451,7 @@ export class FakeServer {
         status: SyncItemStatus;
         code?: ErrorCode;
         scan?: ScanResult;
+        incident?: { id: string; referenceNumber: string };
       }[] = [];
       const touched = new Set<string>();
       for (const raw of parsed.data.items) {
@@ -360,11 +482,17 @@ export class FakeServer {
             hadFix: item.data.fix !== null,
           });
         }
+        // An accepted report comes back with its server id and reference (photos upload against it).
+        const incident =
+          item.data.type === 'INCIDENT' && decision.status === 'ACCEPTED'
+            ? { id: this.#id(), referenceNumber: `INC-${String(this.#counter).padStart(6, '0')}` }
+            : undefined;
         results.push({
           clientEventId,
           status: decision.status,
           ...(decision.code ? { code: decision.code } : {}),
           ...(scan ? { scan } : {}),
+          ...(incident ? { incident } : {}),
         });
       }
       const shifts = this.shifts
@@ -403,8 +531,13 @@ export class FakeServer {
     } else {
       return this.#error(401, 'UNAUTHENTICATED');
     }
+    // Like the real server: the same press answers the same; another press while one is open folds
+    // into it (PROD §11.9).
     const existing = this.sos.get(parsed.data.clientEventId);
-    const sosEventId = existing?.sosEventId ?? this.#id();
+    const open = [...this.sos.values()]
+      .reverse()
+      .find((s) => this.sosStatus.get(s.sosEventId)?.phase !== 'RESOLVED');
+    const sosEventId = existing?.sosEventId ?? open?.sosEventId ?? this.#id();
     this.sos.set(parsed.data.clientEventId, { sosEventId, auth });
     return this.#json(200, { sosEventId, status: 'RECEIVED', serverTime: iso(this.now()) });
   }

@@ -312,6 +312,50 @@ export async function otherActiveShift(
   return row?.id ?? null;
 }
 
+/**
+ * The guard's started shifts whose actual window may hold `at` (inShiftWindow's 60 s tolerance on
+ * each side), newest first: an incident or an SOS belongs to the shift its capture time falls in.
+ */
+export async function startedShiftsAround(
+  trx: Database,
+  organizationId: string,
+  guardId: string,
+  at: Date,
+): Promise<ShiftRow[]> {
+  const rows = await shiftQuery(trx, organizationId)
+    .where('sh.guard_id', '=', guardId)
+    .where('sh.actual_started_at', '<=', new Date(at.getTime() + 60_000))
+    .where((eb) =>
+      eb.or([
+        eb('sh.actual_ended_at', 'is', null),
+        eb('sh.actual_ended_at', '>=', new Date(at.getTime() - 60_000)),
+      ]),
+    )
+    .orderBy('sh.actual_started_at', 'desc')
+    .limit(3)
+    .execute();
+  return rows.map(toShift);
+}
+
+/** Scheduled shifts starting in (from, to]: the reminder job's candidates (PROD App. B). */
+export async function scheduledShiftsStartingBetween(
+  trx: Database,
+  organizationId: string,
+  from: Date,
+  to: Date,
+): Promise<string[]> {
+  const rows = await trx
+    .selectFrom('shifts')
+    .where('organization_id', '=', organizationId)
+    .where('status', '=', 'SCHEDULED')
+    .where('starts_at', '>', from)
+    .where('starts_at', '<=', to)
+    .select('id')
+    .limit(2000)
+    .execute();
+  return rows.map((r) => r.id);
+}
+
 export async function activeShiftsForGuard(trx: Database, organizationId: string, guardId: string) {
   const rows = await shiftQuery(trx, organizationId)
     .where('sh.guard_id', '=', guardId)

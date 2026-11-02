@@ -400,6 +400,58 @@ export async function sessionIdByRefresh(db: Database, token: string) {
   return rows[0] ?? null;
 }
 
+/** A signed SOS names its device (ADV-S11): its organization and key, found without a session. */
+export async function deviceForSignature(db: Database, deviceId: string) {
+  const { rows } = await sql<{
+    organization_id: string;
+    guard_id: string;
+    public_key: Buffer;
+    key_algorithm: string;
+    status: string;
+    revoked_reason: string | null;
+    revoked_at: Date | null;
+  }>`select * from app.device_for_signature(${deviceId}::uuid)`.execute(db);
+  return rows[0] ?? null;
+}
+
+/** The guard and organization behind a device, for a request signed with its key. */
+export async function guardOnDevice(trx: Database, organizationId: string, deviceId: string) {
+  return trx
+    .selectFrom('guard_devices as d')
+    .innerJoin('guards as g', (j) =>
+      j.onRef('g.organization_id', '=', 'd.organization_id').onRef('g.id', '=', 'd.guard_id'),
+    )
+    .innerJoin('organizations as o', 'o.id', 'd.organization_id')
+    .select([
+      'd.guard_id',
+      'g.user_id',
+      'g.display_name',
+      'g.status as guard_status',
+      'g.preferred_locale',
+      'o.name as organization_name',
+      'o.status as organization_status',
+    ])
+    .where('d.organization_id', '=', organizationId)
+    .where('d.id', '=', deviceId)
+    .executeTakeFirst();
+}
+
+/** The phone's Firebase token (D-26); the guard's other devices are revoked, so one is enough. */
+export async function setDevicePushToken(
+  trx: Database,
+  organizationId: string,
+  deviceId: string,
+  token: string | null,
+  now: Date,
+): Promise<void> {
+  await trx
+    .updateTable('guard_devices')
+    .set({ push_token: token, push_token_updated_at: now, updated_at: now })
+    .where('organization_id', '=', organizationId)
+    .where('id', '=', deviceId)
+    .execute();
+}
+
 export async function loadSession(trx: Database, organizationId: string, id: string, forUpdate = false) {
   let query = trx
     .selectFrom('mobile_sessions as s')

@@ -67,8 +67,8 @@ export const mobileRoutes = [
           startMaxFixAgeSeconds: setting(settings, 'shift.start_max_fix_age_seconds'),
           requireBackgroundPermission: requireBackground,
         },
-        // Incidents arrive with Phase 8; until then the app hides them.
-        features: { sos: deps.config.FEATURE_SOS, patrols: true, incidents: false },
+        // SOS stays off for pilot guards until Phase 8's exit criteria pass on real phones (ARCH §22).
+        features: { sos: deps.config.FEATURE_SOS, patrols: true, incidents: true },
         support: {
           emergencyCallNumber:
             typeof settings['sos.emergency_call_number'] === 'string'

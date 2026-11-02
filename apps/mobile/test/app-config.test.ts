@@ -112,6 +112,13 @@ describe('native permissions and declarations', () => {
       Record<string, unknown>,
     ];
     expect(camera[1]).toMatchObject({ microphonePermission: false, recordAudioAndroid: false });
+    // D-18: the photo picker adds no microphone, and says what the photos are for.
+    const picker = config.plugins?.find((p) => Array.isArray(p) && p[0] === 'expo-image-picker') as [
+      string,
+      Record<string, unknown>,
+    ];
+    expect(picker[1]).toMatchObject({ microphonePermission: false });
+    expect(String(picker[1].photosPermission)).toContain('incident report');
     expect(config.ios?.infoPlist?.NSAppTransportSecurity).toEqual({ NSAllowsArbitraryLoads: false });
   });
 

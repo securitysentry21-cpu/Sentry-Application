@@ -4,11 +4,14 @@
 // every phone capability comes in through ports (src/core/ports.ts), so all of this runs in tests.
 import {
   DEVICE_KEY_ALGORITHM,
+  MAX_INCIDENT_PHOTOS,
   type DeviceStatus,
   type Fix,
+  type GuardIncidentsResponse,
   type GuardPatrolsResponse,
   type GuardShift,
   type INCIDENT_SEVERITIES,
+  type IncidentType,
   type MobileConfig,
   type SyncItem,
 } from '@sentryops/contracts';
@@ -51,7 +54,8 @@ import {
   type Receipt,
 } from './outbox/outbox.ts';
 import { isCheckpointLabel } from './patrol.ts';
-import type { DevicePort, LocationPort, SecureKV } from './ports.ts';
+import { type CaptureSource, PhotoQueue } from './photos/queue.ts';
+import type { DevicePort, LocationPort, PhotoPort, SecureKV } from './ports.ts';
 import { ServerTime } from './server-time.ts';
 import {
   canResume,
@@ -64,7 +68,7 @@ import {
 } from './shift/local-shift.ts';
 import { LocalShiftStore } from './shift/store.ts';
 import { type Scheduler, SosLane } from './sos/lane.ts';
-import type { SosState } from './sos/machine.ts';
+import { sosOpen, type SosState } from './sos/machine.ts';
 import { syncDisplay, type SyncDisplay } from './status.ts';
 import { META_KEYS, MetaStore } from './storage/meta.ts';
 import { configureConnection, migrate, SchemaTooNewError } from './storage/schema.ts';
@@ -134,6 +138,10 @@ export type AppSnapshot = {
   readonly serverOffsetMs: number | null;
   readonly clockSkewed: boolean;
   readonly sos: SosState | null;
+  /** Incident photos still on this phone, waiting for their upload (ARCH §12). */
+  readonly pendingPhotos: number;
+  /** The phone's newest fix, for the SOS text the guard can send themselves (PROD §11.7). */
+  readonly lastPosition: { readonly lat: number; readonly lon: number } | null;
   readonly signedOutReason: SignedOutReason | null;
   readonly storageError: string | null;
 };
@@ -170,12 +178,27 @@ export type ScanStart =
   | { readonly kind: 'SAVED'; readonly clientEventId: string }
   | { readonly kind: 'REFUSED'; readonly reason: 'PATROLS_OFF' | 'NOT_A_CHECKPOINT' | 'NO_SHIFT' };
 
+export type IncidentPhoto = {
+  readonly uri: string;
+  readonly width: number;
+  readonly height: number;
+  /** D-18: the in-app camera or the system photo picker; the server labels the photo with it. */
+  readonly source: CaptureSource;
+};
+
 export type IncidentInput = {
-  readonly shiftId: string;
-  readonly type: string;
+  /** The shift being tracked, or null for a report during an open SOS off shift (INV-08). */
+  readonly shiftId: string | null;
+  readonly type: IncidentType;
   readonly severity: (typeof INCIDENT_SEVERITIES)[number];
-  readonly title: string;
+  /** Optional: the server names an untitled report by its type. */
+  readonly title?: string;
   readonly description: string;
+  /** When it happened, phone clock: now, or set back up to 24 hours (PROD §10.1). */
+  readonly occurredAtMs?: number;
+  /** "Checkpoint problem" (PROD §7.7). */
+  readonly checkpointId?: string;
+  readonly photos?: readonly IncidentPhoto[];
 };
 
 export type Diagnostics = {
@@ -190,6 +213,7 @@ export type GuardAppDeps = {
   readonly transport: HttpTransport;
   readonly location: LocationPort;
   readonly device: DevicePort;
+  readonly photos: PhotoPort;
   readonly runtime: RuntimeConfig;
   readonly appVersion: string;
   readonly clocks: Clocks;
@@ -253,6 +277,8 @@ export class GuardApp {
   #api: ApiClient | null = null;
   #engine: SyncEngine | null = null;
   #sos: SosLane | null = null;
+  #photos: PhotoQueue | null = null;
+  #pendingPhotos = 0;
   #installation: Installation | null = null;
 
   #phase: AppPhase = 'BOOTING';
@@ -276,6 +302,10 @@ export class GuardApp {
   };
   #lastRawFix: RawFix | null = null;
   #trackingRunning: boolean | null = null;
+  /** What the running location updates were started for: the interval differs (PROD §8.2, §11.2). */
+  #trackingMode: 'SHIFT' | 'SOS' | null = null;
+  /** The last SOS tracking point taken, phone clock (one per `tracking.sosIntervalS`). */
+  #lastSosPointAtMs: number | null = null;
   #probe: DeviceProbe | null = null;
   #queue: QueueStats = EMPTY_QUEUE;
   #discarded: DiscardedSummary = NO_DISCARDS;
@@ -411,10 +441,26 @@ export class GuardApp {
       ids: this.#ids,
       random01: deps.random01,
       logger: deps.logger,
-      onChange: () => this.#emit(),
+      onChange: () => {
+        this.#emit();
+        // SOS tracking starts or stops with what the server says (resolved, past its window).
+        const wants = this.#sos?.tracking(this.#serverNow()) != null;
+        if (wants !== (this.#trackingMode === 'SOS')) void this.#reconcileTracking();
+      },
       ...(deps.schedule ? { schedule: deps.schedule } : {}),
     });
     this.#sos = sos;
+    this.#photos = new PhotoQueue({
+      db,
+      outbox,
+      api,
+      session,
+      photos: deps.photos,
+      wall: deps.clocks.wall,
+      ids: this.#ids,
+      random01: deps.random01,
+      logger: deps.logger,
+    });
 
     const identity = this.#identity;
     if (identity) {
@@ -513,6 +559,10 @@ export class GuardApp {
       serverOffsetMs: this.#serverTime.offsetMs,
       clockSkewed: this.#serverTime.skewed,
       sos: this.#sos?.latest() ?? null,
+      pendingPhotos: this.#pendingPhotos,
+      lastPosition: this.#lastRawFix
+        ? { lat: this.#lastRawFix.latitude, lon: this.#lastRawFix.longitude }
+        : null,
       signedOutReason: this.#signedOut,
       storageError: this.#storageError,
     };
@@ -962,20 +1012,31 @@ export class GuardApp {
     }
   }
 
-  // ── Incidents (PROD §7.8; text only in this build) ─────────────────────────────────────────
+  // ── Incidents (PROD §7.8, §10) ─────────────────────────────────────────────────────────────
 
+  /**
+   * Whether the guard may file a report now, and under which shift: during the shift this phone
+   * tracks, or during an open SOS off shift (INV-08). Null otherwise.
+   */
+  incidentContext(): { shiftId: string | null } | null {
+    if (!this.settings.features.incidents) return null;
+    const tracked = this.#trackedShift();
+    if (tracked) return { shiftId: tracked.shiftId };
+    const sos = this.#sos?.latest();
+    return sos && sosOpen(sos) ? { shiftId: null } : null;
+  }
+
+  /** Saves a report with a fresh fix and its photos, and sends it at once (offline: when it can). */
   async reportIncident(input: IncidentInput): Promise<string | null> {
     await this.start();
     const outbox = this.#requireOutbox();
     const partition = this.#partition() ?? this.#identityPartition();
-    const tracked = this.#trackedShift();
-    // The server accepts incidents only once the organization has them switched on.
-    if (!this.settings.features.incidents) return null;
-    // INV-08: incidents only during an active shift (an open SOS is the other case, not in this build).
-    if (!partition || !tracked || tracked.shiftId !== input.shiftId) return null;
+    const context = this.incidentContext();
+    if (!partition || !context || context.shiftId !== input.shiftId) return null;
     const raw = await this.#onDemandFix();
     const { clocks } = this.#deps;
     const now = clocks.wall.nowMs();
+    const occurredAtMs = Math.min(now, Math.max(now - 24 * HOUR, input.occurredAtMs ?? now));
     const clientEventId = this.#ids.uuidv7();
     await outbox.enqueue(partition, {
       clientEventId,
@@ -985,13 +1046,65 @@ export class GuardApp {
       bootId: clocks.bootId,
       shiftId: input.shiftId,
       incident: {
-        type: input.type.slice(0, 40),
+        type: input.type,
         severity: input.severity,
-        title: input.title.trim().slice(0, 120),
+        ...(input.title && input.title.trim() ? { title: input.title.trim().slice(0, 120) } : {}),
         description: input.description.trim().slice(0, 4_000),
-        occurredAt: isoFromMs(now),
+        occurredAt: isoFromMs(occurredAtMs),
+        ...(input.checkpointId ? { checkpointId: input.checkpointId } : {}),
       },
       fix: raw ? this.#fix(raw, captureAgeMs(raw, now)) : null,
+    });
+    for (const photo of (input.photos ?? []).slice(0, MAX_INCIDENT_PHOTOS)) {
+      try {
+        await this.#photos?.add(partitionKey(partition), clientEventId, photo);
+      } catch (error) {
+        this.#deps.logger.warn('photo.prepare-failed', { errorKind: errorKind(error) });
+      }
+    }
+    this.#pendingPhotos = (await this.#photos?.pending(partitionKey(partition))) ?? 0;
+    await this.#refreshCounts();
+    this.#emit();
+    void this.flush({ urgent: true });
+    return clientEventId;
+  }
+
+  /** The guard's own reports of the last two weeks, from the server (status, photos, notes). */
+  async myIncidents(): Promise<GuardIncidentsResponse | null> {
+    await this.start();
+    const session = this.#session;
+    const api = this.#api;
+    if (!session?.current || !api || !this.settings.features.incidents) return null;
+    try {
+      return await session.withAuth((token) => api.getMyIncidents(token));
+    } catch (error) {
+      await this.#readFailed('incidents', error);
+      return null;
+    }
+  }
+
+  /** A note on the guard's own report (PROD §10.2), queued like every offline item. */
+  async addIncidentNote(
+    incident: { id: string | null; clientEventId: string | null },
+    body: string,
+  ): Promise<string | null> {
+    await this.start();
+    const partition = this.#partition() ?? this.#identityPartition();
+    const text = body.trim().slice(0, 4_000);
+    if (!partition || text.length === 0 || (!incident.id && !incident.clientEventId)) return null;
+    const { clocks } = this.#deps;
+    const clientEventId = this.#ids.uuidv7();
+    await this.#requireOutbox().enqueue(partition, {
+      clientEventId,
+      type: 'INCIDENT_NOTE',
+      recordedAt: isoFromMs(clocks.wall.nowMs()),
+      monoMs: clocks.mono.nowMs(),
+      bootId: clocks.bootId,
+      shiftId: this.#trackedShift()?.shiftId ?? null,
+      ...(incident.id
+        ? { incidentId: incident.id }
+        : { incidentClientEventId: incident.clientEventId ?? '' }),
+      body: text,
     });
     await this.#refreshCounts();
     this.#emit();
@@ -1074,21 +1187,47 @@ export class GuardApp {
         ? this.#lastRawFix
         : null;
     const clientEventId = await sos.trigger(recent ? this.#fix(recent, captureAgeMs(recent, now)) : null);
-    // PROD §11.2 step 3: the best fix within 10 s goes up as a location update. The contract has no
-    // SOS location item yet, so during a shift it travels as a LOCATION item of that shift.
+    // PROD §11.2 steps 3–4: the best fix within 10 s goes up as an SOS point, and SOS tracking (one
+    // fix every tracking.sosIntervalS, whatever the shift) starts.
     void this.#sosLocationUpdate();
+    await this.#reconcileTracking();
     return clientEventId;
   }
 
   async #sosLocationUpdate(): Promise<void> {
-    const tracked = this.#trackedShift();
-    const partition = this.#partition() ?? this.#identityPartition();
-    if (!tracked || !partition) return;
     const raw = await this.#onDemandFix();
     if (!raw) return;
-    await this.#enqueueLocation(partition, tracked, raw);
+    await this.#recordSosPoint(raw, true);
     await this.#refreshCounts();
-    void this.flush({ urgent: true });
+    this.#emit();
+  }
+
+  /** One SOS tracking point, no more often than tracking.sosIntervalS unless forced (the first fix). */
+  async #recordSosPoint(raw: RawFix, force: boolean): Promise<void> {
+    const sos = this.#sos;
+    if (!sos) return;
+    const { clocks } = this.#deps;
+    const wallNow = clocks.wall.nowMs();
+    const ageMs = captureAgeMs(raw, wallNow);
+    const capturedWall = wallNow - ageMs;
+    const intervalMs = this.settings.tracking.sosIntervalS * 1_000;
+    if (!force && this.#lastSosPointAtMs !== null && capturedWall - this.#lastSosPointAtMs < intervalMs)
+      return;
+    const recorded = await sos.recordFix(
+      this.#fix(raw, ageMs),
+      capturedWall,
+      Math.max(0, clocks.mono.nowMs() - ageMs),
+    );
+    if (recorded) {
+      this.#lastSosPointAtMs = capturedWall;
+      this.#lastRawFix = raw;
+    }
+  }
+
+  /** "I'm safe / false alarm" (PROD §11.8): noted for the control room; the SOS stays open. */
+  async requestSosCancel(): Promise<boolean> {
+    await this.start();
+    return (await this.#sos?.requestCancel()) ?? false;
   }
 
   // ── Location (the background task and on-demand fixes) ─────────────────────────────────────
@@ -1115,6 +1254,18 @@ export class GuardApp {
     await this.#tick(); // failsafe and housekeeping before anything is recorded
     const tracked = this.#trackedShift();
     const partition = this.#partition() ?? this.#identityPartition();
+    // SOS tracking (PROD §11.2): during an open SOS its points carry the guard's position, with or
+    // without a shift (the server files them under the shift when one holds them). The shift's own
+    // points pause meanwhile, so nothing is sent twice.
+    if (this.#sos?.tracking(this.#serverNow())) {
+      const sorted = readings.filter(isPlausibleCoordinate).sort((a, b) => a.timestampMs - b.timestampMs);
+      for (const raw of sorted) await this.#recordSosPoint(raw, false);
+      if (tracked && partition) await this.#heartbeatIfDue(partition, tracked);
+      await this.#refreshCounts();
+      this.#emit();
+      await this.#flushIfDue();
+      return;
+    }
     if (!tracked || !partition) {
       await this.#reconcileTracking(); // nothing should be tracking: make sure updates are off (INV-08)
       this.#emit();
@@ -1253,10 +1404,11 @@ export class GuardApp {
   async #reconcileTracking(): Promise<void> {
     const { location, logger, appVersion } = this.#deps;
     const now = this.#serverNow();
-    const want =
-      [...this.#local.values()].some((s) => shouldTrack(s, now)) &&
-      this.#partition() !== null &&
-      versionGate(appVersion, this.#config) !== 'REVOKED';
+    const signedIn = this.#partition() !== null && versionGate(appVersion, this.#config) !== 'REVOKED';
+    const shiftWants = signedIn && [...this.#local.values()].some((s) => shouldTrack(s, now));
+    // An open SOS is tracked whatever the shift and even signed out (INV-08's one exception, INV-15).
+    const sosWants = this.#sos?.tracking(now) != null;
+    const mode: 'SHIFT' | 'SOS' | null = sosWants ? 'SOS' : shiftWants ? 'SHIFT' : null;
     let running: boolean | null;
     try {
       running = await location.isRunning();
@@ -1264,22 +1416,33 @@ export class GuardApp {
       running = null;
     }
     try {
-      if (want && running !== true) {
-        await location.startUpdates({
-          timeIntervalMs: this.settings.tracking.minIntervalS * 1_000,
-          distanceIntervalM: 0,
-          notificationTitle: this.#t('notification.title'),
-          notificationBody: this.#t('notification.body', { org: this.#identity?.organizationName ?? '' }),
-        });
-        running = true;
-      } else if (!want && running !== false) {
+      if (mode && running === true && this.#trackingMode !== null && this.#trackingMode !== mode) {
+        // A different purpose needs a different interval: restart the updates.
         await location.stopUpdates();
         running = false;
       }
+      if (mode && running !== true) {
+        const org = this.#identity?.organizationName ?? '';
+        await location.startUpdates({
+          timeIntervalMs:
+            mode === 'SOS'
+              ? this.settings.tracking.sosIntervalS * 1_000
+              : this.settings.tracking.minIntervalS * 1_000,
+          distanceIntervalM: 0,
+          notificationTitle: this.#t('notification.title'),
+          notificationBody:
+            mode === 'SOS' ? this.#t('notification.sosBody', { org }) : this.#t('notification.body', { org }),
+        });
+        running = true;
+      } else if (!mode && running !== false) {
+        await location.stopUpdates();
+        running = false;
+      }
+      this.#trackingMode = running ? mode : null;
     } catch (error) {
       // Android may refuse to start a location service from the background. The guard is prompted
       // when the app is next opened, and the gap shows on the dashboard.
-      logger.warn('tracking.reconcile-failed', { errorKind: errorKind(error), tracking: want });
+      logger.warn('tracking.reconcile-failed', { errorKind: errorKind(error), tracking: mode ?? 'NONE' });
       running = await location.isRunning().catch(() => null);
     }
     this.#trackingRunning = running;
@@ -1330,8 +1493,21 @@ export class GuardApp {
     } catch (error) {
       this.#deps.logger.error('sos.flush-crashed', { errorKind: errorKind(error) });
     }
+    await this.#uploadPhotos();
     await this.#refreshCounts();
     this.#emit();
+  }
+
+  /** The upload lane (ARCH §8.6): photos of reports the server has, after the main lane. */
+  async #uploadPhotos(): Promise<void> {
+    const partition = this.#partition();
+    if (!partition || !this.#photos) return;
+    try {
+      await this.#photos.run(partitionKey(partition));
+      this.#pendingPhotos = await this.#photos.pending(partitionKey(partition));
+    } catch (error) {
+      this.#deps.logger.error('photos.upload-crashed', { errorKind: errorKind(error) });
+    }
   }
 
   async #flushIfDue(): Promise<void> {
@@ -1449,6 +1625,13 @@ export class GuardApp {
   }
 
   /** The app came to the front: re-read the phone and the server (ARCH §8.8). */
+  /** The SOS screen asks for the server's latest answer (it also arrives every 5 s on its own). */
+  async refreshSos(): Promise<void> {
+    await this.start();
+    await this.#sos?.pollStatus();
+    await this.#reconcileTracking();
+  }
+
   async onForeground(): Promise<void> {
     await this.start();
     await this.probeDevice();

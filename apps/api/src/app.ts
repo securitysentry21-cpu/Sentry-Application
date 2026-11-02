@@ -1,5 +1,7 @@
 import { randomUUID } from 'node:crypto';
 
+import { MAX_ATTACHMENT_BYTES } from '@sentryops/contracts';
+
 import Fastify, { LogController, type FastifyInstance, type FastifyServerOptions } from 'fastify';
 
 import type { AppDeps } from './deps.ts';
@@ -22,6 +24,8 @@ declare module 'fastify' {
   }
 }
 
+const IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/heic'];
+
 const INCOMING_REQUEST_ID = /^[A-Za-z0-9._-]{1,64}$/;
 
 export type BuildOptions = {
@@ -41,6 +45,9 @@ export function buildApp(deps: AppDeps, options: BuildOptions = {}): FastifyInst
     exposeHeadRoutes: false,
     // Behind the AWS load balancer the client address comes from X-Forwarded-For; only then.
     trustProxy: deps.config.TRUST_PROXY,
+    // The local object store's signed tokens are path parameters (routes/objects.ts); every other
+    // parameter is a UUID its route validates.
+    routerOptions: { maxParamLength: 600 },
     // A full sync batch (500 items) fits comfortably; anything larger is refused before parsing.
     bodyLimit: 2 * 1024 * 1024,
     // ARCH §15.1: honour a well-formed X-Request-Id, otherwise generate one.
@@ -67,6 +74,21 @@ export function buildApp(deps: AppDeps, options: BuildOptions = {}): FastifyInst
     // Responses hold one user's data, so no cache keeps them unless a route explicitly opts in.
     if (!reply.hasHeader('cache-control')) reply.header('cache-control', 'no-store');
   });
+
+  // A request signed with the device key is checked over its exact bytes (INV-15, ADV-S11), so the
+  // SOS routes keep their JSON as received; parsing is Fastify's own, poisoning checks included.
+  const json = app.getDefaultJsonParser('error', 'error');
+  app.removeContentTypeParser('application/json');
+  app.addContentTypeParser('application/json', { parseAs: 'string' }, (request, body, done) => {
+    if (request.url.startsWith('/api/v1/sos')) request.rawBody = body as string;
+    void json(request, body as string, done);
+  });
+  // Photo uploads to the local object store (development and tests); S3 takes them in AWS.
+  app.addContentTypeParser(
+    IMAGE_TYPES,
+    { parseAs: 'buffer', bodyLimit: MAX_ATTACHMENT_BYTES },
+    (_request, body, done) => done(null, body),
+  );
 
   app.setErrorHandler(errorHandler);
   app.setNotFoundHandler((request, reply) =>

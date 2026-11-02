@@ -3,6 +3,11 @@ output "dashboard_url" {
   value       = local.public_origin
 }
 
+output "attachments_bucket" {
+  description = "Where incident photos are kept (private; reached only through links the api signs)."
+  value       = aws_s3_bucket.attachments.bucket
+}
+
 output "image_repository" {
   value = aws_ecr_repository.app.repository_url
 }

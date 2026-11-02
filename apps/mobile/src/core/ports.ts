@@ -44,3 +44,21 @@ export interface DevicePort {
   networkAvailable(): Promise<boolean | null>;
   readonly info: DeviceInfo;
 }
+
+/** A photo re-encoded into app-private storage, ready to upload (ARCH §12 step 3). */
+export type PreparedPhoto = {
+  readonly uri: string;
+  readonly sizeBytes: number;
+  /** Lowercase hex SHA-256 of the file: the server checks the upload against it. */
+  readonly sha256: string;
+  readonly contentType: 'image/jpeg';
+};
+
+/** Incident photos (D-18): src/platform/photos.ts with Expo modules; tests use a fake. */
+export interface PhotoPort {
+  /** A JPEG, long edge ≤ 2,048 px, without metadata, in the app's own storage. */
+  prepare(sourceUri: string, width: number, height: number, name: string): Promise<PreparedPhoto>;
+  /** PUTs the file to a signed link; resolves with the HTTP status, throws when there is no response. */
+  upload(uri: string, url: string, headers: Readonly<Record<string, string>>): Promise<number>;
+  remove(uri: string): Promise<void>;
+}

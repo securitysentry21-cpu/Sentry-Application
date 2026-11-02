@@ -723,3 +723,290 @@ input[type='range'] {
     flex: 1 1 140px;
   }
 }
+
+/* ── Incidents and SOS (Phase 8) ───────────────────────────────────────────────────────────── */
+
+/* People's own text keeps its line breaks and never stretches the layout. */
+.prewrap {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* A drill is always labelled as one, in words (PROD §11.10). */
+.badge.drill {
+  color: #d9b8ff;
+  border: 1px dashed rgb(217 184 255 / 70%);
+  letter-spacing: 0.06em;
+}
+
+.badge.drill::before {
+  display: none;
+}
+
+.grid.cols-2 > .wide-card {
+  grid-column: 1 / -1;
+}
+
+.sound-warning,
+.sos-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.sos-banner {
+  border-width: 2px;
+  font-size: 15px;
+}
+
+/* The alarm (PROD §11.6): it covers every page and its dialogs, and says what it is in words. Only
+   the signed-out screen goes above it: acknowledging needs a session. */
+.alarm-overlay {
+  z-index: 200;
+  background: rgb(60 8 8 / 88%);
+}
+
+.signed-out-overlay {
+  z-index: 300;
+}
+
+.alarm-dialog {
+  width: min(600px, 100%);
+  border: 2px solid var(--danger);
+  animation: alarm-pulse 1.2s ease-in-out infinite;
+}
+
+.alarm-title {
+  font-family: var(--font-display), sans-serif;
+  font-size: 24px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #ffd2d0;
+}
+
+.alarm-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 12px;
+}
+
+.alarm-item {
+  display: grid;
+  gap: 6px;
+  padding: 14px;
+  border: 1px solid rgb(239 83 80 / 55%);
+  border-radius: var(--radius);
+  background: rgb(239 83 80 / 8%);
+}
+
+.alarm-who {
+  font-size: 20px;
+  font-weight: 650;
+  overflow-wrap: anywhere;
+}
+
+.btn.alarm-ack,
+.btn.sos-ack {
+  height: 44px;
+  padding: 0 20px;
+  font-size: 16px;
+}
+
+.alarm-bar {
+  display: grid;
+  gap: 8px;
+  padding: 12px 14px;
+  border: 2px solid var(--danger);
+  border-radius: var(--radius);
+  background: #3a1214;
+  color: #ffd2d0;
+}
+
+.alarm-bar-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+@keyframes alarm-pulse {
+  50% {
+    box-shadow: 0 0 0 6px rgb(239 83 80 / 35%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .alarm-dialog {
+    animation: none;
+  }
+}
+
+/* An SOS's progress: each step with a mark and a word, never colour alone. */
+.progress {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.progress li {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+}
+
+.progress-mark {
+  width: 18px;
+  flex: none;
+  text-align: center;
+  font-weight: 700;
+}
+
+.progress .done .progress-mark {
+  color: var(--ok);
+}
+
+.progress .pending {
+  color: var(--fg-muted);
+}
+
+.timeline {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 12px;
+}
+
+.timeline li {
+  display: grid;
+  gap: 4px;
+  padding-left: 12px;
+  border-left: 2px solid var(--border);
+}
+
+.photo-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 12px;
+}
+
+.photo {
+  margin: 0;
+  display: grid;
+  gap: 6px;
+  align-content: start;
+}
+
+.photo-thumb {
+  display: grid;
+  place-items: center;
+  aspect-ratio: 4 / 3;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #0f1318;
+  color: var(--fg-muted);
+  font: inherit;
+  cursor: pointer;
+}
+
+.photo-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.photo-thumb.empty-photo {
+  cursor: default;
+  padding: 8px;
+  text-align: center;
+}
+
+.photo-full {
+  width: 100%;
+  max-height: 70vh;
+  object-fit: contain;
+  border-radius: 8px;
+  background: #0f1318;
+}
+
+fieldset.checks,
+fieldset.role-checks {
+  margin: 0;
+  padding: 0;
+  border: none;
+  min-width: 0;
+}
+
+fieldset.checks {
+  display: grid;
+  gap: 8px;
+}
+
+fieldset.checks legend {
+  margin-bottom: 8px;
+  font-weight: 600;
+}
+
+.check-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 6px 16px;
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.role-checks {
+  display: grid;
+  gap: 2px;
+  white-space: nowrap;
+}
+
+.ladder td {
+  vertical-align: top;
+}
+
+.ladder input[type='number'] {
+  width: 96px;
+}
+
+.phone-edit {
+  display: grid;
+  gap: 6px;
+  min-width: 200px;
+}
+
+.error-text {
+  color: #ffb4b2;
+}
+
+@media (max-width: 480px) {
+  .alarm-title {
+    font-size: 20px;
+  }
+
+  .alarm-who {
+    font-size: 18px;
+  }
+}

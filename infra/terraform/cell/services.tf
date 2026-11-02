@@ -46,6 +46,10 @@ locals {
     { name = "OIDC_ISSUER", value = "https://cognito-idp.${var.region}.amazonaws.com/${aws_cognito_user_pool.dashboard.id}" },
     { name = "OIDC_CLIENT_ID", value = aws_cognito_user_pool_client.dashboard.id },
     { name = "FEATURE_SOS", value = "false" },
+    # Incident photos (attachments.tf).
+    { name = "OBJECT_STORE", value = "s3" },
+    { name = "S3_BUCKET", value = aws_s3_bucket.attachments.bucket },
+    { name = "S3_REGION", value = var.region },
     { name = "MOBILE_MIN_VERSION", value = "0.1.0" },
     { name = "MOBILE_RECOMMENDED_VERSION", value = "0.1.0" },
   ]
@@ -85,7 +89,12 @@ resource "aws_ecs_task_definition" "api" {
     essential    = true
     command      = ["node", "apps/api/src/main.ts"]
     portMappings = [{ containerPort = 4000, protocol = "tcp" }]
-    environment  = concat(local.app_environment, [{ name = "HOST", value = "0.0.0.0" }, { name = "PORT", value = "4000" }])
+    environment = concat(local.app_environment, [
+      { name = "HOST", value = "0.0.0.0" },
+      { name = "PORT", value = "4000" },
+      # Only the public half: the api tells browsers the key and never sends (notifications.tf).
+      { name = "WEB_PUSH_VAPID_PUBLIC_KEY_PEM", value = tls_private_key.vapid.public_key_pem },
+    ])
     secrets = [for key in ["DATABASE_URL", "QR_TOKEN_SECRET", "OIDC_CLIENT_SECRET"] :
     { name = key, valueFrom = "${local.secret_from.api}:${key}::" }]
     logConfiguration = local.logs["api"]
@@ -105,15 +114,32 @@ resource "aws_ecs_task_definition" "worker" {
     operating_system_family = "LINUX"
   }
   container_definitions = jsonencode([{
-    name        = "worker"
-    image       = local.image
-    essential   = true
-    command     = ["node", "apps/api/src/worker.ts"]
-    environment = concat(local.app_environment, [{ name = "DETECTOR_INTERVAL_S", value = "60" }])
-    secrets = [for key in ["DATABASE_URL", "SWEEP_DATABASE_URL", "QR_TOKEN_SECRET", "OIDC_CLIENT_SECRET"] :
-    { name = key, valueFrom = "${local.secret_from.worker}:${key}::" }]
+    name      = "worker"
+    image     = local.image
+    essential = true
+    command   = ["node", "apps/api/src/worker.ts"]
+    environment = concat(
+      local.app_environment,
+      [{ name = "DETECTOR_INTERVAL_S", value = "60" }],
+      # The synthetic SOS goes the real way in: through the public address (notifications.tf alarms).
+      var.canary_enabled ? [
+        { name = "CANARY_ENABLED", value = "true" },
+        { name = "CANARY_BASE_URL", value = local.public_origin },
+        { name = "CANARY_DEVICE_ID", value = var.canary_device_id },
+      ] : [],
+    )
+    secrets = [for key in concat(
+      ["DATABASE_URL", "SWEEP_DATABASE_URL", "QR_TOKEN_SECRET", "OIDC_CLIENT_SECRET", "WEB_PUSH_VAPID_PRIVATE_KEY_PEM"],
+      keys(local.worker_optional_secrets),
+    ) : { name = key, valueFrom = "${local.secret_from.worker}:${key}::" }]
     logConfiguration = local.logs["worker"]
   }])
+  lifecycle {
+    precondition {
+      condition     = !var.canary_enabled || (var.canary_device_id != "" && var.canary_device_key != "")
+      error_message = "canary_enabled needs canary_device_id and canary_device_key (operator create-canary)."
+    }
+  }
 }
 
 resource "aws_ecs_task_definition" "web" {

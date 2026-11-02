@@ -303,6 +303,75 @@ describe('the stream (ARCH §14)', () => {
     }
   });
 
+  it("INV-14 an SOS's newer position arrives live on the stream, marked position-only, with no history read and no audit row", async () => {
+    const { phone } = await onShift();
+    await dispatch();
+    const pressed = await asPhone(t.app, phone, {
+      method: 'POST',
+      url: '/api/v1/sos',
+      body: {
+        clientEventId: randomUUID(),
+        recordedAt: t.clock.now().toISOString(),
+        monoMs: (mono += 100),
+        bootId: 'boot-rt',
+        fix: { lat: CENTER.lat, lon: CENTER.lng, accuracyM: 8, fixAgeS: 1 },
+        sentMonoMs: mono + 10,
+      },
+    });
+    const sosEventId = pressed.json<{ sosEventId: string }>().sosEventId;
+    await dispatch();
+    const snap = await snapshot(adminA, orgA.id);
+    const audits = async () =>
+      Number(
+        (
+          await asOwner(t.db, (c) =>
+            c.query<{ n: string }>(
+              `select count(*) as n from audit_logs where action = 'SOS_VIEWED' and resource_id = $1`,
+              [sosEventId],
+            ),
+          )
+        ).rows[0]?.n,
+      );
+    const stream = await openStream({ cookie: adminA, org: orgA.id, lastEventId: snap.lastEventId });
+    try {
+      t.clock.advance(10_000);
+      const moved = await asPhone(t.app, phone, {
+        method: 'POST',
+        url: `/api/v1/sos/${sosEventId}/locations`,
+        body: {
+          bootId: 'boot-rt',
+          sentMonoMs: (mono += 10_000) + 5,
+          points: [
+            {
+              clientEventId: randomUUID(),
+              recordedAt: t.clock.now().toISOString(),
+              monoMs: mono,
+              bootId: 'boot-rt',
+              fix: { lat: CENTER.lat + 0.001, lon: CENTER.lng, accuracyM: 7, fixAgeS: 1 },
+            },
+          ],
+        },
+      });
+      expect(moved.statusCode, moved.body).toBe(200);
+      await dispatch();
+      await stream.waitFor((e) => e.type === 'sos.updated', 'sos.updated');
+      const event = stream.events.find((e) => e.type === 'sos.updated')!;
+      const data = event.data as {
+        sosEventId: string;
+        positionOnly: boolean;
+        position: { lat: number } | null;
+        alert: unknown;
+      };
+      expect(data).toMatchObject({ sosEventId, positionOnly: true });
+      expect(data.position?.lat).toBeCloseTo(CENTER.lat + 0.001, 6);
+      expect(data.alert).not.toBeNull();
+      // Nobody opened the SOS's history, so nothing was audited.
+      expect(await audits()).toBe(0);
+    } finally {
+      stream.close();
+    }
+  });
+
   it('replays what a reconnecting dashboard missed, in order, and asks it to resync when that is gone', async () => {
     const ids: string[] = [];
     for (let i = 0; i < 3; i++) {

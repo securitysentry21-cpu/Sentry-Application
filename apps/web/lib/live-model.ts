@@ -1,8 +1,18 @@
 // The dashboard's live picture (PROD §8.3, §14; D-36). Pure, so it can be tested without a browser:
 // the provider (live.tsx) feeds it the snapshot and the stream's events, and freshness is recomputed
 // from server time every second. A guard therefore turns DELAYED and OFFLINE on time even when
-// nothing arrives, and a last-known position is never shown as live (ADV-U01, INV-09).
-import type { Alert, Coverage, LiveGuard, Snapshot, StreamEvent } from '@sentryops/contracts';
+// nothing arrives, and a last-known position is never shown as live (ADV-U01, INV-09). SOS events
+// carry their alert, which drives the alarm (PROD §11.6); incident events keep the home page's count
+// of open incidents current (PROD §14.2).
+import type {
+  Alert,
+  Coverage,
+  IncidentStatus,
+  IncidentSummary,
+  LiveGuard,
+  Snapshot,
+  StreamEvent,
+} from '@sentryops/contracts';
 import {
   hasTrackingProblem,
   locationAge,
@@ -24,11 +34,18 @@ export type LiveModel = {
   readonly freshness: FreshnessSettings;
   readonly coverage: Coverage;
   readonly shiftsNotStarted: number;
+  /** Incidents not resolved yet (PROD §14.2): the snapshot's count, kept current by incident events. */
+  readonly openIncidents: number;
+  /** The status the stream last gave each incident it mentioned since the snapshot. */
+  readonly incidents: ReadonlyMap<string, IncidentStatus>;
+  /** The snapshot's server time (ms): what happened to an incident before it is in its count already. */
+  readonly snapshotAt: number;
   /** The stream's position: every change up to here is in this model. */
   readonly lastEventId: number;
 };
 
 const ACTIVE_ALERT = new Set<Alert['status']>(['OPEN', 'ACKNOWLEDGED']);
+const OPEN_INCIDENT = new Set<IncidentStatus>(['OPEN', 'ACKNOWLEDGED']);
 
 export function fromSnapshot(snapshot: Snapshot, alerts: readonly Alert[]): LiveModel {
   return {
@@ -37,6 +54,9 @@ export function fromSnapshot(snapshot: Snapshot, alerts: readonly Alert[]): Live
     freshness: snapshot.freshness,
     coverage: snapshot.coverage,
     shiftsNotStarted: snapshot.shiftsNotStarted,
+    openIncidents: snapshot.openIncidents,
+    incidents: new Map(),
+    snapshotAt: Date.parse(snapshot.serverTime),
     lastEventId: snapshot.lastEventId,
   };
 }
@@ -59,11 +79,57 @@ function newerGuard(current: LiveGuard | undefined, next: LiveGuard): boolean {
  * - `now`: the stream lost its place (resync);
  * - `missing`: a shift started that the model doesn't know yet. A guard who starts from the app
  *   arrives with their next `guard.state` a moment later; only if it doesn't is a reload needed;
- * - `counts`: only a count may have changed (shifts not started); at most once a minute.
+ * - `counts`: only a count may have changed (shifts not started, open incidents); at most once a
+ *   minute.
  */
 export type Reload = false | 'now' | 'counts' | { readonly missing: string };
 
 export type Applied = { readonly model: LiveModel; readonly reload: Reload };
+
+/** An alert as the server sent it; an older copy never replaces a newer one. */
+function withAlert(model: LiveModel, alert: Alert | null, lastEventId: number): Applied {
+  if (!alert) return { model: { ...model, lastEventId }, reload: false };
+  const current = model.alerts.get(alert.id);
+  if (current && current.version > alert.version) return { model: { ...model, lastEventId }, reload: false };
+  const alerts = new Map(model.alerts);
+  if (ACTIVE_ALERT.has(alert.status)) alerts.set(alert.id, alert);
+  else alerts.delete(alert.id);
+  return { model: { ...model, alerts, lastEventId }, reload: false };
+}
+
+/**
+ * An incident event moves the open count by what changed. Events carry the incident's state when
+ * sent, and the model remembers the status of each one it has heard of since the snapshot, so a
+ * repeat or a replay changes nothing. For an incident it hasn't heard of, the snapshot's count
+ * already holds its state then: one received after the snapshot wasn't in it; one resolved after
+ * the snapshot was open in it. One that is open now was most likely open then too (a note, a photo,
+ * an acknowledgement), but a reopen looks the same, as does an incident created just as the
+ * snapshot was read: the count stays and is checked against a fresh snapshot (at most once a minute).
+ */
+function withIncident(
+  model: LiveModel,
+  incident: IncidentSummary | null,
+  created: boolean,
+  lastEventId: number,
+): Applied {
+  if (!incident) return { model: { ...model, lastEventId }, reload: false };
+  const known = model.incidents.get(incident.id);
+  const open = OPEN_INCIDENT.has(incident.status);
+  let wasOpen: boolean;
+  let reload: Reload = false;
+  if (known !== undefined) wasOpen = OPEN_INCIDENT.has(known);
+  else if (Date.parse(incident.receivedAt) > model.snapshotAt) wasOpen = false;
+  else if (!open)
+    wasOpen = incident.resolvedAt !== null && Date.parse(incident.resolvedAt) > model.snapshotAt;
+  else {
+    wasOpen = true;
+    if (created || incident.status === 'OPEN') reload = 'counts';
+  }
+  const incidents = new Map(model.incidents);
+  incidents.set(incident.id, incident.status);
+  const openIncidents = Math.max(0, model.openIncidents + Number(open) - Number(wasOpen));
+  return { model: { ...model, incidents, openIncidents, lastEventId }, reload };
+}
 
 export function applyEvent(model: LiveModel, event: Envelope): Applied {
   const lastEventId = event.id === null ? model.lastEventId : Math.max(model.lastEventId, Number(event.id));
@@ -76,17 +142,15 @@ export function applyEvent(model: LiveModel, event: Envelope): Applied {
       return { model: { ...model, guards, lastEventId }, reload: false };
     }
     case 'alert.opened':
-    case 'alert.updated': {
-      const alert = event.data.alert;
-      if (!alert) return { model: { ...model, lastEventId }, reload: false };
-      const current = model.alerts.get(alert.id);
-      if (current && current.version > alert.version)
-        return { model: { ...model, lastEventId }, reload: false };
-      const alerts = new Map(model.alerts);
-      if (ACTIVE_ALERT.has(alert.status)) alerts.set(alert.id, alert);
-      else alerts.delete(alert.id);
-      return { model: { ...model, alerts, lastEventId }, reload: false };
-    }
+    case 'alert.updated':
+      return withAlert(model, event.data.alert, lastEventId);
+    // An SOS changed: its alert carries the state the alarm follows (PROD §11.6).
+    case 'sos.activated':
+    case 'sos.updated':
+      return withAlert(model, event.data.alert, lastEventId);
+    case 'incident.created':
+    case 'incident.updated':
+      return withIncident(model, event.data.incident, event.type === 'incident.created', lastEventId);
     case 'shift.updated': {
       // A shift that ended leaves the picture now. One that started arrives with its guard.state.
       const { shiftId, status } = event.data;

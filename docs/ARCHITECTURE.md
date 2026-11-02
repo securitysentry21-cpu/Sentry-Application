@@ -783,10 +783,10 @@ Generated in the START transaction (outbox effect) for each scheduled route at t
 ## 12. Attachments pipeline
 
 1. Incident exists on the server (phone has the server ID).
-2. `POST /incidents/:id/attachments` with `clientEventId`, declared type and size → `{ attachmentId, uploadUrl, headers, expiresAt }` — a presigned PUT, ≤ 15 min, constrained to content type and maximum length (15 MB).
-3. Phone uploads a compressed JPEG (long edge ≤ 2,048 px, quality ≈ 0.8) from app-private storage; resumable via retry.
+2. `POST /incidents/:id/attachments` with `clientEventId`, declared type and size → `{ attachmentId, uploadUrl, headers, expiresAt }` — a presigned PUT, ≤ 15 min, constrained to content type and maximum length (15 MB). It also carries `if-none-match: *` (an S3 conditional write), so it never overwrites: once the original is there it stays the evidence, even while the link is still valid. A retry that finds it there gets 412 and goes on to complete; the hash check decides.
+3. Phone uploads a compressed JPEG (long edge ≤ 2,048 px, quality ≈ 0.8) from app-private storage; resumable via retry. Re-encoding on the phone drops the photo's metadata, its GPS position included; the gallery opens only through the system photo picker (D-18).
 4. `POST /attachments/:id/complete` with `sha256`.
-5. Worker verifies: object exists; size; magic bytes (JPEG, PNG, HEIC, WebP); pixel count ≤ 40 MP (decompression-bomb guard); sha256 match. Extracts EXIF capture time and GPS into columns. Produces a re-encoded view copy with metadata stripped. Status AVAILABLE or REJECTED.
+5. Worker verifies: object exists; size; magic bytes (JPEG, PNG, WebP; HEIC is recognised and refused as unreadable); pixel count ≤ 40 MP, read from the header before decoding (decompression-bomb guard); sha256 match. Extracts EXIF capture time, and GPS only when that time falls inside the guard's shift or SOS (INV-08), into columns. Produces a re-encoded view copy with metadata stripped. Status AVAILABLE or REJECTED.
 6. Viewing: `GET /attachments/:id/url` → authorization → signed GET of the view copy, TTL ≤ 5 min. Original: `GET /attachments/:id/original-url`, Owner/Admin only, audited.
 
 Keys: `org/{orgId}/incidents/{incidentId}/{attachmentId}/original` and `/view.jpg`. Malware scanning added if infrastructure policy requires (re-encoding already defuses most image-borne payloads).
@@ -818,8 +818,9 @@ A job every 15 s selects OPEN alerts with `next_escalation_at ≤ now`, applies 
 ### 13.4 Notification engine
 
 - Deliveries are rows; sending happens in workers via `PushProvider` / `SmsProvider` / `EmailProvider` interfaces.
-- Idempotency: `dedupe_key = {alertId}:{recipientId}:{channel}:{escalationLevel}`; a retried job never double-sends.
-- Retries: SOS — 3 attempts within 2 min; others — 5 within 30 min. Invalid push tokens are deactivated.
+- Idempotency: `dedupe_key = {alertId}:{episode}:{recipientId}:{channel}:{escalationLevel}`, where the episode is when the ladder (re)started, so a press after acknowledgement escalates afresh; a retried job never double-sends.
+- Retries: SOS — 3 attempts (again after 15 s and 45 s); others — 5 within 30 min. Invalid push tokens are deactivated.
+- Only the worker sends, so only the worker holds the Web Push private key and the Firebase service account; the API holds the public Web Push key alone (it tells browsers which key to subscribe with).
 - Status meanings: QUEUED → SENT (provider accepted) → DELIVERED (provider receipt where available) | FAILED | SUPPRESSED (throttled or duplicate).
 - Push priority: dashboard users get Web Push with `Urgency: high` for CRITICAL and HIGH. The browser decides how it is shown, and it follows the phone's silent and Do Not Disturb settings, which is why SOS also sends SMS to duty officers from the first second (PROD §11.4). Guards get FCM/APNs pushes (shift notifications, SOS acknowledged).
 - Non-production environments send SMS only to allow-listed numbers.
@@ -833,7 +834,7 @@ A job every 15 s selects OPEN alerts with `next_escalation_at ≤ now`, applies 
 - Revalidation: on membership/role change or session revocation, an internal event closes that user's connections; all connections are cycled every 30 min to re-authenticate.
 - Envelope: `{ id: "<orgSeq>", type, occurredAt, data }`, with a per-organization monotonic sequence. The server keeps a short replay buffer (5 min / 10,000 events per organization). If `Last-Event-ID` is outside the buffer, the server sends `resync`; the client reloads `GET /dashboard/snapshot`.
 - **The sequence is assigned after commit, by the single outbox dispatcher** (it holds an advisory lock) when it moves committed outbox rows into `realtime_events`. It is never assigned inside the business transaction: transactions commit out of order, so a client reconnecting with `Last-Event-ID` would silently skip events. The replay buffer is the `realtime_events` table, so any API instance can replay.
-- Event types: `guard.state`, `alert.opened`, `alert.updated`, `sos.activated`, `sos.updated`, `incident.created`, `incident.updated`, `shift.updated`, `coverage.updated`. Payloads are minimal; details are fetched over REST.
+- Event types: `guard.state`, `alert.opened`, `alert.updated`, `sos.activated`, `sos.updated`, `incident.created`, `incident.updated`, `shift.updated`, `coverage.updated`. Each carries the current state it names (a guard's live state, an alert, an incident summary); details are fetched over REST. SOS events carry their alert and the SOS's newest position, live like the live map's; a `positionOnly` event says only the position moved, so the SOS page moves its marker without reloading its audited history (INV-14).
 - Fan-out: outbox → publisher → `NOTIFY` with IDs only (payload limit ~8 KB) → each API instance's dedicated listener connection → connections. Swap to Redis pub/sub only on measured need (D-11).
 - Keep-alive comment every 25 s; `X-Accel-Buffering: no` and equivalent settings so proxies do not buffer.
 - Monitoring coverage (PROD §11.5) = count of live dashboard connections, desktop and phone.
@@ -884,7 +885,7 @@ A job every 15 s selects OPEN alerts with `next_escalation_at ≤ now`, applies 
 - `GET /guards/:id/location` (live) [live.read]
 - `GET /guards/:id/location-history?shiftId=|from=&to=&reason=` [location.history.read] audited before data is returned
 - `POST /enrollments/redeem` [enrollment code] audited (`DEVICE_REGISTERED`) · `POST /sessions/refresh` [refresh token] · `POST /guards/:id/enrollment-codes` [devices.enroll: Supervisor+] audited · `GET /guards/:id/devices` [devices.read] · `POST /devices/:id/revoke` [devices.revoke] audited
-- `POST /push-tokens` · `DELETE /push-tokens/:id` [authenticated; guard-app FCM/APNs tokens and dashboard Web Push subscriptions]
+- `POST /me/push-token` [guard self; the phone's Firebase token] · `GET /push/config` (the public Web Push key) · `GET /push-subscriptions` · `POST /push-subscriptions` · `DELETE /push-subscriptions/:id` [a member's own browsers] · `POST /notifications/test` ("Send me a test SOS alert": the caller's own browsers and number)
 - `POST /tracking-consents` [guard self]
 
 **Sites, checkpoints, patrols**
@@ -905,13 +906,14 @@ A job every 15 s selects OPEN alerts with `next_escalation_at ≤ now`, applies 
 - `POST /sync/batch` [guard self]
 
 **Incidents and attachments**
-- `GET /incidents` · `POST /incidents` · `GET /incidents/:id` · `PATCH /incidents/:id` (severity, type) · `POST /incidents/:id/notes` · `POST /incidents/:id/status`
-- `POST /incidents/:id/attachments` · `POST /attachments/:id/complete` · `GET /attachments/:id/url` · `GET /attachments/:id/original-url` (audited)
+- `GET /incidents` · `POST /incidents` · `GET /incidents/:id` · `PATCH /incidents/:id` (severity, type) · `POST /incidents/:id/notes` · `POST /incidents/:id/acknowledge` · `/resolve` (note required) · `/reopen` (reason required)
+- `GET /me/incidents` [guard self: the last 14 days, the guard's own notes]; reports and the guard's notes arrive through `POST /sync/batch` (`INCIDENT`, `INCIDENT_NOTE`)
+- `POST /incidents/:id/attachments` · `POST /attachments/:id/complete` [guard own] · `GET /attachments/:id/url` · `GET /attachments/:id/original-url` (audited)
 
 **SOS**
-- `POST /sos` [guard self] · `GET /sos/:id` [guard own / sos.read] · `POST /sos/:id/cancel-request` [guard own]
-- `POST /sos/:id/acknowledge` [sos.ack] · `POST /sos/:id/resolve` [sos.resolve] audited
-- `POST /sos-drills` · `POST /sos-drills/:id/end` [sos.drill] audited
+- `POST /sos` · `GET /sos/:id/status` · `POST /sos/:id/locations` · `POST /sos/:id/cancel-request` [guard own; never rate-limited; session or device-key signature]
+- `GET /sos/:id` [sos.read] audited (`SOS_VIEWED`) · `POST /sos/:id/acknowledge` [sos.ack] · `POST /sos/:id/resolve` [sos.resolve] audited
+- `GET /sos-drills/current` · `GET /sos-drills/:id` [sos.read] · `POST /sos-drills` · `POST /sos-drills/:id/end` [sos.drill] audited
 
 **Alerts**
 - `GET /alerts` · `GET /alerts/:id` · `POST /alerts/:id/acknowledge` · `/resolve` · `/dismiss` · `/notes` · `/seen` · `/delivered`
@@ -1205,7 +1207,7 @@ Status: **OPEN** unless marked APPROVED or REJECTED; `docs/DECISIONS.md` holds t
 | D-19 | Organization provisioning and operator access | operator CLI · self-serve | operator CLI; documented break-glass (SEC §4.6) | Phase 1 |
 | D-20 | Minimum OS versions | — | from launch-market device data and library support (e.g., Android 9/10+, iOS 16+); verify | Phase 0B |
 | D-23 | V1 scale target | — | A-05; the pilot organization alone has about 1,000 guards | Phase 0 |
-| D-26 | Push delivery path | direct FCM/APNs · Expo push service | direct FCM/APNs for the guard app (one fewer third party); Web Push (VAPID) for the dashboard (D-04) | Phase 5 |
+| D-26 | Push delivery path | direct FCM/APNs · Expo push service | **APPROVED 2026-11-02** (owner): direct FCM/APNs for the guard app (one fewer third party); Web Push (VAPID) for the dashboard (D-04) | Phase 8 |
 | D-32 | Realtime reconnection | snapshot only · replay buffer + per-organization sequence | **REJECTED 2026-10-08** (snapshot only): the replay buffer and sequence are kept, with the sequence assigned after commit | Phase 6 |
 | D-37 | Cloud provider for the first cell | AWS · Google Cloud · Azure · smaller providers | **DECIDED 2026-10-08** (the owner delegated: "any cloud service … secure"): AWS eu-central-1, Frankfurt, with backups in eu-west-1, Ireland, and the security baseline in §19.8; Supabase and Firebase were compared and not chosen (`docs/DECISIONS.md`) | Phase 0 |
 
@@ -1224,6 +1226,8 @@ Status: **OPEN** unless marked APPROVED or REJECTED; `docs/DECISIONS.md` holds t
 | VERSION_CONFLICT | 409 | optimistic concurrency failure |
 | SHIFT_INVALID_TRANSITION | 409 | transition not allowed from current state |
 | ALERT_INVALID_TRANSITION | 409 | alert already closed, or SOS / critical incident dismissed instead of resolved |
+| INCIDENT_INVALID_TRANSITION | 409 | incident status change not allowed from its current status |
+| DRILL_ALREADY_RUNNING | 409 | an SOS drill is already open in the organization |
 | SHIFT_OVERLAP | 409 | guard already has a shift in that period |
 | SHIFT_NOT_ACTIVE | 409 | operation needs an ACTIVE shift |
 | SHIFT_OUTSIDE_START_WINDOW | 422 | too early or after the start deadline |
@@ -1241,6 +1245,7 @@ Status: **OPEN** unless marked APPROVED or REJECTED; `docs/DECISIONS.md` holds t
 | ENROLLMENT_CODE_INVALID | 422 | wrong enrollment code, or the code doesn't match the phone number |
 | ATTACHMENT_TOO_LARGE | 413 | over size limit |
 | ATTACHMENT_TYPE_NOT_ALLOWED | 415 | content does not match an allowed type |
+| ATTACHMENT_LIMIT_REACHED | 409 | the incident already has 5 photos |
 | EXPORT_RANGE_TOO_LARGE | 422 | export range > 92 days |
 | APP_VERSION_UNSUPPORTED | 426 | below minimum (not returned for SOS or queued uploads unless revoked) |
 | RATE_LIMITED | 429 | with `Retry-After` |

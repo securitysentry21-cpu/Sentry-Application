@@ -104,6 +104,73 @@ Made as a co-founder would make them, while the owner was away. Each is reversib
 - **No SMS aggregator yet.** Guard enrollment codes are shown in the dashboard, as a code and a QR code, for the supervisor to hand to the guard in person. SMS goes behind an `SmsProvider` interface and switches on when EXT-10 is done. Member invitations work the same way: the dashboard shows the invitation link to send by hand until an email provider is chosen.
 - **Device key (ARCH §5.3).** The P-256 key pair is generated on the phone and the private key is kept in the secure store (Keychain or Android Keystore-encrypted storage). It is not yet generated inside the Secure Enclave or Keystore hardware, which needs a native module; revisit with Phase 0B.
 
+## Phase 8 · incidents and SOS · owner decisions 2026-11-02
+
+The owner approved Phase 8 ("Go for phase 8. The two decisions we will go with your recommendations."):
+
+- **D-18 · gallery photos allowed, labelled:**
+  - a guard may attach photos from the phone's gallery as well as the in-app camera;
+  - each photo records where it came from, and the dashboard shows "From gallery";
+  - the gallery opens only through the system photo picker, so the app never browses the library (SEC §16.2).
+- **D-26 · direct push:**
+  - the guard app gets pushes straight from Firebase Cloud Messaging, not through Expo's push service, which means one less third party on the SOS path (SEC §13);
+  - the dashboard uses standard Web Push (VAPID);
+  - iOS guard pushes (APNs) wait for the paid Apple account.
+
+Four gaps touching SOS and privacy, asked under the STOP rule and answered the same day, each as recommended:
+
+- **SOS text numbers.** Dashboard members are invited by email, so the system had no phone number for the SOS texts of PROD §11.4. An Owner or Administrator enters each member's number on the Members page, audited as `MEMBER_PHONE_CHANGED` (added to SEC §17.1). The number is kept on the membership, not the user, so a person in two organizations can't have one organization redirect the other's SOS texts.
+- **Incident location.** Everyone who can see an incident sees where it was reported: Owners, Administrators, Supervisors and Dispatchers, and the guard on their own reports. It marks where the incident happened, reported deliberately during a shift. It is tagged `INCIDENT_LOCATION`, and the coordinate meta-test (ADV-X05) allows that tag only on routes that need an incident permission.
+- **Drill participants.** A drill reaches only the members picked when it starts, the person starting it by default (ADV-S10). Only they get its alarm, pushes and texts, marked "[DRILL]". Everyone else sees it in the alert list, marked DRILL, without an alarm.
+- **Pressing SOS again after acknowledgement.** The SOS becomes unacknowledged again: the dashboard alarm returns and the ladder restarts from its first step, because the guard still needs help.
+
+**Agent-decided while building Phase 8 (2026-11-02).** These fill gaps the spec left, each with the simplest option that keeps its rules. Review and veto in the diff.
+
+- **SOS delivery:**
+  - an SOS notification is tried 3 times (again after 15 s and 45 s), any other 5 times over about 30 minutes;
+  - each step of the ladder sends its own actions. Each repeat after the last step ("repeat until acknowledged") goes again to everyone the ladder has reached so far, and to the emergency contacts if any step texted them;
+  - with no SMS provider (until EXT-10) a text is recorded as FAILED `SMS_NOT_CONFIGURED`, never as sent;
+  - outside production a text to a number not on `SMS_ALLOWED_NUMBERS` is SUPPRESSED, never sent;
+  - the operator alarm for an SOS left unacknowledged fires after 10 minutes. Drills are left out.
+- **An SOS alert is resolved only on the SOS,** with its type and note (`POST /sos/:id/resolve`). Resolving it through `/alerts` answers 409, so an SOS can't be closed without the resolution PROD §11.4 asks for.
+- **Drills:**
+  - one drill at a time (`DRILL_ALREADY_RUNNING`), for 5 to 240 minutes;
+  - an alert names its drill (`drillId`), and `GET /sos-drills/:id` says who takes part, also after the drill has ended. A dashboard opened late therefore still knows whether a drill SOS is its own;
+  - a drill alert with no drill is from a demo or canary organization, and alarms every member there.
+- **The SOS position on the stream.** INV-14 audits every read of location history, and the SOS page's trail is history. So:
+  - a batch of SOS positions publishes a "position only" event carrying the newest position, live like the live map's;
+  - the page moves the marker without reloading, and reloads (and audits `SOS_VIEWED`) only when the SOS itself changes;
+  - every role that reads alerts also reads SOS events and live positions, and a test keeps it that way.
+- **The dashboard alarm can't be configured off.** PROD §11.5 makes the staffed dashboard the primary receiver, and the alarm rings for every open critical alert until someone acknowledges it. So the SOS settings refuse `dashboardAlarm: false` on any step, rather than accepting a setting that would do nothing.
+- **One rule for phone numbers:** E.164 with 8–15 digits, for members' SOS numbers as for the emergency contacts and "Call supervisor".
+- **Rate limits:**
+  - a guard's incidents: 20 an hour. Beyond that the phone gets RETRY and sends them later, so nothing is lost;
+  - incidents recorded from the dashboard: 120 an hour per person;
+  - photo upload slots: 30 an hour per guard.
+- **Incidents on the phone:**
+  - the title is optional. The server titles an untitled report by its type ("Theft");
+  - "When did it happen?" offers now, 15 or 30 minutes, or 1, 2, 4, 8, 12 or 24 hours back. The phone never sets it more than 24 hours back or in the future, and the server checks again;
+  - "My reports" lists the guard's reports of the last 14 days (50 at most), with their status and photos;
+  - the list shows only the guard's own notes. The spec lets guards add notes; it doesn't let them read the supervisors' notes, which stay in the dashboard;
+  - a guard may add a note after the report is closed, since corrections are notes (PROD §10.2);
+  - during an open SOS off shift, a report is filed under the SOS, with no shift (INV-08).
+- **"Checkpoint problem"** (PROD §7.7) is on the patrol screen. The guard picks a checkpoint of this shift's rounds. That files a LOW report of type OTHER, titled "Checkpoint problem: <name>" and linked to the checkpoint. It doesn't count as a visit, and its severity can't be changed on the phone.
+- **Photos on the phone:**
+  - every photo, from the camera or the gallery, is re-encoded on the phone as a JPEG (long edge at most 2,048 px, quality 0.8) before upload, which drops its metadata, the GPS position included;
+  - the server's rule for a GPS position inside a photo (kept only when the photo's time falls in the shift or SOS) therefore applies only to a photo that still carries one;
+  - the gallery opens only through the system photo picker, so the app asks for no storage or media permission. Those permissions, `ACCESS_MEDIA_LOCATION` and the picker's microphone stay blocked in the build;
+  - HEIC is recognised by its bytes but refused as unreadable. The phone always sends JPEG.
+- **An uploaded original can't be replaced.** The signed upload carries `if-none-match: *`, a conditional write S3 enforces, so the same link can't overwrite the original in its remaining minutes. If an earlier try already landed, the phone gets 412 and completes anyway, and the server checks the hash of what is there.
+- **Keys in AWS:**
+  - the Web Push key pair is generated by Terraform;
+  - only the worker, which sends, holds the private key. The API faces the internet and only tells browsers the public key, so it can't be used to forge an SOS push to a control room;
+  - task credentials are renewed 20 minutes before they expire, so a 15-minute upload link never outlives the credentials that signed it.
+- **Dashboard (built by a delegated agent, reviewed):**
+  - notification setup is at Settings › Notifications under "This device", open to every role, since Settings itself is for Owners and Administrators;
+  - the alarm's Acknowledge uses `POST /alerts/:id/acknowledge` (the same roles as `sos.ack`), because its answer stops the alarm at once;
+  - the push service worker sends the delivery receipt only after the notification is shown;
+  - the home-screen manifest has no icon yet: the only brand asset is the wide wordmark (design open item 4).
+
 ## Phase 7 · patrols · owner decisions 2026-11-02
 
 The owner read how scanning will work and approved Phase 7 ("Go ahead with Phase 7"), with the three decisions it needs, as recommended:
@@ -293,6 +360,8 @@ The first cell, in Terraform (`infra/`), following ARCH §19.8. The choices the 
 | D-12 | Map provider: MapLibre GL with OpenFreeMap tiles (was Google Maps) | REVISED under delegation, round 6 |
 | D-16 | Patrol runs per shift, not shared per site | APPROVED 2026-11-02 (owner) |
 | D-17 | QR-only scans count, always labelled; an organization may turn this off | APPROVED 2026-11-02 (owner) |
+| D-18 | Incident photos from the gallery allowed, labelled | APPROVED 2026-11-02 (owner) |
+| D-26 | Direct Firebase push for the guard app; Web Push for the dashboard | APPROVED 2026-11-02 (owner) |
 | D-21 | Reason for viewing location history: always asked, optional unless the organization requires it | APPROVED 2026-11-01 (owner) |
 | D-24 | Checkpoint position by map pin in V1; on-site calibration in V1.1 | APPROVED 2026-11-02 (owner) |
 | D-22 | Guard sees own location trail in the app | REJECTED 2026-11-01 (owner) |
@@ -313,6 +382,7 @@ The first cell, in Terraform (`infra/`), following ARCH §19.8. The choices the 
 | — | Phase 6 choices (stream client, event enrichment, revalidation, coverage, history thinning) | Agent-decided 2026-11-01; veto in the diff |
 | — | Phase 7 choices (scans through sync, verification order, run windows and changes, closing grace, late scans) | Agent-decided 2026-11-02; veto in the diff |
 | Q-22 | A replaced checkpoint label says "Old QR code — report to supervisor" | APPROVED 2026-11-02 (owner) |
+| — | Phase 8 gaps: members' SOS numbers, incident location, drill participants, a second SOS press | APPROVED 2026-11-02 (owner) |
 
 ---
 

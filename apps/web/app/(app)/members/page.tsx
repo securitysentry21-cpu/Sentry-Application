@@ -2,6 +2,9 @@
 
 // Members and invitations. The server enforces every rule (self-change, owner-only roles, last
 // owner); the page only offers what the role could do and shows the server's answer when it refuses.
+// Each member's SOS text number is where the SOS ladder's texts to them go (PROD §11.4); Owners and
+// Administrators set it, an Owner's or Administrator's only by an Owner, anyone their own (owner
+// decision 2026-11-02, audited masked).
 import type { Invitation, Member, StaffRole } from '@sentryops/contracts';
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 
@@ -10,6 +13,7 @@ import { CopyBox } from '../../../components/ui';
 import { api, errorText } from '../../../lib/api';
 import { formatDateTime, ROLE_LABELS } from '../../../lib/format';
 import { useSession } from '../../../lib/session';
+import { MEMBER_PHONE, normalizePhone } from '../../../lib/sos';
 
 const STATUS_BADGE: Record<string, string> = {
   ACTIVE: 'ok',
@@ -106,6 +110,11 @@ export default function MembersPage() {
 
       <div className="card">
         <h2>Members</h2>
+        <p className="muted">
+          <strong>SOS texts</strong> go to each member&apos;s SOS text number when the SOS ladder reaches
+          their role (Settings, SOS). A member without one gets no SOS texts, only the alarm and push
+          notifications.
+        </p>
         {members === null ? (
           <div className="loading">Loading…</div>
         ) : (
@@ -115,6 +124,7 @@ export default function MembersPage() {
                 <tr>
                   <th>Name</th>
                   <th>Email</th>
+                  <th>SOS texts</th>
                   <th>Role</th>
                   <th>Status</th>
                   <th />
@@ -131,6 +141,13 @@ export default function MembersPage() {
                         {m.name} {self ? <span className="faint">(you)</span> : null}
                       </td>
                       <td className="muted">{m.email}</td>
+                      <td>
+                        <AlertPhone
+                          member={m}
+                          editable={m.status !== 'REMOVED' && (self || !privileged || can('owners.manage'))}
+                          onSaved={() => void load()}
+                        />
+                      </td>
                       <td>
                         {editable ? (
                           <select
@@ -241,6 +258,101 @@ export default function MembersPage() {
         )}
       </div>
     </>
+  );
+}
+
+/** PUT /members/:id/alert-phone: an international number (E.164), or none. */
+function AlertPhone({
+  member,
+  editable,
+  onSaved,
+}: {
+  member: Member;
+  editable: boolean;
+  onSaved: () => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function save(phone: string | null) {
+    if (phone !== null && !MEMBER_PHONE.test(phone)) {
+      return setError(
+        'Enter the full international number, starting with + and the country code, like +923001234567.',
+      );
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      await api(`/members/${member.id}/alert-phone`, { method: 'PUT', body: { phone } });
+      setEditing(false);
+      onSaved();
+    } catch (e) {
+      setError(errorText(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (!editing) {
+    return (
+      <div className="row">
+        {member.alertPhone ? (
+          <span className="mono">{member.alertPhone}</span>
+        ) : (
+          <span className="faint">none</span>
+        )}
+        {editable ? (
+          <button
+            type="button"
+            className="btn small ghost"
+            aria-label={`Change the SOS text number of ${member.name}`}
+            onClick={() => {
+              setValue(member.alertPhone ?? '');
+              setError(null);
+              setEditing(true);
+            }}
+          >
+            {member.alertPhone ? 'Change' : 'Add'}
+          </button>
+        ) : null}
+      </div>
+    );
+  }
+  return (
+    <form
+      className="phone-edit"
+      onSubmit={(e) => {
+        e.preventDefault();
+        void save(normalizePhone(value));
+      }}
+    >
+      <input
+        type="tel"
+        inputMode="tel"
+        autoComplete="off"
+        placeholder="+923001234567"
+        aria-label={`SOS text number of ${member.name}`}
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        required
+      />
+      <div className="row">
+        <button className="btn small primary" disabled={busy || !value.trim()}>
+          Save
+        </button>
+        {member.alertPhone ? (
+          <button type="button" className="btn small danger" disabled={busy} onClick={() => void save(null)}>
+            Remove
+          </button>
+        ) : null}
+        <button type="button" className="btn small ghost" onClick={() => setEditing(false)}>
+          Cancel
+        </button>
+      </div>
+      {error ? <div className="faint error-text">{error}</div> : null}
+    </form>
   );
 }
 

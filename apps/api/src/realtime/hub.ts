@@ -6,18 +6,29 @@
 // organization, and every read runs in that organization's tenant transaction (ADV-T02).
 import { randomUUID } from 'node:crypto';
 
-import type { Alert, Coverage, LiveGuard, RealtimeEventType, StreamEvent } from '@sentryops/contracts';
+import type {
+  Alert,
+  Coverage,
+  IncidentSummary,
+  LiveGuard,
+  RealtimeEventType,
+  SosLivePosition,
+  StreamEvent,
+} from '@sentryops/contracts';
 import { withTenantTransaction } from '@sentryops/db';
 import type { FastifyBaseLogger } from 'fastify';
 
 import type { AppDeps } from '../deps.ts';
-import { alertsByIds } from '../repositories/alerts.ts';
+import { alertsByIds, alertsBySos } from '../repositories/alerts.ts';
+import { incidentsByIds } from '../repositories/incidents.ts';
 import { RealtimeListener } from '../repositories/listener.ts';
 import { organizationSettings } from '../repositories/organizations.ts';
 import { coverageCounts, eventsAfter, type RealtimeRow } from '../repositories/realtime.ts';
 import { shiftStatuses } from '../repositories/shifts.ts';
+import { sosPositions } from '../repositories/sos.ts';
 import { liveSnapshot } from '../repositories/tracking.ts';
 import { alertDto } from '../services/alerts.ts';
+import { incidentSummary } from '../services/incidents.ts';
 import { freshnessFrom, liveGuardDto } from '../services/live.ts';
 import { STREAM_STALE_MS } from '../services/realtime.ts';
 
@@ -218,6 +229,30 @@ export class RealtimeHub {
           (a) => [a.id, alertDto(a)],
         ),
       );
+      const sosIds = named(['sos.activated', 'sos.updated'], 'sosEventId');
+      const sosAlerts = new Map<string, Alert>();
+      for (const a of await alertsBySos(trx, organizationId, sosIds)) {
+        if (a.sosEventId) sosAlerts.set(a.sosEventId, alertDto(a));
+      }
+      const positions = new Map<string, SosLivePosition>();
+      for (const p of await sosPositions(trx, organizationId, sosIds)) {
+        if (p.latitude === null || p.longitude === null || !p.location_captured_at) continue;
+        positions.set(p.id, {
+          lat: p.latitude,
+          lng: p.longitude,
+          accuracyM: p.accuracy_m,
+          capturedAt: p.location_captured_at.toISOString(),
+        });
+      }
+      const incidents = new Map<string, IncidentSummary>(
+        (
+          await incidentsByIds(
+            trx,
+            organizationId,
+            named(['incident.created', 'incident.updated'], 'incidentId'),
+          )
+        ).map((i) => [i.id, incidentSummary(i)]),
+      );
       const statuses = await shiftStatuses(trx, organizationId, named(['shift.updated'], 'shiftId'));
       const coverage = rows.some((r) => r.type === 'coverage.updated')
         ? await coverageCounts(trx, organizationId, new Date(now.getTime() - STREAM_STALE_MS))
@@ -225,8 +260,12 @@ export class RealtimeHub {
 
       return rows.map((r) => ({
         seq: r.seq,
-        alertsOnly: r.type === 'alert.opened' || r.type === 'alert.updated',
-        frame: sseFrame(r.seq, toEvent(r, live, alerts, statuses, coverage)),
+        // SOS events carry their alert, so they go where alerts go.
+        alertsOnly: ['alert.opened', 'alert.updated', 'sos.activated', 'sos.updated'].includes(r.type),
+        frame: sseFrame(
+          r.seq,
+          toEvent(r, live, alerts, statuses, coverage, { alerts: sosAlerts, positions }, incidents),
+        ),
       }));
     });
   }
@@ -238,6 +277,8 @@ function toEvent(
   alerts: ReadonlyMap<string, Alert>,
   statuses: ReadonlyMap<string, string>,
   coverage: Coverage | null,
+  sos: { alerts: ReadonlyMap<string, Alert>; positions: ReadonlyMap<string, SosLivePosition> },
+  incidents: ReadonlyMap<string, IncidentSummary>,
 ): StreamEvent {
   const occurredAt = r.createdAt.toISOString();
   switch (r.type) {
@@ -256,5 +297,24 @@ function toEvent(
     }
     case 'coverage.updated':
       return { type: r.type, occurredAt, data: { coverage: coverage ?? { desktop: 0, phone: 0 } } };
+    case 'sos.activated':
+    case 'sos.updated': {
+      const sosEventId = String(r.payload.sosEventId ?? '');
+      return {
+        type: r.type,
+        occurredAt,
+        data: {
+          sosEventId,
+          alert: sos.alerts.get(sosEventId) ?? null,
+          position: sos.positions.get(sosEventId) ?? null,
+          positionOnly: r.payload.positionOnly === 'true',
+        },
+      };
+    }
+    case 'incident.created':
+    case 'incident.updated': {
+      const incidentId = String(r.payload.incidentId ?? '');
+      return { type: r.type, occurredAt, data: { incidentId, incident: incidents.get(incidentId) ?? null } };
+    }
   }
 }

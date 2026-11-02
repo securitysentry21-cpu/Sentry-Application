@@ -25,6 +25,7 @@ const receipt = (status: Receipt['status'], errorCode: string | null = null): Re
   errorCode,
   serverRef: null,
   scan: null,
+  referenceNumber: null,
   createdAtMs: NOW,
   updatedAtMs: NOW,
 });

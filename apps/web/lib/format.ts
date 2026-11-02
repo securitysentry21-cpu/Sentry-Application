@@ -56,6 +56,23 @@ export function shortAge(iso: string, now: Date): string {
   return `${Math.floor(seconds / 86_400)} d`;
 }
 
+/**
+ * A date and time in a site's own time zone (or the organization's), with the zone's abbreviation
+ * (PROD §14.7): "02 Nov 2026, 21:14 GMT+5". SOS moments carry their seconds.
+ */
+export function zonedDateTime(iso: string, timeZone: string, withSeconds = false): string {
+  return new Intl.DateTimeFormat('en-GB', {
+    timeZone,
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    ...(withSeconds ? { second: '2-digit' as const } : {}),
+    timeZoneName: 'short',
+  }).format(new Date(iso));
+}
+
 /** A site-bound time in the site's own time zone, with its abbreviation (PROD §14.7). */
 export function siteTime(iso: string, timeZone: string, withZone = true): string {
   return new Intl.DateTimeFormat('en-GB', {

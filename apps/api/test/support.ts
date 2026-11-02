@@ -2,7 +2,16 @@
 // sign-in, so tests exercise the same request pipeline (CSRF, session, organization, permission)
 // as the dashboard does.
 import { CURRENT_DISCLOSURE_VERSION } from '@sentryops/contracts';
-import { generateKeyPairSync, randomInt, randomUUID } from 'node:crypto';
+import {
+  createHash,
+  generateKeyPairSync,
+  randomInt,
+  randomUUID,
+  sign as cryptoSign,
+  type KeyObject,
+} from 'node:crypto';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
 import { createPool, type Pool } from '@sentryops/db';
 import { createTestDatabase, type TestDatabase } from '@sentryops/db/test-support';
@@ -14,6 +23,7 @@ import { inject } from 'vitest';
 import { buildApp, type BuildOptions } from '../src/app.ts';
 import type { Config } from '../src/config.ts';
 import type { AppDeps } from '../src/deps.ts';
+import type { Providers } from '../src/notify/providers.ts';
 import { createDeps } from '../src/server.ts';
 
 export const NOW = '2026-10-08T19:57:03.120Z';
@@ -36,6 +46,11 @@ export function testConfig(databaseUrl: string, overrides: Partial<Config> = {})
     DISCLOSURE_VERSION: CURRENT_DISCLOSURE_VERSION,
     FEATURE_SOS: false,
     ALLOW_FOREIGN_GUARD_PHONES: false,
+    OBJECT_STORE: 'local',
+    OBJECT_STORE_DIR: join(tmpdir(), 'sentry-test-objects', randomUUID()),
+    LOCAL_OBJECT_SECRET: 'test-only-object-link-secret-0123456789abcdef',
+    SMS_PROVIDER: 'memory',
+    SMS_ALLOWED_NUMBERS: [],
     ...overrides,
   };
 }
@@ -52,12 +67,16 @@ export type TestApp = {
 };
 
 export async function startTestApp(
-  options: { config?: Partial<Config>; realtime?: BuildOptions['realtime'] } = {},
+  options: { config?: Partial<Config>; realtime?: BuildOptions['realtime']; notify?: Providers } = {},
 ): Promise<TestApp> {
   const db = await createTestDatabase(inject('adminUrl'));
   const pool: Pool = createPool(db.urls.app_runtime, { max: 4 });
   const clock = new FakeClock(NOW);
-  const deps = createDeps(testConfig(db.urls.app_runtime, options.config), pool, { clock, oidc: null });
+  const deps = createDeps(testConfig(db.urls.app_runtime, options.config), pool, {
+    clock,
+    oidc: null,
+    ...(options.notify ? { notify: options.notify } : {}),
+  });
   const app = buildApp(deps, { logger: false, ...(options.realtime ? { realtime: options.realtime } : {}) });
   await app.ready();
   return {
@@ -276,4 +295,53 @@ export function asPhone(
     },
     ...(options.body === undefined ? {} : { payload: options.body as Record<string, unknown> }),
   });
+}
+
+/** A phone enrolled with a key pair the test keeps, so it can sign requests (ADV-S11). */
+export async function enrollPhoneWithKey(
+  app: FastifyInstance,
+  cookie: string,
+  orgId: string,
+  guardId: string,
+  phone: string,
+): Promise<EnrolledPhone & { key: KeyObject }> {
+  const { publicKey, privateKey } = generateKeyPairSync('ec', { namedCurve: 'prime256v1' });
+  const issued = await call(app, {
+    method: 'POST',
+    url: `/api/v1/guards/${guardId}/enrollment-codes`,
+    cookie,
+    org: orgId,
+  });
+  if (issued.statusCode !== 201) throw new Error(`issue code failed: ${issued.statusCode} ${issued.body}`);
+  const installationId = randomUUID();
+  const redeemed = await redeem(app, {
+    code: issued.json<{ code: string }>().code,
+    phone,
+    installationId,
+    publicKey: publicKey.export({ format: 'der', type: 'spki' }).toString('base64'),
+  });
+  if (redeemed.statusCode !== 200) throw new Error(`redeem failed: ${redeemed.statusCode} ${redeemed.body}`);
+  const body = redeemed.json<{ deviceId: string; session: { accessToken: string; refreshToken: string } }>();
+  return {
+    guardId,
+    deviceId: body.deviceId,
+    installationId,
+    accessToken: body.session.accessToken,
+    refreshToken: body.session.refreshToken,
+    key: privateKey,
+  };
+}
+
+/** X-Device-Signature for a request, exactly as the guard app signs it (device-key.ts). */
+export function signRequest(
+  key: KeyObject,
+  method: string,
+  path: string,
+  body: string,
+  timestampMs: number,
+): string {
+  const bodyHash = createHash('sha256').update(body, 'utf8').digest('base64url');
+  const input = ['v1', method, path, String(timestampMs), bodyHash].join('\n');
+  const signature = cryptoSign('sha256', Buffer.from(input, 'utf8'), { key, dsaEncoding: 'ieee-p1363' });
+  return `v1.${timestampMs}.${signature.toString('base64url')}`;
 }

@@ -12,6 +12,7 @@ import { type Clocks, monotonic } from '../core/time.ts';
 import { expoDevice } from './device.ts';
 import { fetchTransport } from './http.ts';
 import { expoLocation } from './location.ts';
+import { expoPhotos } from './photos.ts';
 import { appLogger } from './logger.ts';
 import { secureKV } from './secure-store.ts';
 import { openOutboxDatabase } from './sqlite.ts';
@@ -45,6 +46,7 @@ export function getGuardApp(): GuardApp {
     transport: fetchTransport,
     location: expoLocation,
     device: expoDevice,
+    photos: expoPhotos,
     runtime,
     appVersion: appVersion(),
     clocks,

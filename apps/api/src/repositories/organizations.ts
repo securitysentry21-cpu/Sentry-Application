@@ -34,6 +34,8 @@ export async function createOrganization(
     dataRegion: string;
     settingsId: string;
     now: Date;
+    /** DEMO and CANARY organizations have no real people: every SOS is a drill (PROD §17). */
+    kind?: 'CUSTOMER' | 'DEMO' | 'CANARY';
   },
 ): Promise<void> {
   await trx
@@ -44,6 +46,7 @@ export async function createOrganization(
       legal_name: input.legalName,
       timezone: input.timezone,
       data_region: input.dataRegion,
+      kind: input.kind ?? 'CUSTOMER',
       created_at: input.now,
       updated_at: input.now,
     })
@@ -57,7 +60,7 @@ export async function createOrganization(
 export async function getOrganization(trx: Database, id: string) {
   return trx
     .selectFrom('organizations')
-    .select(['id', 'name', 'status', 'timezone', 'default_locale', 'data_region'])
+    .select(['id', 'name', 'status', 'timezone', 'default_locale', 'data_region', 'kind'])
     .where('id', '=', id)
     .executeTakeFirst();
 }
@@ -92,4 +95,15 @@ export async function saveSettings(
     .where('version', '=', input.version)
     .executeTakeFirst();
   return result.numUpdatedRows === 1n;
+}
+
+export type OrganizationKind = 'CUSTOMER' | 'DEMO' | 'CANARY';
+
+export async function organizationKind(trx: Database, organizationId: string): Promise<OrganizationKind> {
+  const row = await trx
+    .selectFrom('organizations')
+    .select('kind')
+    .where('id', '=', organizationId)
+    .executeTakeFirst();
+  return row?.kind === 'DEMO' || row?.kind === 'CANARY' ? row.kind : 'CUSTOMER';
 }

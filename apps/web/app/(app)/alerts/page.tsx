@@ -2,12 +2,16 @@
 
 // Alerts (PROD §12, §14.2): severity first, then age. Dispatchers acknowledge; supervisors and above
 // resolve or dismiss (a reason is required, and SOS and critical incidents can only be resolved).
-// The server decides every permission; buttons are only hidden when they would be refused. Polls
-// every 10 seconds until the realtime stream arrives (Phase 6). Phone-width friendly for duty officers.
+// An SOS is resolved on its own SOS page, with a resolution type and a note (PROD §11.4). A drill is
+// marked DRILL; only its participants get its alarm (ADV-S10). The server decides every permission;
+// buttons are only hidden when they would be refused. Polls every 10 seconds until the realtime
+// stream arrives (Phase 6). Phone-width friendly for duty officers.
 import type { Alert } from '@sentryops/contracts';
+import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
 
 import { PageHead } from '../../../components/shell';
+import { alarmPath } from '../../../lib/alarm';
 import { api, errorText } from '../../../lib/api';
 import { ALERT_TYPE_LABEL as TYPE_LABEL, formatRelative } from '../../../lib/format';
 import { useSession } from '../../../lib/session';
@@ -45,6 +49,12 @@ export default function AlertsPage() {
   const [text, setText] = useState('');
   const [busy, setBusy] = useState<string | null>(null);
   const [tick, setTick] = useState(() => Date.now());
+  // A notification for one alert opens this page with ?id= (its push links here): that row stands out.
+  const [focus, setFocus] = useState<string | null>(null);
+
+  useEffect(() => {
+    setFocus(new URLSearchParams(window.location.search).get('id'));
+  }, []);
 
   const load = useCallback(async () => {
     try {
@@ -143,13 +153,24 @@ export default function AlertsPage() {
                 {sorted.map((a) => {
                   const outside = minutesOutside(a, now);
                   return (
-                    <tr key={a.id}>
+                    <tr key={a.id} className={a.id === focus ? 'selected' : undefined}>
                       <td>
                         <span className={`badge ${SEVERITY_BADGE[a.severity]}`}>
                           {a.severity.toLowerCase()}
                         </span>{' '}
                         <strong>{TYPE_LABEL[a.type]}</strong>
                         {a.triggerCount > 1 ? <span className="faint"> ×{a.triggerCount}</span> : null}
+                        {a.isDrill ? (
+                          <>
+                            {' '}
+                            <span className="badge drill">DRILL</span>
+                          </>
+                        ) : null}
+                        {a.sosEventId || a.incidentId ? (
+                          <div>
+                            <Link href={alarmPath(a)}>{a.sosEventId ? 'Open SOS' : 'Open incident'}</Link>
+                          </div>
+                        ) : null}
                         {outside ? <div className="faint">{outside}</div> : null}
                         {a.detectedLate ? <div className="faint">detected after sync</div> : null}
                       </td>
@@ -212,7 +233,13 @@ export default function AlertsPage() {
                                   Acknowledge
                                 </button>
                               ) : null}
-                              {can('alerts.resolve') ? (
+                              {a.type === 'SOS_ACTIVATED' && a.sosEventId ? (
+                                can('sos.resolve') ? (
+                                  <Link className="btn small" href={alarmPath(a)}>
+                                    Resolve on SOS page
+                                  </Link>
+                                ) : null
+                              ) : can('alerts.resolve') ? (
                                 <button
                                   type="button"
                                   className="btn small"

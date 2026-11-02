@@ -40,6 +40,8 @@ export type MemberRow = {
   readonly email: string | null;
   readonly role: Role;
   readonly status: 'INVITED' | 'ACTIVE' | 'DISABLED' | 'REMOVED';
+  /** Where this member's SOS texts go, in this organization (owner decision 2026-11-02). */
+  readonly alertPhone: string | null;
   readonly version: number;
   readonly createdAt: Date;
   readonly updatedAt: Date;
@@ -52,6 +54,7 @@ const memberColumns = [
   'u.email',
   'm.role',
   'm.status',
+  'm.alert_phone',
   'm.version',
   'm.created_at',
   'm.updated_at',
@@ -64,6 +67,7 @@ type RawMember = {
   email: string | null;
   role: string;
   status: string;
+  alert_phone: string | null;
   version: number;
   created_at: Date;
   updated_at: Date;
@@ -76,6 +80,7 @@ const toMember = (r: RawMember): MemberRow => ({
   email: r.email,
   role: r.role as Role,
   status: r.status as MemberRow['status'],
+  alertPhone: r.alert_phone,
   version: r.version,
   createdAt: r.created_at,
   updatedAt: r.updated_at,
@@ -183,4 +188,21 @@ export async function insertMember(
       updated_at: input.now,
     })
     .execute();
+}
+
+/** The organization's first ACTIVE administrator or owner (the canary resolves its own SOS as them). */
+export async function activeManagerUser(
+  trx: Database,
+  organizationId: string,
+): Promise<{ userId: string; name: string } | null> {
+  const row = await trx
+    .selectFrom('organization_members as m')
+    .innerJoin('users as u', 'u.id', 'm.user_id')
+    .where('m.organization_id', '=', organizationId)
+    .where('m.role', 'in', ['ADMIN', 'OWNER'])
+    .where('m.status', '=', 'ACTIVE')
+    .select(['u.id', 'u.name'])
+    .orderBy('m.id')
+    .executeTakeFirst();
+  return row ? { userId: row.id, name: row.name } : null;
 }

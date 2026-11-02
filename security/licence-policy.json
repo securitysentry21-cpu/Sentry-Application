@@ -22,7 +22,7 @@
     {
       "package": "@img/sharp-*",
       "licences": ["Apache-2.0 AND LGPL-3.0-or-later", "LGPL-3.0-or-later"],
-      "reason": "Image library binaries (libvips is LGPL-3.0) that Next.js uses for image optimisation on our own servers. Used unmodified as a separate library, and not shipped in the guard app. Windows bundles libvips into one package; Linux ships it separately as @img/sharp-libvips-*."
+      "reason": "Image library binaries (libvips is LGPL-3.0) that Next.js uses for image optimisation, and that the API's photo worker (sharp) uses to check and re-encode incident photos, on our own servers. Used unmodified as a separate library, and not shipped in the guard app. Windows bundles libvips into one package; Linux ships it separately as @img/sharp-libvips-*."
     },
     {
       "package": "caniuse-lite",

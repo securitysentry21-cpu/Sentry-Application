@@ -13,6 +13,8 @@
 | `VERSION_CONFLICT` | 409 | optimistic concurrency failure |
 | `SHIFT_INVALID_TRANSITION` | 409 | transition not allowed from current state |
 | `ALERT_INVALID_TRANSITION` | 409 | alert already closed, or SOS / critical incident dismissed instead of resolved |
+| `INCIDENT_INVALID_TRANSITION` | 409 | incident status change not allowed from its current status |
+| `DRILL_ALREADY_RUNNING` | 409 | an SOS drill is already open in the organization |
 | `SHIFT_OVERLAP` | 409 | guard already has a shift in that period |
 | `SHIFT_NOT_ACTIVE` | 409 | operation needs an ACTIVE shift |
 | `SHIFT_OUTSIDE_START_WINDOW` | 422 | too early or after the start deadline |
@@ -30,6 +32,7 @@
 | `ENROLLMENT_CODE_INVALID` | 422 | wrong enrollment code, or the code doesn't match the phone number |
 | `ATTACHMENT_TOO_LARGE` | 413 | over size limit |
 | `ATTACHMENT_TYPE_NOT_ALLOWED` | 415 | content does not match an allowed type |
+| `ATTACHMENT_LIMIT_REACHED` | 409 | the incident already has 5 photos |
 | `EXPORT_RANGE_TOO_LARGE` | 422 | export range > 92 days |
 | `APP_VERSION_UNSUPPORTED` | 426 | below minimum (not returned for SOS or queued uploads unless revoked) |
 | `RATE_LIMITED` | 429 | with Retry-After |

@@ -452,7 +452,24 @@ describe('manual changes (PROD §12.2, §12.5)', () => {
       expect(errorCode(res)).toBe('ALERT_INVALID_TRANSITION');
     }
     expect((await post(dispatcher, 'acknowledge')).statusCode).toBe(200);
-    const resolved = await post(supervisor, 'resolve', { note: 'Guard safe, called back' });
+    // Phase 8: an SOS is resolved on its own page, with a resolution type and a note (PROD §11.4).
+    const viaAlert = await post(supervisor, 'resolve', { note: 'Guard safe, called back' });
+    expect(viaAlert.statusCode).toBe(409);
+    expect(errorCode(viaAlert)).toBe('ALERT_INVALID_TRANSITION');
+    // A critical incident's alert can't be dismissed either, and resolves like any other alert.
+    const critical = await seedAlert('INCIDENT_CRITICAL', null, null);
+    const onCritical = (action: string, body: Record<string, unknown>) =>
+      call(t.app, {
+        method: 'POST',
+        url: `/api/v1/alerts/${critical}/${action}`,
+        cookie: supervisor,
+        org: org.id,
+        body,
+      });
+    expect(errorCode(await onCritical('dismiss', { reason: 'false alarm' }))).toBe(
+      'ALERT_INVALID_TRANSITION',
+    );
+    const resolved = await onCritical('resolve', { note: 'Guard safe, called back' });
     expect(resolved.statusCode).toBe(200);
     expect(resolved.json<{ alert: { status: string } }>().alert.status).toBe('RESOLVED');
     // A dismissible alert still needs a reason.

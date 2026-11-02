@@ -62,6 +62,7 @@ beforeAll(async () => {
       );
       // One row per organization in every Phase 1 tenant table (the per-table test requires it).
       const user = randomUUID();
+      const member = randomUUID();
       await m.query(`insert into users (id, email, name) values ($1, $2, 'Member')`, [
         user,
         `${user}@example.test`,
@@ -69,7 +70,7 @@ beforeAll(async () => {
       await m.query(
         `insert into organization_members (id, organization_id, user_id, role, status)
          values ($1, $2, $3, 'OWNER', 'ACTIVE')`,
-        [randomUUID(), org, user],
+        [member, org, user],
       );
       await m.query(
         `insert into invitations (id, organization_id, purpose, role, email, token_hash, expires_at)
@@ -213,6 +214,68 @@ beforeAll(async () => {
          values ($1, $2, $3, $4, $5, $6, $7, $8, $9, now(), now(), now(), 'VERIFIED_MONOTONIC',
            'LOCATION_UNCONFIRMED', true)`,
         [randomUUID(), org, guard, shift, checkpoint, route, run, device, randomUUID()],
+      );
+      // Phase 8 tables.
+      const drill = randomUUID();
+      const sos = randomUUID();
+      const incident = randomUUID();
+      const subscription = randomUUID();
+      await m.query(
+        `insert into sos_drills (id, organization_id, started_by_user_id, started_at, ends_at)
+         values ($1, $2, $3, now(), now() + interval '1 hour')`,
+        [drill, org, user],
+      );
+      await m.query(
+        `insert into sos_drill_guards (id, organization_id, drill_id, guard_id) values ($1, $2, $3, $4)`,
+        [randomUUID(), org, drill, guard],
+      );
+      await m.query(
+        `insert into sos_drill_members (id, organization_id, drill_id, member_id) values ($1, $2, $3, $4)`,
+        [randomUUID(), org, drill, member],
+      );
+      await m.query(
+        `insert into sos_events (id, organization_id, guard_id, shift_id, site_id, device_id, client_event_id,
+           activated_at_recorded, activated_at, received_at, clock_status, last_triggered_at, is_drill, drill_id)
+         values ($1, $2, $3, $4, $5, $6, $7, now(), now(), now(), 'VERIFIED_MONOTONIC', now(), true, $8)`,
+        [sos, org, guard, shift, siteRow, device, randomUUID(), drill],
+      );
+      await m.query(
+        `insert into sos_presses (id, organization_id, sos_event_id, guard_id, device_id, client_event_id,
+           pressed_at_recorded, pressed_at, received_at, auth)
+         values ($1, $2, $3, $4, $5, $6, now(), now(), now(), 'SESSION')`,
+        [randomUUID(), org, sos, guard, device, randomUUID()],
+      );
+      await m.query(`insert into incident_counters (id, organization_id, next_value) values ($1, $2, 2)`, [
+        randomUUID(),
+        org,
+      ]);
+      await m.query(
+        `insert into incidents (id, organization_id, reference_number, guard_id, shift_id, site_id, type, severity,
+           title, occurred_at, reported_at, received_at)
+         values ($1, $2, 1, $3, $4, $5, 'FIRE', 'HIGH', 'Fire', now(), now(), now())`,
+        [incident, org, guard, shift, siteRow],
+      );
+      await m.query(
+        `insert into incident_events (id, organization_id, incident_id, type, actor_type, actor_guard_id)
+         values ($1, $2, $3, 'CREATED', 'GUARD', $4)`,
+        [randomUUID(), org, incident, guard],
+      );
+      await m.query(
+        `insert into incident_attachments (id, organization_id, incident_id, client_event_id, capture_source,
+           declared_type, declared_size, original_key, view_key, upload_expires_at)
+         values ($1, $2, $3, $4, 'IN_APP_CAMERA', 'image/jpeg', 1000, 'o', 'v', now())`,
+        [randomUUID(), org, incident, randomUUID()],
+      );
+      await m.query(
+        `insert into web_push_subscriptions (id, organization_id, member_id, user_id, endpoint, p256dh, auth, client)
+         values ($1, $2, $3, $4, $5, repeat('B', 87), repeat('A', 22), 'PHONE')`,
+        [subscription, org, member, user, `https://fcm.googleapis.com/fcm/send/${subscription}`],
+      );
+      await m.query(
+        `insert into notification_deliveries (id, organization_id, topic, alert_id, channel, recipient_member_id,
+           subscription_id, dedupe_key, max_attempts, next_attempt_at, title, body)
+         values ($1, $2, 'ALERT', $3, 'WEB_PUSH', $4, $5, $6, 3, now(), 'SOS', 'SOS — Guard — Gate')`,
+        [randomUUID(), org, alert, member, subscription, `${alert}:${member}:WEB_PUSH:0`],
       );
     }
   });

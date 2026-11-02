@@ -144,3 +144,31 @@ variable "web_desired_count" {
   type    = number
   default = 1
 }
+
+# ── Notifications and the canary (Phase 8) ──────────────────────────────────────────────────────
+
+variable "fcm_service_account" {
+  description = "The Firebase service account JSON for pushes to the guard app (D-26). Empty until the Firebase project exists. A secret: set it in the git-ignored local.auto.tfvars, never in a committed file."
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
+variable "canary_enabled" {
+  description = "The synthetic SOS (ARCH §22): a canary organization's SOS every 5 minutes, end to end, with alarms when it fails or goes quiet. Needs the canary organization first (operator create-canary)."
+  type        = bool
+  default     = false
+}
+
+variable "canary_device_id" {
+  description = "The canary phone's device ID, printed by operator create-canary."
+  type        = string
+  default     = ""
+}
+
+variable "canary_device_key" {
+  description = "The canary phone's private key, printed once by operator create-canary. A secret: local.auto.tfvars only."
+  type        = string
+  default     = ""
+  sensitive   = true
+}

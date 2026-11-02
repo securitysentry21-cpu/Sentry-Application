@@ -85,6 +85,30 @@ ALTER TABLE outbox ADD COLUMN next_attempt_at_ms INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE receipts ADD COLUMN detail TEXT;
 `,
   },
+  {
+    version: 4,
+    name: 'incident photos waiting to upload (Phase 8, ARCH §12)',
+    sql: `
+CREATE TABLE photos (
+  client_event_id TEXT PRIMARY KEY NOT NULL,
+  partition_key TEXT NOT NULL,
+  incident_client_event_id TEXT NOT NULL,
+  local_uri TEXT NOT NULL,
+  capture_source TEXT NOT NULL CHECK (capture_source IN ('IN_APP_CAMERA', 'GALLERY')),
+  content_type TEXT NOT NULL,
+  size_bytes INTEGER NOT NULL,
+  sha256 TEXT NOT NULL,
+  status TEXT NOT NULL CHECK (status IN ('QUEUED', 'UPLOADED', 'DONE', 'REJECTED')),
+  attachment_id TEXT,
+  attempts INTEGER NOT NULL DEFAULT 0,
+  next_attempt_at_ms INTEGER NOT NULL DEFAULT 0,
+  last_error TEXT,
+  created_at_ms INTEGER NOT NULL
+) STRICT;
+
+CREATE INDEX photos_due ON photos (partition_key, status, next_attempt_at_ms);
+`,
+  },
 ];
 
 export const SCHEMA_VERSION = MIGRATIONS.at(-1)?.version ?? 0;

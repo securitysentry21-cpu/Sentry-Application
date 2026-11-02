@@ -14,6 +14,11 @@ export const ERROR_CODES = {
     http: 409,
     meaning: 'alert already closed, or SOS / critical incident dismissed instead of resolved',
   },
+  INCIDENT_INVALID_TRANSITION: {
+    http: 409,
+    meaning: 'incident status change not allowed from its current status',
+  },
+  DRILL_ALREADY_RUNNING: { http: 409, meaning: 'an SOS drill is already open in the organization' },
   SHIFT_OVERLAP: { http: 409, meaning: 'guard already has a shift in that period' },
   SHIFT_NOT_ACTIVE: { http: 409, meaning: 'operation needs an ACTIVE shift' },
   SHIFT_OUTSIDE_START_WINDOW: { http: 422, meaning: 'too early or after the start deadline' },
@@ -34,6 +39,7 @@ export const ERROR_CODES = {
   },
   ATTACHMENT_TOO_LARGE: { http: 413, meaning: 'over size limit' },
   ATTACHMENT_TYPE_NOT_ALLOWED: { http: 415, meaning: 'content does not match an allowed type' },
+  ATTACHMENT_LIMIT_REACHED: { http: 409, meaning: 'the incident already has 5 photos' },
   EXPORT_RANGE_TOO_LARGE: { http: 422, meaning: 'export range > 92 days' },
   APP_VERSION_UNSUPPORTED: {
     http: 426,

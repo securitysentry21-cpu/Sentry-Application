@@ -3,7 +3,8 @@
 import { View } from 'react-native';
 
 import { formatAgo, formatDay, formatTime } from '../../core/i18n/format.ts';
-import { shiftLine } from '../../core/presenter.ts';
+import { shiftLine, sosLine } from '../../core/presenter.ts';
+import { sosDisplay, sosOpen } from '../../core/sos/machine.ts';
 import type { Navigate } from '../App.tsx';
 import { Banner, Button, Card, Screen, Txt } from '../components.tsx';
 import { useGuardApp, useI18n, useSnapshot } from '../context.tsx';
@@ -16,11 +17,20 @@ export function HomeScreen({ navigate }: { navigate: Navigate }) {
   const { t, locale } = useI18n();
   const now = Date.now();
   const shifts = [...snap.shifts].sort((a, b) => Date.parse(a.startsAt) - Date.parse(b.startsAt));
+  const sos = snap.sos && sosOpen(snap.sos) && sosDisplay(snap.sos) !== 'RESOLVED' ? snap.sos : null;
+  const sosZone = snap.shifts[0]?.site.timezone ?? 'Asia/Karachi';
 
   return (
     <Screen>
       <Txt kind="title">{t('home.greeting', { name: snap.identity?.guardDisplayName ?? '' })}</Txt>
       <Txt tone="muted">{snap.identity?.organizationName ?? ''}</Txt>
+      {sos && snap.settings.features.sos ? (
+        <Banner
+          tone="danger"
+          text={sosLine(sos, t, (iso) => formatTime(Date.parse(iso), sosZone, locale)).text}
+          action={{ label: t('home.open'), onPress: () => navigate({ name: 'sos' }) }}
+        />
+      ) : null}
       <StatusBanners />
       <Txt kind="heading">{t('home.shifts')}</Txt>
       {snap.shiftsFromCache ? <Banner tone="warning" text={t('home.cached')} /> : null}
@@ -55,6 +65,14 @@ export function HomeScreen({ navigate }: { navigate: Navigate }) {
       ) : null}
       <View style={{ gap: space.sm }}>
         <Button kind="secondary" icon="↻" label={t('home.refresh')} onPress={() => void app.onForeground()} />
+        {snap.settings.features.incidents ? (
+          <Button
+            kind="secondary"
+            icon="☰"
+            label={t('incident.mine')}
+            onPress={() => navigate({ name: 'myIncidents' })}
+          />
+        ) : null}
         <Button
           kind="secondary"
           icon="ⓘ"

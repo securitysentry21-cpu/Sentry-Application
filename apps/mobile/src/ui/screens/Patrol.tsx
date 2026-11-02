@@ -1,6 +1,7 @@
 // Patrol rounds (PROD §7.7): the round under way with its checkpoints in order and the next one to
 // scan, later rounds, and the scanner. Each scan shows what the server said about it, never more
 // (INV-16): "Saved — will verify when online" until it answers. Only during the active shift.
+// "Checkpoint problem" files a LOW incident linked to a checkpoint of the rounds (not a visit).
 import type { GuardPatrolsResponse } from '@sentryops/contracts';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
@@ -19,6 +20,7 @@ type Mode =
   | { readonly kind: 'scanning' }
   | { readonly kind: 'saving' }
   | { readonly kind: 'result'; readonly clientEventId: string }
+  | { readonly kind: 'problem' }
   | { readonly kind: 'refused'; readonly reason: Extract<ScanStart, { kind: 'REFUSED' }>['reason'] };
 
 type Rounds = { rounds: GuardPatrolsResponse; fromCache: boolean } | null;
@@ -88,6 +90,36 @@ export function PatrolScreen({ shiftId, navigate }: { shiftId: string; navigate:
             );
         }}
       />
+    );
+  }
+
+  if (mode.kind === 'problem') {
+    // The checkpoints of this shift's rounds, each once, in route order.
+    const loadedRuns = rounds === 'loading' || rounds === null ? [] : rounds.rounds.runs;
+    const checkpoints = [
+      ...new Map(loadedRuns.flatMap((r) => r.checkpoints).map((c) => [c.checkpointId, c.name])).entries(),
+    ];
+    return (
+      <Screen>
+        <Txt kind="title">{t('incident.checkpointProblem')}</Txt>
+        <Txt tone="muted">{t('incident.checkpointHint')}</Txt>
+        {checkpoints.length === 0 ? <Banner tone="info" text={t('patrol.unavailable')} /> : null}
+        {checkpoints.map(([checkpointId, name]) => (
+          <Button
+            key={checkpointId}
+            kind="secondary"
+            icon="⚑"
+            label={name}
+            onPress={() => navigate({ name: 'incident', shiftId, checkpoint: { checkpointId, name } })}
+          />
+        ))}
+        <Button
+          kind="secondary"
+          icon="←"
+          label={t('patrol.title')}
+          onPress={() => setMode({ kind: 'rounds' })}
+        />
+      </Screen>
     );
   }
 
@@ -203,6 +235,14 @@ export function PatrolScreen({ shiftId, navigate }: { shiftId: string; navigate:
       ) : null}
 
       <Button icon="▣" label={t('patrol.scan')} onPress={scanAgain} />
+      {snap.settings.features.incidents ? (
+        <Button
+          kind="secondary"
+          icon="⚑"
+          label={t('incident.checkpointProblem')}
+          onPress={() => setMode({ kind: 'problem' })}
+        />
+      ) : null}
       <Button kind="secondary" icon="←" label={t('common.back')} onPress={back} />
     </Screen>
   );

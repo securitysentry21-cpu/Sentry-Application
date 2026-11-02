@@ -2,14 +2,16 @@
 
 // Guard detail (PROD §14.4): the guard, their current shift and site, tracking health and location
 // age (PROD §8.3), the phone's own report and devices, the disclosure they accepted, recent shifts,
-// patrol rounds and alerts. The live part follows the realtime stream. Location history opens on its
-// own, audited page; each round and shift opens on the Patrols page. Incidents join with Phase 8.
-import type { Alert, Guard, LiveGuard, PatrolRun, Shift } from '@sentryops/contracts';
+// patrol rounds, incidents and alerts. The live part follows the realtime stream. Location history
+// opens on its own, audited page; each round and shift opens on the Patrols page, each incident on
+// its own page.
+import type { Alert, Guard, IncidentSummary, LiveGuard, PatrolRun, Shift } from '@sentryops/contracts';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
 
 import { GuardPanel } from '../../../../components/guard-panel';
+import { IncidentTable } from '../../../../components/incidents';
 import { RunsTable } from '../../../../components/patrol-runs';
 import { PageHead } from '../../../../components/shell';
 import { api, errorText } from '../../../../lib/api';
@@ -39,6 +41,8 @@ type Location = {
 const DAY = 86_400_000;
 /** Patrol history: the latest rounds due in the last week. */
 const PATROL_HISTORY = { days: 7, limit: 20 } as const;
+/** The guard's latest incidents, open or resolved. */
+const INCIDENT_HISTORY = { limit: 20 } as const;
 const STATUS_BADGE: Record<string, string> = {
   ACTIVE: 'ok',
   SCHEDULED: 'info',
@@ -57,6 +61,7 @@ export default function GuardDetailPage() {
   const [shifts, setShifts] = useState<Shift[] | null>(null);
   const [alerts, setAlerts] = useState<Alert[] | null>(null);
   const [runs, setRuns] = useState<PatrolRun[] | null>(null);
+  const [incidents, setIncidents] = useState<IncidentSummary[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const canHistory = can('location.history.read');
   const canPatrols = can('patrols.read');
@@ -90,6 +95,16 @@ export default function GuardDetailPage() {
         limit: String(PATROL_HISTORY.limit),
       });
       void guarded(api<{ runs: PatrolRun[] }>(`/patrol-runs?${query.toString()}`), (r) => setRuns(r.runs));
+    }
+    if (can('incidents.read')) {
+      const query = new URLSearchParams({
+        status: 'all',
+        guardId: id,
+        limit: String(INCIDENT_HISTORY.limit),
+      });
+      void guarded(api<{ incidents: IncidentSummary[] }>(`/incidents?${query.toString()}`), (r) =>
+        setIncidents(r.incidents),
+      );
     }
     return () => {
       cancelled = true;
@@ -248,6 +263,21 @@ export default function GuardDetailPage() {
               showGuard={false}
               withDate
               href={(r) => `/patrols?shiftId=${r.shiftId}&run=${r.id}`}
+            />
+          )}
+        </div>
+      ) : null}
+      {incidents ? (
+        <div className="card">
+          <h2>Incidents</h2>
+          <p className="faint">Their latest reports, open or resolved (up to {INCIDENT_HISTORY.limit}).</p>
+          {incidents.length === 0 ? (
+            <div className="empty">No incidents.</div>
+          ) : (
+            <IncidentTable
+              incidents={incidents}
+              timeZone={membership.organizationTimezone}
+              showReporter={false}
             />
           )}
         </div>

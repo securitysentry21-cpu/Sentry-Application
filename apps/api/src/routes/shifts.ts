@@ -39,6 +39,7 @@ import {
   type ShiftUpdate,
 } from '../repositories/shifts.ts';
 import { getSite } from '../repositories/sites.ts';
+import { noticeShift } from '../services/guard-notices.ts';
 import {
   guardEnd,
   guardShiftDto,
@@ -140,6 +141,8 @@ async function supervise(
     const updated = await getShift(trx, org.id, shift.id);
     if (!updated) throw notFound();
     await shiftChanged(trx, deps, org.id, updated, result.event);
+    if (command.type === 'CANCEL') await noticeShift(trx, deps, org.id, updated, 'CANCELLED');
+    if (command.type === 'EXTEND') await noticeShift(trx, deps, org.id, updated, 'CHANGED');
     return shiftDto(updated);
   });
 }
@@ -242,7 +245,9 @@ export const shiftRoutes = [
             resourceType: 'shift',
             resourceId: id,
           });
-          return getShift(trx, org.id, id);
+          const created = await getShift(trx, org.id, id);
+          if (created) await noticeShift(trx, deps, org.id, created, 'ASSIGNED');
+          return created;
         });
         if (!shift) throw notFound();
         void reply.code(201);
@@ -319,6 +324,18 @@ export const shiftRoutes = [
           resourceId: null,
           metadata: { count: planned.length, guardId: body.guardId, siteId: body.siteId },
         });
+        // One notice for the batch, about its first shift, not one per shift.
+        if (first) {
+          const firstShift = (
+            await listShifts(trx, org.id, {
+              from: first.startsAt,
+              to: new Date(first.startsAt.getTime() + 1),
+              guardId: body.guardId,
+              limit: 1,
+            })
+          )[0];
+          if (firstShift) await noticeShift(trx, deps, org.id, firstShift, 'ASSIGNED');
+        }
         return { preview, shifts: report, created: planned.length };
       });
     },
@@ -424,6 +441,13 @@ export const shiftRoutes = [
           });
           const updated = await getShift(trx, org.id, shift.id);
           if (!updated) throw notFound();
+          // The guard hears about a move; a reassignment tells both guards.
+          if (reassigned) {
+            await noticeShift(trx, deps, org.id, shift, 'CANCELLED', shift.guardId);
+            await noticeShift(trx, deps, org.id, updated, 'ASSIGNED');
+          } else if (structural) {
+            await noticeShift(trx, deps, org.id, updated, 'CHANGED');
+          }
           return shiftDto(updated);
         });
       } catch (error) {

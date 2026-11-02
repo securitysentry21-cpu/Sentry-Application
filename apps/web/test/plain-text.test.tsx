@@ -4,26 +4,34 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { join, relative } from 'node:path';
 
 import type {
+  Alert,
   Checkpoint,
   CheckpointVisit,
+  IncidentDetail,
   LiveGuard,
   PatrolRoute,
   PatrolRun,
   Site,
+  SosDetail,
 } from '@sentryops/contracts';
 import type { AnchorHTMLAttributes } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 
+import { AlarmBar, AlarmView } from '../components/alarm';
 import { CheckpointEditor } from '../components/checkpoint-editor';
 import { GuardPanel } from '../components/guard-panel';
+import { PhotoTiles } from '../components/incident-photos';
+import { IncidentDescription, IncidentFacts, IncidentTable, IncidentTimeline } from '../components/incidents';
 import { RouteEditor, RouteTable } from '../components/patrol-routes';
 import { RunDetail, RunsTable, VisitsTable } from '../components/patrol-runs';
+import { CancelNotice, DeliveriesTable, SosFacts, SosProgressList } from '../components/sos';
 import { guardView } from '../lib/live-model';
 
 vi.mock('next/link', () => ({
   default: (props: AnchorHTMLAttributes<HTMLAnchorElement>) => <a href={props.href}>{props.children}</a>,
 }));
+vi.mock('next/navigation', () => ({ usePathname: () => '/', useRouter: () => ({ push: () => undefined }) }));
 
 const ROOT = join(import.meta.dirname, '..');
 const PAYLOAD = '<img src=x onerror=alert(1)>';
@@ -231,6 +239,262 @@ describe('plain text only (SEC §8)', () => {
     expect(html).toContain('sent late');
     expect(html).toContain('1 of 2 (1 QR only)');
     expect(html).toContain('Unknown label');
+  });
+
+  it('ADV-W01 script payloads in incident titles, descriptions, notes, reasons and names render as text in the incident views', () => {
+    const id = (n: number) => `0190a0d2-7c5e-7000-8000-${String(n).padStart(12, '0')}`;
+    const at = '2026-11-02T16:00:00Z';
+    const incident: IncidentDetail = {
+      id: id(1),
+      referenceNumber: 'INC-000123',
+      type: 'INTRUSION',
+      severity: 'CRITICAL',
+      status: 'RESOLVED',
+      title: PAYLOAD,
+      guard: { id: id(2), displayName: SCRIPT },
+      reportedBy: null,
+      site: { id: id(3), name: PAYLOAD, timezone: 'Asia/Karachi' },
+      checkpoint: { id: id(4), name: SCRIPT },
+      shiftId: id(5),
+      sosEventId: id(6),
+      occurredAt: at,
+      reportedAt: at,
+      receivedAt: at,
+      acknowledgedAt: at,
+      resolvedAt: at,
+      photoCount: 2,
+      isDrill: true,
+      version: 4,
+      description: `${SCRIPT}\nsecond line ${PAYLOAD}`,
+      location: { lat: 31.47, lng: 74.4, accuracyM: 12 },
+      locationFlags: ['MOCK_LOCATION'],
+      acknowledgedBy: { id: id(7), name: PAYLOAD },
+      resolvedBy: { id: id(8), name: SCRIPT },
+      resolutionNote: PAYLOAD,
+      original: { type: 'THEFT', severity: 'LOW' },
+      events: [
+        {
+          id: id(9),
+          type: 'CREATED',
+          actorType: 'GUARD',
+          actorName: SCRIPT,
+          body: null,
+          fromValue: null,
+          toValue: null,
+          createdAt: at,
+        },
+        {
+          id: id(10),
+          type: 'NOTE_ADDED',
+          actorType: 'USER',
+          actorName: PAYLOAD,
+          body: SCRIPT,
+          fromValue: null,
+          toValue: null,
+          createdAt: at,
+        },
+        {
+          id: id(11),
+          type: 'SEVERITY_CHANGED',
+          actorType: 'USER',
+          actorName: PAYLOAD,
+          body: null,
+          fromValue: 'LOW',
+          toValue: 'CRITICAL',
+          createdAt: at,
+        },
+        {
+          id: id(12),
+          type: 'TYPE_CHANGED',
+          actorType: 'USER',
+          actorName: PAYLOAD,
+          body: null,
+          fromValue: 'THEFT',
+          toValue: '<b>NEW</b>',
+          createdAt: at,
+        },
+        {
+          id: id(13),
+          type: 'STATUS_CHANGED',
+          actorType: 'USER',
+          actorName: SCRIPT,
+          body: PAYLOAD,
+          fromValue: 'OPEN',
+          toValue: 'RESOLVED',
+          createdAt: at,
+        },
+        {
+          id: id(14),
+          type: 'ATTACHMENT_REJECTED',
+          actorType: 'SYSTEM',
+          actorName: null,
+          body: null,
+          fromValue: null,
+          toValue: null,
+          createdAt: at,
+        },
+      ],
+      attachments: [
+        {
+          id: id(15),
+          status: 'AVAILABLE',
+          captureSource: 'GALLERY',
+          width: 800,
+          height: 600,
+          sizeBytes: 1000,
+          exifCapturedAt: at,
+          rejectionReason: null,
+          createdAt: at,
+        },
+        {
+          id: id(16),
+          status: 'REJECTED',
+          captureSource: 'IN_APP_CAMERA',
+          width: null,
+          height: null,
+          sizeBytes: null,
+          exifCapturedAt: null,
+          rejectionReason: '<b>NEW_REASON</b>',
+          createdAt: at,
+        },
+      ],
+    };
+    const html = renderToStaticMarkup(
+      <>
+        <IncidentTable incidents={[incident]} timeZone="Asia/Karachi" />
+        <IncidentFacts incident={incident} timeZone="Asia/Karachi" canGuards />
+        <IncidentDescription text={incident.description} />
+        <IncidentTimeline events={incident.events} timeZone="Asia/Karachi" />
+        <PhotoTiles
+          attachments={incident.attachments}
+          links={{ [id(15)]: { url: 'https://objects.example/view?sig=x', expiresAt: at } }}
+          timeZone="Asia/Karachi"
+          onOpen={() => undefined}
+        />
+      </>,
+    );
+    expect(html).not.toContain('<img src=x');
+    expect(html).not.toContain('<script');
+    expect(html).not.toContain('<b>');
+    expect(html).toContain('&lt;img src=x onerror=alert(1)&gt;');
+    expect(html).toContain('&lt;script&gt;alert(1)&lt;/script&gt;');
+    // The words around them: the original as filed, changes old → new, sources, refusals.
+    expect(html).toContain('filed as Theft');
+    expect(html).toContain('filed as Low');
+    expect(html).toContain('Severity: Low → Critical');
+    expect(html).toContain('Status: Open → Resolved');
+    expect(html).toContain('From gallery');
+    expect(html).toContain('Camera');
+    expect(html).toContain('Refused: ');
+    expect(html).toContain('>DRILL</span>');
+  });
+
+  it('ADV-W01 script payloads in SOS guard, site and recipient names render as text on the SOS page and in the alarm', () => {
+    const id = (n: number) => `0190a0d2-7c5e-7000-8000-${String(n).padStart(12, '0')}`;
+    const at = '2026-11-02T16:00:00Z';
+    const sos: SosDetail = {
+      id: id(1),
+      alertId: id(2),
+      status: 'ACKNOWLEDGED',
+      isDrill: false,
+      guard: { id: id(3), displayName: PAYLOAD, employeeNumber: SCRIPT, phone: '+923001234567' },
+      site: { id: id(4), name: SCRIPT, timezone: 'Asia/Karachi' },
+      shiftId: id(5),
+      activatedAt: at,
+      receivedAt: at,
+      triggerCount: 3,
+      lastTriggeredAt: at,
+      guardCancelRequestedAt: at,
+      alertSentAt: at,
+      notifiedAt: null,
+      acknowledgedAt: at,
+      acknowledgedBy: { id: id(6), name: SCRIPT },
+      resolvedAt: null,
+      resolvedBy: null,
+      resolution: null,
+      resolutionNote: PAYLOAD,
+      location: { lat: 31.47, lng: 74.4, accuracyM: 8, capturedAt: at },
+      trail: [],
+      receipts: { shownOnDashboards: 0, reachedPhones: 0 },
+      deliveries: [
+        {
+          channel: 'SMS',
+          recipient: PAYLOAD,
+          status: 'SENT',
+          escalationLevel: 0,
+          sentAt: at,
+          errorCode: null,
+        },
+        {
+          channel: 'WEB_PUSH',
+          recipient: SCRIPT,
+          status: 'FAILED',
+          escalationLevel: 1,
+          sentAt: null,
+          errorCode: '<b>E</b>',
+        },
+      ],
+      version: 5,
+    };
+    const alert: Alert = {
+      id: id(2),
+      type: 'SOS_ACTIVATED',
+      severity: 'CRITICAL',
+      status: 'OPEN',
+      summary: SCRIPT,
+      guard: { id: id(3), displayName: PAYLOAD },
+      site: { id: id(4), name: SCRIPT },
+      shiftId: id(5),
+      details: {},
+      openedAt: at,
+      lastTriggeredAt: at,
+      triggerCount: 3,
+      acknowledgedAt: null,
+      acknowledgedBy: null,
+      resolvedAt: null,
+      resolutionType: null,
+      resolutionNote: null,
+      dismissedAt: null,
+      dismissReason: null,
+      detectedLate: false,
+      dismissible: false,
+      sosEventId: id(1),
+      incidentId: null,
+      isDrill: true,
+      drillId: id(9),
+      escalationLevel: 2,
+      version: 3,
+    };
+    const actions = {
+      now: new Date('2026-11-02T16:01:00Z'),
+      canAcknowledge: true,
+      onAcknowledge: () => undefined,
+      busy: null,
+      error: SCRIPT,
+    };
+    const html = renderToStaticMarkup(
+      <>
+        <SosFacts sos={sos} timeZone="Asia/Karachi" />
+        <CancelNotice sos={sos} timeZone="Asia/Karachi" />
+        <SosProgressList sos={sos} timeZone="Asia/Karachi" />
+        <DeliveriesTable sos={sos} timeZone="Asia/Karachi" />
+        <AlarmView alarms={[alert]} sound="off" onEnableSound={() => undefined} {...actions} />
+        <AlarmBar alarms={[alert]} {...actions} />
+      </>,
+    );
+    expect(html).not.toContain('<img');
+    expect(html).not.toContain('<script');
+    expect(html).not.toContain('<b>');
+    expect(html).toContain('&lt;img src=x onerror=alert(1)&gt;');
+    expect(html).toContain('&lt;script&gt;alert(1)&lt;/script&gt;');
+    // The honest words around them (PROD §11.3, §11.8).
+    expect(html).toContain('href="tel:+923001234567"');
+    expect(html).toContain('Pressed again ×2');
+    expect(html).toContain('I’m safe / false alarm');
+    expect(html).toContain('The SOS stays open');
+    expect(html).toContain('Sent, not confirmed');
+    expect(html).toContain('not yet');
+    expect(html).toContain('DRILL');
   });
 
   it('ADV-W01 the dashboard has no HTML sink: no innerHTML, map popup HTML or dangerouslySetInnerHTML', () => {

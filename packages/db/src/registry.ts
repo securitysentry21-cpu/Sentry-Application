@@ -88,4 +88,17 @@ export const TABLES: TableRegistry = {
   patrol_runs: { kind: 'tenant' },
   checkpoint_visits: { kind: 'tenant-append-only' },
   checkpoint_retired_labels: { kind: 'tenant-append-only' },
+
+  // Phase 8: incidents, SOS, notifications.
+  incident_counters: { kind: 'tenant' },
+  incidents: { kind: 'tenant' },
+  incident_events: { kind: 'tenant-append-only' },
+  incident_attachments: { kind: 'tenant' },
+  sos_drills: { kind: 'tenant' },
+  sos_drill_guards: { kind: 'tenant-append-only' },
+  sos_drill_members: { kind: 'tenant-append-only' },
+  sos_events: { kind: 'tenant' },
+  sos_presses: { kind: 'tenant-append-only' },
+  web_push_subscriptions: { kind: 'tenant' },
+  notification_deliveries: { kind: 'tenant' },
 };

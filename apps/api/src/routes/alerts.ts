@@ -19,6 +19,8 @@ import { AppError, notFound } from '../errors.ts';
 import { alertEvents, getAlert, listAlerts, type AlertRow } from '../repositories/alerts.ts';
 import { recordAudit } from '../repositories/audit.ts';
 import { acknowledge, alertDto, dismiss, resolveManually, type ManualOutcome } from '../services/alerts.ts';
+import { acknowledgeIncidentOfAlert } from '../services/incidents.ts';
+import { acknowledgeSos } from '../services/sos.ts';
 import { defineRoute } from './registry.ts';
 
 const READ = { kind: 'permission', permission: 'alerts.read' } as const;
@@ -122,19 +124,52 @@ export const alertRoutes = [
   defineRoute({
     method: 'POST',
     url: '/api/v1/alerts/:id/acknowledge',
-    summary: 'Acknowledges an alert. Idempotent: a second acknowledgement shows who was first.',
+    summary:
+      'Acknowledges an alert. Idempotent: a second acknowledgement shows who was first. An SOS alert acknowledges its SOS.',
     policy: { access: ACK, ownership: 'organization', rateLimit: 'default', audit: 'ALERT_ACKNOWLEDGED' },
     params,
     responses: { 200: alertResponseSchema, 404: errorEnvelopeSchema, 409: errorEnvelopeSchema },
-    handler: ({ deps, ctx, params: p }) =>
-      change(
+    handler: async ({ deps, ctx, params: p }) => {
+      const org = orgOf(ctx);
+      const user = userOf(ctx);
+      const target = await withTenantTransaction(deps.db, org.id, (trx) => getAlert(trx, org.id, p.id));
+      if (!target) throw notFound();
+      if (target.sosEventId && target.type === 'SOS_ACTIVATED') {
+        // The SOS and its alert move together, so the guard's phone hears it (PROD §11.3).
+        const sosEventId = target.sosEventId;
+        return withTenantTransaction(deps.db, org.id, async (trx) => {
+          const { changed } = await acknowledgeSos(trx, deps, org.id, sosEventId, {
+            userId: user.userId,
+            name: user.name,
+          });
+          if (changed) {
+            await recordAudit(trx, deps.clock, org.id, auditActor(ctx), {
+              action: 'SOS_ACKNOWLEDGED',
+              resourceType: 'sos_event',
+              resourceId: sosEventId,
+            });
+          }
+          const updated = await getAlert(trx, org.id, p.id);
+          if (!updated) throw notFound();
+          return { alert: alertDto(updated) };
+        });
+      }
+      return change(
         deps,
         ctx,
         p.id,
         'ALERT_ACKNOWLEDGED',
-        (trx, alert, userId) => acknowledge(trx, deps, orgOf(ctx).id, alert, userId),
+        async (trx, alert, userId) => {
+          const outcome = await acknowledge(trx, deps, org.id, alert, userId);
+          // An incident's alert and the incident never disagree about who is on it.
+          if (outcome.ok && outcome.changed && alert.incidentId) {
+            await acknowledgeIncidentOfAlert(trx, deps, org.id, { userId }, alert.incidentId);
+          }
+          return outcome;
+        },
         null,
-      ),
+      );
+    },
   }),
 
   defineRoute({
@@ -151,7 +186,16 @@ export const alertRoutes = [
         ctx,
         p.id,
         'ALERT_RESOLVED',
-        (trx, alert, userId) => resolveManually(trx, deps, orgOf(ctx).id, alert, userId, body.note ?? null),
+        (trx, alert, userId) => {
+          // An SOS is resolved on its own page, with a resolution type and a note (PROD §11.4).
+          if (alert.type === 'SOS_ACTIVATED') {
+            throw new AppError(
+              'ALERT_INVALID_TRANSITION',
+              'Resolve an SOS from its SOS page, with a resolution.',
+            );
+          }
+          return resolveManually(trx, deps, orgOf(ctx).id, alert, userId, body.note ?? null);
+        },
         body.note ?? null,
       ),
   }),

@@ -47,21 +47,29 @@ describe('route registry (ARCH §4.6)', () => {
       ['lng', 'lon', 'longitude'],
     ];
     type Node = { [key: string]: unknown };
-    const found = { guardLocation: [] as string[], untagged: [] as string[] };
-    const walk = (node: unknown, key: string, tags: { guard: boolean }) => {
+    const found = {
+      guardLocation: [] as string[],
+      incidentLocation: [] as string[],
+      untagged: [] as string[],
+    };
+    const walk = (node: unknown, key: string, tags: { guard: boolean; incident: boolean }) => {
       if (!node || typeof node !== 'object') return;
       const n = node as Node;
       const props = n.properties && typeof n.properties === 'object' ? Object.keys(n.properties) : [];
       const hasCoordinates = COORDINATE_KEYS.every((names) => names.some((k) => props.includes(k)));
       if (hasCoordinates) {
         if (n.guardLocation === true) tags.guard = true;
+        else if (n.incidentLocation === true) tags.incident = true;
         else if (n.siteGeometry !== true) found.untagged.push(key);
       }
       for (const value of Object.values(n)) walk(value, key, tags);
     };
+    // Where a guard filed an incident is shown to whoever may see the incident (owner decision
+    // 2026-11-02), and nowhere else: every incident permission belongs to a role that sees incidents.
+    const isIncidentPermission = (permission: string) => permission.startsWith('incidents.');
     for (const route of ROUTES) {
       const key = `${route.method} ${route.url}`;
-      const tags = { guard: false };
+      const tags = { guard: false, incident: false };
       for (const schema of Object.values(route.responses)) {
         walk(z.toJSONSchema(schema, { unrepresentable: 'any' }), key, tags);
       }
@@ -72,12 +80,24 @@ describe('route registry (ARCH §4.6)', () => {
           `${key} returns guard coordinates: declare locationScope 'live' or an audit action`,
         ).toBe(true);
       }
+      if (tags.incident) {
+        found.incidentLocation.push(key);
+        const access = route.policy.access;
+        expect(
+          access.kind === 'permission' && isIncidentPermission(access.permission),
+          `${key} returns an incident's location: only routes that need an incident permission may`,
+        ).toBe(true);
+      }
     }
-    expect(found.untagged, 'coordinates in responses must be tagged GUARD_LOCATION or SITE_GEOMETRY').toEqual(
-      [],
-    );
-    // The live snapshot carries guard positions, so the check can't pass by finding nothing.
+    expect(
+      found.untagged,
+      'coordinates in responses must be tagged GUARD_LOCATION, INCIDENT_LOCATION or SITE_GEOMETRY',
+    ).toEqual([]);
+    // The live snapshot carries guard positions and incident detail an incident's, so the checks
+    // can't pass by finding nothing.
     expect(found.guardLocation).toContain('GET /api/v1/dashboard/snapshot');
+    expect(found.guardLocation).toContain('GET /api/v1/sos/:id');
+    expect(found.incidentLocation).toContain('GET /api/v1/incidents/:id');
   });
 
   it('INV-12 the API refuses to mount a route that has no policy', async () => {

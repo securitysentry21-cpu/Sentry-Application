@@ -32,6 +32,13 @@ export type AlertRow = {
   dismissedAt: Date | null;
   dismissReason: string | null;
   detectedLate: boolean;
+  sosEventId: string | null;
+  incidentId: string | null;
+  isDrill: boolean;
+  drillId: string | null;
+  escalationLevel: number;
+  escalationStartedAt: Date | null;
+  nextEscalationAt: Date | null;
   version: number;
 };
 
@@ -45,6 +52,9 @@ function base(trx: Database, organizationId: string) {
       j.onRef('s.organization_id', '=', 'a.organization_id').onRef('s.id', '=', 'a.site_id'),
     )
     .leftJoin('users as u', 'u.id', 'a.acknowledged_by')
+    .leftJoin('sos_events as se', (j) =>
+      j.onRef('se.organization_id', '=', 'a.organization_id').onRef('se.id', '=', 'a.sos_event_id'),
+    )
     .where('a.organization_id', '=', organizationId)
     .select([
       'a.id',
@@ -73,6 +83,13 @@ function base(trx: Database, organizationId: string) {
       'a.dismissed_at',
       'a.dismiss_reason',
       'a.detected_late',
+      'a.sos_event_id',
+      'a.incident_id',
+      'a.is_drill',
+      'se.drill_id',
+      'a.escalation_level',
+      'a.escalation_started_at',
+      'a.next_escalation_at',
       'a.version',
     ]);
 }
@@ -107,6 +124,13 @@ function toRow(r: Raw): AlertRow {
     dismissedAt: r.dismissed_at,
     dismissReason: r.dismiss_reason,
     detectedLate: r.detected_late,
+    sosEventId: r.sos_event_id,
+    incidentId: r.incident_id,
+    isDrill: r.is_drill,
+    drillId: r.drill_id,
+    escalationLevel: r.escalation_level,
+    escalationStartedAt: r.escalation_started_at,
+    nextEscalationAt: r.next_escalation_at,
     version: r.version,
   };
 }
@@ -164,6 +188,13 @@ export async function alertsByIds(trx: Database, organizationId: string, ids: re
   return rows.map(toRow);
 }
 
+/** The alerts of these SOS events (one per SOS), for realtime events about them. */
+export async function alertsBySos(trx: Database, organizationId: string, sosEventIds: readonly string[]) {
+  if (sosEventIds.length === 0) return [];
+  const rows = await base(trx, organizationId).where('a.sos_event_id', 'in', sosEventIds).execute();
+  return rows.map(toRow);
+}
+
 export async function openShiftScopedAlerts(
   trx: Database,
   organizationId: string,
@@ -215,6 +246,11 @@ export async function insertAlert(
     details: Record<string, unknown>;
     at: Date;
     detectedLate: boolean;
+    sosEventId?: string | null;
+    incidentId?: string | null;
+    isDrill?: boolean;
+    /** The first escalation step's time when the alert escalates (PROD §11.4); null otherwise. */
+    nextEscalationAt?: Date | null;
   },
 ): Promise<boolean> {
   const row = await trx
@@ -234,6 +270,11 @@ export async function insertAlert(
       opened_at: a.at,
       last_triggered_at: a.at,
       detected_late: a.detectedLate,
+      sos_event_id: a.sosEventId ?? null,
+      incident_id: a.incidentId ?? null,
+      is_drill: a.isDrill ?? false,
+      escalation_started_at: a.nextEscalationAt ? a.at : null,
+      next_escalation_at: a.nextEscalationAt ?? null,
       created_at: a.at,
       updated_at: a.at,
     })
@@ -267,6 +308,9 @@ export async function updateAlert(
     dismissedAt?: Date | null;
     dismissReason?: string | null;
     details?: Record<string, unknown>;
+    escalationLevel?: number;
+    escalationStartedAt?: Date | null;
+    nextEscalationAt?: Date | null;
   },
   now: Date,
 ): Promise<void> {
@@ -286,6 +330,11 @@ export async function updateAlert(
       ...(changes.dismissedAt !== undefined ? { dismissed_at: changes.dismissedAt } : {}),
       ...(changes.dismissReason !== undefined ? { dismiss_reason: changes.dismissReason } : {}),
       ...(changes.details !== undefined ? { details: JSON.stringify(changes.details) } : {}),
+      ...(changes.escalationLevel !== undefined ? { escalation_level: changes.escalationLevel } : {}),
+      ...(changes.escalationStartedAt !== undefined
+        ? { escalation_started_at: changes.escalationStartedAt }
+        : {}),
+      ...(changes.nextEscalationAt !== undefined ? { next_escalation_at: changes.nextEscalationAt } : {}),
       version: eb('version', '+', 1),
       updated_at: now,
     }))
@@ -302,7 +351,10 @@ export type AlertEventType =
   | 'RESOLVED'
   | 'AUTO_RESOLVED'
   | 'DISMISSED'
-  | 'NOTE';
+  | 'NOTE'
+  | 'ESCALATED'
+  | 'SEEN'
+  | 'NOTIFIED';
 
 export async function insertAlertEvent(
   trx: Database,
@@ -430,4 +482,73 @@ export async function staleNotStartedAlerts(trx: Database, organizationId: strin
     .where((eb) => eb.or([eb('sh.status', '<>', 'SCHEDULED'), eb('sh.starts_at', '>', lateBefore)]))
     .select(['a.dedupe_key', 'sh.status as shift_status'])
     .execute();
+}
+
+/** Organizations with alerts due an escalation step (ARCH §13.3), found as system_worker. */
+export async function organizationsWithEscalationsDue(sweep: Database, now: Date): Promise<string[]> {
+  const rows = await sweep
+    .selectFrom('alerts')
+    .where('status', '=', 'OPEN')
+    .where('next_escalation_at', '<=', now)
+    .select('organization_id')
+    .distinct()
+    .execute();
+  return rows.map((r) => r.organization_id);
+}
+
+/** Alerts due a step, locked so two workers never send the same step. */
+export async function alertsDueEscalation(trx: Database, organizationId: string, now: Date, limit = 50) {
+  const ids = await trx
+    .selectFrom('alerts')
+    .where('organization_id', '=', organizationId)
+    .where('status', '=', 'OPEN')
+    .where('next_escalation_at', '<=', now)
+    .select('id')
+    .orderBy('next_escalation_at')
+    .limit(limit)
+    .forUpdate()
+    .skipLocked()
+    .execute();
+  return alertsByIds(
+    trx,
+    organizationId,
+    ids.map((r) => r.id),
+  );
+}
+
+/** Whether this user already sent a receipt of this kind for the alert (one per person). */
+export async function hasReceipt(
+  trx: Database,
+  organizationId: string,
+  alertId: string,
+  type: 'SEEN' | 'NOTIFIED',
+  userId: string,
+): Promise<boolean> {
+  const row = await trx
+    .selectFrom('alert_events')
+    .where('organization_id', '=', organizationId)
+    .where('alert_id', '=', alertId)
+    .where('type', '=', type)
+    .where('actor_user_id', '=', userId)
+    .select('id')
+    .executeTakeFirst();
+  return row !== undefined;
+}
+
+/** Display and delivery receipts for an alert: dashboards that showed it, people whose phones got it. */
+export async function receiptCounts(
+  trx: Database,
+  organizationId: string,
+  alertId: string,
+): Promise<{ shownOnDashboards: number; reachedPhones: number }> {
+  const rows = await trx
+    .selectFrom('alert_events')
+    .where('organization_id', '=', organizationId)
+    .where('alert_id', '=', alertId)
+    .where('type', 'in', ['SEEN', 'NOTIFIED'])
+    .select(['type', (eb) => eb.fn.count<string>('actor_user_id').distinct().as('people')])
+    .groupBy('type')
+    .execute();
+  const count = (t: string) => Number(rows.find((r) => r.type === t)?.people ?? 0);
+  return { shownOnDashboards: count('SEEN'), reachedPhones: count('NOTIFIED') };
 }

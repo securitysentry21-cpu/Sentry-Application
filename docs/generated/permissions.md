@@ -39,6 +39,7 @@ The role → permission map that implements PROD §3.2. Code checks these string
 | `incidents.acknowledge` | ✔ | ✔ | ✔ | ✔ | – | Acknowledge incidents |
 | `incidents.notes` | ✔ | ✔ | ✔ | ✔ | – | Add notes to incidents |
 | `incidents.notes.own` | – | – | – | – | ✔ | Add notes to own incidents |
+| `incidents.attachments.original` | ✔ | ✔ | – | – | – | Download original incident photos (audited; PROD §10.3) |
 | `alerts.read` | ✔ | ✔ | ✔ | ✔ | – | View alerts |
 | `alerts.acknowledge` | ✔ | ✔ | ✔ | ✔ | – | Acknowledge alerts |
 | `alerts.resolve` | ✔ | ✔ | ✔ | – | – | Resolve and dismiss alerts |

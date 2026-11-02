@@ -23,7 +23,10 @@ export const LIMITS: Readonly<Partial<Record<RateLimitClass, Readonly<Record<str
   },
   sync: { device: { max: 120, windowMs: MINUTE } },
   scan: { guard: { max: 60, windowMs: MINUTE } },
-  incident: { guard: { max: 20, windowMs: 60 * MINUTE } },
+  // Guards' incidents arrive through sync and are counted there (RETRY, nothing lost); dashboard
+  // users record theirs directly.
+  incident: { guard: { max: 20, windowMs: 60 * MINUTE }, user: { max: 120, windowMs: 60 * MINUTE } },
+  attachment: { guard: { max: 30, windowMs: 60 * MINUTE } },
   report: { user: { max: 30, windowMs: MINUTE } },
 };
 

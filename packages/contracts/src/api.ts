@@ -5,6 +5,7 @@ import { z } from 'zod';
 
 import { AUDIT_ACTIONS } from './audit.ts';
 import { PERMISSIONS, ROLES, type Permission } from './permissions.ts';
+import { phoneNumberSchema } from './settings.ts';
 
 const uuid = z.uuid();
 const instant = z.iso.datetime({ offset: true });
@@ -46,11 +47,16 @@ export const memberSchema = z.object({
   email: z.string().nullable(),
   role: z.enum(ROLES),
   status: z.enum(MEMBER_STATUSES),
+  /** Where this member's SOS texts go (PROD §11.4); set by an Owner or Administrator. */
+  alertPhone: z.string().nullable(),
   version: z.int(),
   createdAt: instant,
   updatedAt: instant,
 });
 export type Member = z.infer<typeof memberSchema>;
+
+/** Sets or clears a member's SOS text number (owner decision 2026-11-02; audited). */
+export const memberAlertPhoneRequestSchema = z.strictObject({ phone: phoneNumberSchema.nullable() });
 
 export const memberListResponseSchema = z.object({ members: z.array(memberSchema) });
 

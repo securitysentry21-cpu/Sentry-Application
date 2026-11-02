@@ -17,6 +17,7 @@ import {
   scanResultSchema,
   sosRequestSchema,
   syncItemSchema,
+  type Fix,
   type ScanResult,
   type SyncItem,
   type SyncItemStatus,
@@ -33,6 +34,26 @@ export const partitionKey = (p: Partition): string => `${p.organizationId}/${p.g
 
 export type Lane = 'MAIN' | 'SOS';
 export type SosRequest = z.infer<typeof sosRequestSchema>;
+
+/** What follows an SOS on its lane: a tracking point, or the guard's "I'm safe". */
+export type SosFollowUp =
+  | {
+      readonly type: 'SOS_LOCATION';
+      readonly clientEventId: string;
+      readonly sosClientEventId: string;
+      readonly recordedAt: string;
+      readonly monoMs: number;
+      readonly bootId: string;
+      readonly fix: Fix;
+    }
+  | {
+      readonly type: 'SOS_CANCEL';
+      readonly clientEventId: string;
+      readonly sosClientEventId: string;
+      readonly recordedAt: string;
+      readonly monoMs: number;
+      readonly bootId: string;
+    };
 export type OutboxItemType = SyncItem['type'] | 'SOS';
 
 /** Items whose outcome the guard sees ("Saved on this phone" → "Received by server"). */
@@ -40,6 +61,7 @@ const RECEIPT_TYPES: ReadonlySet<string> = new Set([
   'SHIFT_START',
   'SHIFT_END',
   'INCIDENT',
+  'INCIDENT_NOTE',
   'CHECKPOINT_SCAN',
   'SOS',
 ]);
@@ -50,6 +72,7 @@ export const PROTECTED_TYPES: ReadonlySet<string> = new Set([
   'SHIFT_END',
   'CHECKPOINT_SCAN',
   'INCIDENT',
+  'INCIDENT_NOTE',
   'SOS',
 ]);
 
@@ -73,6 +96,8 @@ export type Receipt = {
   serverRef: string | null;
   /** A checkpoint scan's outcome, as the server judged it (PROD §7.7); null until it answers. */
   scan: ScanResult | null;
+  /** An incident's reference (INC-000123), once the server stored it; its ID is `serverRef`. */
+  referenceNumber: string | null;
   createdAtMs: number;
   updatedAtMs: number;
 };
@@ -184,10 +209,21 @@ function toReceipt(row: ReceiptRow): Receipt {
     status: row.status,
     errorCode: row.error_code,
     serverRef: row.server_ref,
-    scan: parseScan(row.detail),
+    scan: row.type === 'CHECKPOINT_SCAN' ? parseScan(row.detail) : null,
+    referenceNumber: row.type === 'INCIDENT' ? parseReference(row.detail) : null,
     createdAtMs: row.created_at_ms,
     updatedAtMs: row.updated_at_ms,
   };
+}
+
+function parseReference(detail: string | null): string | null {
+  if (!detail) return null;
+  try {
+    const value = (JSON.parse(detail) as { referenceNumber?: unknown }).referenceNumber;
+    return typeof value === 'string' ? value : null;
+  } catch {
+    return null;
+  }
 }
 
 function parseScan(detail: string | null): ScanResult | null {
@@ -391,11 +427,17 @@ export class Outbox {
       status: SyncItemStatus;
       code?: string | undefined;
       scan?: ScanResult | undefined;
+      incident?: { id: string; referenceNumber: string } | undefined;
     }[],
   ): Promise<ItemOutcome[]> {
     const byId = new Map<
       string,
-      { status: SyncItemStatus; code?: string | undefined; scan?: ScanResult | undefined }
+      {
+        status: SyncItemStatus;
+        code?: string | undefined;
+        scan?: ScanResult | undefined;
+        incident?: { id: string; referenceNumber: string } | undefined;
+      }
     >();
     for (const r of results) if (!byId.has(r.clientEventId)) byId.set(r.clientEventId, r);
     const now = this.#now();
@@ -416,9 +458,16 @@ export class Outbox {
           );
         } else {
           await tx.run('DELETE FROM outbox WHERE seq = ?', [row.seq]);
+          // A scan keeps its outcome; an incident its server id (photos upload against it) and reference.
+          const detail = result?.scan
+            ? JSON.stringify(result.scan)
+            : result?.incident
+              ? JSON.stringify({ referenceNumber: result.incident.referenceNumber })
+              : null;
           await tx.run(
-            `UPDATE receipts SET status = ?, error_code = ?, detail = ?, updated_at_ms = ? WHERE client_event_id = ?`,
-            [status, errorCode, result?.scan ? JSON.stringify(result.scan) : null, now, row.client_event_id],
+            `UPDATE receipts SET status = ?, error_code = ?, detail = ?, server_ref = COALESCE(?, server_ref),
+               updated_at_ms = ? WHERE client_event_id = ?`,
+            [status, errorCode, detail, result?.incident?.id ?? null, now, row.client_event_id],
           );
         }
         outcomes.push({
@@ -447,10 +496,11 @@ export class Outbox {
 
   // ── SOS lane ───────────────────────────────────────────────────────────────────────────────
 
-  /** SOS items of this partition that are due, oldest first. */
+  /** SOS presses of this partition that are due, oldest first. */
   async dueSos(key: string, nowMs: number): Promise<QueuedSos[]> {
     const rows = await this.#db.all<OutboxRow>(
-      `SELECT * FROM outbox WHERE partition_key = ? AND lane = 'SOS' AND next_attempt_at_ms <= ? ORDER BY seq`,
+      `SELECT * FROM outbox WHERE partition_key = ? AND lane = 'SOS' AND type = 'SOS' AND next_attempt_at_ms <= ?
+       ORDER BY seq`,
       [key, nowMs],
     );
     return rows.map((row) => ({
@@ -474,6 +524,102 @@ export class Outbox {
        WHERE client_event_id = ? AND lane = 'SOS'`,
       [nextAttemptAtMs, error, clientEventId],
     );
+  }
+
+  /**
+   * An SOS tracking point or an "I'm safe" request (PROD §11.2, §11.8), queued in the SOS lane behind
+   * its SOS: it can only be sent once the server has that SOS (`sosClientEventId`).
+   */
+  async enqueueSosFollowUp(partition: Partition, item: SosFollowUp): Promise<void> {
+    const key = partitionKey(partition);
+    const now = this.#now();
+    await this.#db.run(
+      `INSERT INTO outbox (partition_key, lane, client_event_id, type, shift_id, payload, recorded_at_ms,
+         mono_ms, boot_id, created_at_ms, next_attempt_at_ms)
+       VALUES (?, 'SOS', ?, ?, NULL, ?, ?, ?, ?, ?, 0)`,
+      [
+        key,
+        item.clientEventId,
+        item.type,
+        JSON.stringify(item),
+        msFromIso(item.recordedAt),
+        item.monoMs,
+        item.bootId,
+        now,
+      ],
+    );
+  }
+
+  /** Follow-ups of one SOS that are due, oldest first. */
+  async dueSosFollowUps(
+    key: string,
+    sosClientEventId: string,
+    nowMs: number,
+    limit: number,
+  ): Promise<SosFollowUp[]> {
+    const rows = await this.#db.all<OutboxRow>(
+      `SELECT * FROM outbox WHERE partition_key = ? AND lane = 'SOS' AND type IN ('SOS_LOCATION', 'SOS_CANCEL')
+         AND next_attempt_at_ms <= ? ORDER BY seq LIMIT ?`,
+      [key, nowMs, limit * 4],
+    );
+    return rows
+      .map((row) => JSON.parse(row.payload) as SosFollowUp)
+      .filter((item) => item.sosClientEventId === sosClientEventId)
+      .slice(0, limit);
+  }
+
+  async pendingSosFollowUps(key: string): Promise<number> {
+    const row = await this.#db.get<{ n: number }>(
+      `SELECT COUNT(*) AS n FROM outbox WHERE partition_key = ? AND lane = 'SOS' AND type IN ('SOS_LOCATION', 'SOS_CANCEL')`,
+      [key],
+    );
+    return row?.n ?? 0;
+  }
+
+  /** The server answered these follow-ups (accepted, duplicate or refused for good): they leave the lane. */
+  async completeSosFollowUps(clientEventIds: readonly string[]): Promise<void> {
+    if (clientEventIds.length === 0) return;
+    await this.#db.transaction(async (tx) => {
+      for (const id of clientEventIds) {
+        await tx.run(`DELETE FROM outbox WHERE client_event_id = ? AND lane = 'SOS'`, [id]);
+      }
+    });
+  }
+
+  async rescheduleSosFollowUps(
+    clientEventIds: readonly string[],
+    nextAttemptAtMs: number,
+    error: string,
+  ): Promise<void> {
+    await this.#db.transaction(async (tx) => {
+      for (const id of clientEventIds) {
+        await tx.run(
+          `UPDATE outbox SET attempts = attempts + 1, next_attempt_at_ms = ?, last_error = ?
+           WHERE client_event_id = ? AND lane = 'SOS'`,
+          [nextAttemptAtMs, error, id],
+        );
+      }
+    });
+  }
+
+  /**
+   * The newest SOS the server confirmed, from its receipt: after the app restarts, the SOS screen and
+   * SOS tracking pick it up again (the server's answers say whether it is still open).
+   */
+  async latestReceivedSos(
+    key: string,
+    sinceMs: number,
+  ): Promise<{ clientEventId: string; sosEventId: string; createdAtMs: number } | null> {
+    const row = await this.#db.get<{ client_event_id: string; server_ref: string; created_at_ms: number }>(
+      `SELECT client_event_id, server_ref, created_at_ms FROM receipts
+       WHERE partition_key = ? AND type = 'SOS' AND status = 'ACCEPTED' AND server_ref IS NOT NULL
+         AND created_at_ms >= ?
+       ORDER BY created_at_ms DESC LIMIT 1`,
+      [key, sinceMs],
+    );
+    return row
+      ? { clientEventId: row.client_event_id, sosEventId: row.server_ref, createdAtMs: row.created_at_ms }
+      : null;
   }
 
   /** The server confirmed the SOS (RECEIVED): remove it from the lane, keep the receipt. */
@@ -515,7 +661,7 @@ export class Outbox {
     }>(
       `SELECT COUNT(*) AS pending,
               SUM(CASE WHEN lane = 'MAIN' THEN 1 ELSE 0 END) AS main,
-              SUM(CASE WHEN lane = 'SOS' THEN 1 ELSE 0 END) AS sos,
+              SUM(CASE WHEN lane = 'SOS' AND type = 'SOS' THEN 1 ELSE 0 END) AS sos,
               SUM(CASE WHEN batch_id IS NOT NULL THEN 1 ELSE 0 END) AS in_batch,
               MIN(recorded_at_ms) AS oldest
        FROM outbox ${where}`,

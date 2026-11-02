@@ -308,3 +308,21 @@ export async function organizationsWithStaleConnections(
      limit ${limit}`.execute(sweep);
   return rows.map((r) => r.organization_id);
 }
+
+/** The numbered event of this type naming this ID, if the dispatcher has moved it yet (the canary). */
+export async function realtimeEventFor(
+  trx: Database,
+  organizationId: string,
+  type: string,
+  key: string,
+  value: string,
+): Promise<number | null> {
+  const row = await trx
+    .selectFrom('realtime_events')
+    .where('organization_id', '=', organizationId)
+    .where('type', '=', type)
+    .where(sql<boolean>`payload ->> ${key} = ${value}`)
+    .select('seq')
+    .executeTakeFirst();
+  return row ? Number(row.seq) : null;
+}

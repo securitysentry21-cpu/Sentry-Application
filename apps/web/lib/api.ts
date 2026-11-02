@@ -42,7 +42,11 @@ export function notifySignedOut(): void {
   for (const listener of signedOutListeners) listener();
 }
 
-type Options = { method?: 'GET' | 'POST' | 'PATCH' | 'DELETE'; body?: unknown; organization?: string | null };
+type Options = {
+  method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
+  body?: unknown;
+  organization?: string | null;
+};
 
 export async function api<T>(path: string, options: Options = {}): Promise<T> {
   const headers: Record<string, string> = { 'x-sentry-csrf': '1', accept: 'application/json' };

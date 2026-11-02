@@ -61,7 +61,7 @@ export const ANDROID_PERMISSIONS = [
   'android.permission.FOREGROUND_SERVICE_LOCATION', // its declared type (Android 14+, EXT-31)
   'android.permission.POST_NOTIFICATIONS', // the persistent tracking notification (Android 13+)
   'android.permission.RECEIVE_BOOT_COMPLETED', // lets the task manager restore an active shift's updates after a reboot
-  'android.permission.CAMERA', // QR codes: enrollment now, patrol checkpoints in Phase 7
+  'android.permission.CAMERA', // QR codes (enrollment, patrol checkpoints) and incident photos (PROD §7.8)
   'android.permission.VIBRATE', // haptic feedback on critical actions and the SOS hold (PROD §7.1, §11.1)
   'android.permission.ACCESS_NETWORK_STATE', // expo-network: upload when the network returns (never proof of delivery)
   // android.permission.INTERNET comes from React Native itself.
@@ -81,9 +81,9 @@ export const BLOCKED_ANDROID_PERMISSIONS = [
   'android.permission.SEND_SMS', // EXT-34: the SMS fallback opens the composer
   'android.permission.RECEIVE_SMS',
   'android.permission.READ_SMS',
-  'android.permission.READ_EXTERNAL_STORAGE', // added by expo-file-system; the app uses private storage only
+  'android.permission.READ_EXTERNAL_STORAGE', // added by expo-file-system and expo-image-picker; private storage only
   'android.permission.WRITE_EXTERNAL_STORAGE',
-  'android.permission.READ_MEDIA_IMAGES',
+  'android.permission.READ_MEDIA_IMAGES', // gallery photos come through the system photo picker, which needs none (D-18)
   'android.permission.READ_MEDIA_VIDEO',
   'android.permission.READ_MEDIA_AUDIO',
   'android.permission.ACCESS_MEDIA_LOCATION',
@@ -109,7 +109,9 @@ const IOS_USAGE = {
     'SENTRY uses your location during your security shift to confirm you are at your assigned site and to help your control room in an emergency.',
   always:
     "SENTRY shares your location with your security company's control room while your shift is active, including when the screen is locked. Tracking stops when your shift ends.",
-  camera: 'SENTRY uses the camera only to scan QR codes: your enrollment code and patrol checkpoint labels.',
+  camera:
+    'SENTRY uses the camera to scan QR codes (your enrollment code and patrol checkpoint labels) and to take the photos you add to an incident report.',
+  photos: 'SENTRY opens your photos only when you choose one to add to an incident report.',
   temporaryFullAccuracy: 'SENTRY needs your precise location to confirm this patrol checkpoint scan.',
 };
 
@@ -226,6 +228,15 @@ export function buildConfig(
           microphonePermission: false,
           recordAudioAndroid: false,
           barcodeScannerEnabled: true,
+        },
+      ],
+      [
+        // D-18: gallery photos through the system photo picker only; the in-app camera is expo-camera's.
+        'expo-image-picker',
+        {
+          photosPermission: IOS_USAGE.photos,
+          cameraPermission: IOS_USAGE.camera,
+          microphonePermission: false,
         },
       ],
       ['expo-secure-store', { faceIDPermission: false, configureAndroidBackup: true }],

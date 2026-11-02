@@ -14,6 +14,11 @@ terraform {
       source  = "hashicorp/random"
       version = "~> 3.6"
     }
+    # The VAPID key pair for Web Push (notifications.tf).
+    tls = {
+      source  = "hashicorp/tls"
+      version = "~> 4.0"
+    }
   }
 
   # State in S3 with native locking. infra/scripts/bootstrap-state.sh creates the bucket and writes

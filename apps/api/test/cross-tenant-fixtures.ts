@@ -165,4 +165,80 @@ export const CROSS_TENANT_FIXTURES: Readonly<Record<string, Coverage>> = {
     covered: 'test',
     test: "reports.test.ts: another organization's shifts never appear; its site is not found",
   },
+
+  // Phase 8
+  'PUT /api/v1/members/:id/alert-phone': T01,
+  'GET /api/v1/incidents': {
+    covered: 'test',
+    test: "incidents.test.ts: the list never holds another organization's incidents",
+  },
+  'POST /api/v1/incidents': T09,
+  'GET /api/v1/incidents/:id': T01,
+  'PATCH /api/v1/incidents/:id': T01,
+  'POST /api/v1/incidents/:id/notes': T01,
+  'POST /api/v1/incidents/:id/acknowledge': T01,
+  'POST /api/v1/incidents/:id/resolve': T01,
+  'POST /api/v1/incidents/:id/reopen': T01,
+  'POST /api/v1/incidents/:id/attachments': {
+    covered: 'test',
+    test: "attachments.test.ts › ADV-T10 (another guard's or organization's incident is not found)",
+  },
+  'POST /api/v1/attachments/:id/complete': {
+    covered: 'test',
+    test: "attachments.test.ts › ADV-T10 (another guard's photo is not found)",
+  },
+  'GET /api/v1/attachments/:id/url': T01,
+  'GET /api/v1/attachments/:id/original-url': T01,
+  'GET /api/v1/me/incidents': {
+    covered: 'test',
+    test: "incidents.test.ts › ADV-A03 (only the guard's own reports)",
+  },
+  'PUT /api/v1/local-objects/:token': {
+    covered: 'test',
+    test: 'attachments.test.ts › ADV-F03 (a guessed or altered link is refused)',
+  },
+  'GET /api/v1/local-objects/:token': {
+    covered: 'test',
+    test: 'attachments.test.ts › ADV-F03, F04 (a guessed, altered or expired link is refused)',
+  },
+  'POST /api/v1/sos': {
+    covered: 'test',
+    test: "sos.test.ts: the SOS lands in the phone's own organization, from its session or its device key",
+  },
+  'GET /api/v1/sos/:id/status': {
+    covered: 'test',
+    test: "sos.test.ts › ADV-A03 (another guard's SOS is not found)",
+  },
+  'POST /api/v1/sos/:id/locations': {
+    covered: 'test',
+    test: "sos.test.ts › ADV-A03 (another guard's SOS is not found)",
+  },
+  'POST /api/v1/sos/:id/cancel-request': {
+    covered: 'test',
+    test: "sos.test.ts › ADV-A03 (another guard's SOS is not found)",
+  },
+  'GET /api/v1/sos/:id': T01,
+  'POST /api/v1/sos/:id/acknowledge': T01,
+  'POST /api/v1/sos/:id/resolve': T01,
+  'GET /api/v1/sos-drills/current': T09,
+  'POST /api/v1/sos-drills': {
+    covered: 'test',
+    test: "sos.test.ts › ADV-S10 (another organization's guard or member is not found)",
+  },
+  'GET /api/v1/sos-drills/:id': T01,
+  'POST /api/v1/sos-drills/:id/end': T01,
+  'GET /api/v1/push/config': { covered: 'no-tenant-data', reason: "the environment's public Web Push key" },
+  'POST /api/v1/push-subscriptions': T09,
+  'GET /api/v1/push-subscriptions': {
+    covered: 'test',
+    test: "notifications.test.ts: only the member's own browsers in this organization",
+  },
+  'DELETE /api/v1/push-subscriptions/:id': T01,
+  'POST /api/v1/notifications/test': T09,
+  'POST /api/v1/alerts/:id/seen': T01,
+  'POST /api/v1/alerts/:id/delivered': T01,
+  'POST /api/v1/me/push-token': {
+    covered: 'test',
+    test: "notifications.test.ts: the token goes on the caller's own phone",
+  },
 };

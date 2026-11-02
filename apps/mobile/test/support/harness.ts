@@ -8,7 +8,15 @@ import { GuardApp } from '../../src/core/app.ts';
 import type { Scheduler } from '../../src/core/sos/lane.ts';
 import type { SqlDatabase } from '../../src/core/storage/sql.ts';
 import { ManualClocks } from '../../src/core/time.ts';
-import { capturingLogger, cryptoRandom, FakeDevice, FakeLocation, fixAt, MemoryKV } from './fakes.ts';
+import {
+  capturingLogger,
+  cryptoRandom,
+  FakeDevice,
+  FakeLocation,
+  FakePhotos,
+  fixAt,
+  MemoryKV,
+} from './fakes.ts';
 import { FakeServer, GUARD_A, SHIFT_1, testShift } from './fake-server.ts';
 import { fileDatabase, memoryDatabase } from './sqlite.ts';
 
@@ -34,6 +42,7 @@ export type Harness = {
   kv: MemoryKV;
   location: FakeLocation;
   device: FakeDevice;
+  photos: FakePhotos;
   scheduler: ManualScheduler;
   lines: ReturnType<typeof capturingLogger>['lines'];
   dbPath: string | null;
@@ -59,6 +68,7 @@ export async function makeApp(options: HarnessOptions = {}): Promise<Harness> {
   const kv = options.kv ?? new MemoryKV();
   const location = options.location ?? new FakeLocation();
   const device = options.device ?? new FakeDevice();
+  const photos = new FakePhotos();
   const scheduler = new ManualScheduler();
   const { logger, lines } = capturingLogger();
   const dbPath = options.dbPath ?? null;
@@ -69,6 +79,7 @@ export async function makeApp(options: HarnessOptions = {}): Promise<Harness> {
     transport: server.transport,
     location,
     device,
+    photos,
     runtime: { variant: 'development', apiBaseUrl: 'http://10.0.2.2:4000' },
     appVersion: '0.1.0',
     clocks,
@@ -78,7 +89,7 @@ export async function makeApp(options: HarnessOptions = {}): Promise<Harness> {
     schedule: scheduler.schedule,
   });
   await app.start();
-  return { app, server, clocks, kv, location, device, scheduler, lines, dbPath };
+  return { app, server, clocks, kv, location, device, photos, scheduler, lines, dbPath };
 }
 
 /** Language chosen, phone enrolled, disclosure accepted, today's shift known: ready to start. */

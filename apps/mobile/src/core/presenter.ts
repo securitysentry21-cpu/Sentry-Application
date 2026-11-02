@@ -6,7 +6,7 @@ import { errorMessageKey } from './i18n/index.ts';
 import { formatAgo, formatDuration } from './i18n/format.ts';
 import type { Receipt } from './outbox/outbox.ts';
 import type { LocalShift } from './shift/local-shift.ts';
-import type { SosState } from './sos/machine.ts';
+import { sosDisplay, type SosState } from './sos/machine.ts';
 import type { SyncDisplay } from './status.ts';
 import type { TrackingView } from './app.ts';
 
@@ -153,15 +153,41 @@ export function scanProgress(receipt: Receipt | null, t: Translate): string | nu
 }
 
 /** Only the server's answer moves the SOS beyond "waiting for network" (INV-10). */
-export function sosLine(sos: SosState, t: Translate): Line {
-  switch (sos.phase) {
+/**
+ * The SOS line (PROD §11.3): the transport phase until the server has the SOS, then exactly the
+ * server's latest answer (INV-10). `formatTime` shows the acknowledgement in the guard's zone.
+ */
+export function sosLine(
+  sos: SosState,
+  t: Translate,
+  formatTime: (iso: string) => string = (iso) => iso,
+): Line {
+  const display = sosDisplay(sos);
+  const server = sos.server;
+  switch (display) {
     case 'QUEUED':
       return { text: t('sos.QUEUED'), tone: 'danger' };
     case 'SENDING':
       return { text: t('sos.SENDING'), tone: 'warning' };
-    case 'RECEIVED':
-      return { text: t('sos.RECEIVED'), tone: 'ok' };
     case 'FAILED':
       return { text: t('sos.FAILED'), tone: 'danger' };
+    case 'RECEIVED':
+      return { text: t('sos.RECEIVED'), tone: 'warning' };
+    case 'ALERT_SENT':
+      return { text: t('sos.ALERT_SENT', { count: String(server?.alertSentTo ?? 0) }), tone: 'warning' };
+    case 'NOTIFIED':
+      return server?.shownInControlRoom
+        ? { text: t('sos.NOTIFIED.controlRoom'), tone: 'ok' }
+        : { text: t('sos.NOTIFIED.phones', { count: String(server?.reachedPhones ?? 0) }), tone: 'ok' };
+    case 'ACKNOWLEDGED':
+      return {
+        text: t('sos.ACKNOWLEDGED', {
+          name: server?.acknowledgedBy ?? '',
+          time: server?.acknowledgedAt ? formatTime(server.acknowledgedAt) : '',
+        }),
+        tone: 'ok',
+      };
+    case 'RESOLVED':
+      return { text: t('sos.RESOLVED'), tone: 'ok' };
   }
 }

@@ -1,18 +1,72 @@
 'use client';
 
-// Home, exceptions first (PROD §14.2): who is on duty and how their phones are reporting, how many
-// dashboards are watching (PROD §11.5), then the active alerts, most severe first. Every number
-// opens the matching list. Live through the realtime stream; freshness ticks against server time.
-// Each section appears only with its permission; the server decides.
+// Home, exceptions first (PROD §14.2): an SOS banner at the top until someone acknowledges it, who
+// is on duty and how their phones are reporting, open incidents, how many dashboards are watching
+// (PROD §11.5), then the active alerts, most severe first. Every number opens the matching list.
+// Live through the realtime stream; freshness ticks against server time. A drill is marked DRILL and
+// alarms only its participants (ADV-S10). Each section appears only with its permission; the server
+// decides.
+import type { Alert } from '@sentryops/contracts';
 import Link from 'next/link';
+import { useState } from 'react';
 
+import { useAlarms } from '../../../components/alarm';
 import { PageHead } from '../../../components/shell';
+import { alarmPath } from '../../../lib/alarm';
+import { errorText } from '../../../lib/api';
 import { formatRelative, ROLE_LABELS } from '../../../lib/format';
 import { useLive } from '../../../lib/live';
 import { alertsBySeverity, guardView, homeCounts } from '../../../lib/live-model';
 import { useSession } from '../../../lib/session';
 
 const SEVERITY_BADGE = { CRITICAL: 'danger', HIGH: 'danger', MEDIUM: 'warn', LOW: 'info' } as const;
+
+/** PROD §14.2: "SOS — Ahmed Khan — ABC Warehouse — 40 s ago [ACKNOWLEDGE]", until acknowledged. */
+function SosBanners({ now }: { now: Date }) {
+  const { alarms, acknowledge } = useAlarms();
+  const { can } = useSession();
+  const [busy, setBusy] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const sos = alarms.filter((a) => a.type === 'SOS_ACTIVATED');
+  if (sos.length === 0) return null;
+  const onAcknowledge = (alert: Alert) => {
+    setBusy(alert.id);
+    setError(null);
+    void acknowledge(alert)
+      .catch((e: unknown) => setError(errorText(e)))
+      .finally(() => setBusy(null));
+  };
+  return (
+    <>
+      {sos.map((a) => (
+        <div className="banner error sos-banner" role="alert" key={a.id}>
+          <span>
+            {a.isDrill ? <span className="badge drill">DRILL</span> : null} <strong>SOS</strong> —{' '}
+            {a.guard?.displayName ?? 'Guard'} — {a.site?.name ?? 'off shift'} —{' '}
+            {formatRelative(a.openedAt, now)}
+            {a.triggerCount > 1 ? ` · pressed again ×${a.triggerCount - 1}` : ''}
+          </span>
+          <span className="row">
+            {can('alerts.acknowledge') ? (
+              <button
+                type="button"
+                className="btn primary small"
+                disabled={busy === a.id}
+                onClick={() => onAcknowledge(a)}
+              >
+                {busy === a.id ? 'Acknowledging…' : 'Acknowledge'}
+              </button>
+            ) : null}
+            <Link className="btn small" href={alarmPath(a)}>
+              Open SOS
+            </Link>
+          </span>
+        </div>
+      ))}
+      {error ? <div className="banner error">{error}</div> : null}
+    </>
+  );
+}
 
 export default function DashboardPage() {
   const { me, membership, can } = useSession();
@@ -23,7 +77,8 @@ export default function DashboardPage() {
   const views = model ? [...model.guards.values()].map((g) => guardView(g, now, model.freshness)) : [];
   const counts = homeCounts(views);
   const alerts = model ? alertsBySeverity(model.alerts.values()) : [];
-  const critical = alerts.filter((a) => a.severity === 'CRITICAL').length;
+  // An SOS has its own banner above; this one counts the other critical alerts.
+  const critical = alerts.filter((a) => a.severity === 'CRITICAL' && a.type !== 'SOS_ACTIVATED').length;
   const watching = model ? model.coverage.desktop + model.coverage.phone : 0;
   const value = (n: number) => (model ? n : '–');
 
@@ -39,10 +94,21 @@ export default function DashboardPage() {
       href: can('shifts.read') ? '/shifts' : '/dashboard',
       tone: 'warn',
     },
+    ...(can('incidents.read')
+      ? [
+          {
+            label: 'open incidents',
+            value: model?.openIncidents ?? 0,
+            href: '/incidents',
+            tone: 'warn' as const,
+          },
+        ]
+      : []),
   ];
 
   return (
     <>
+      <SosBanners now={now} />
       <PageHead
         title={membership.organizationName}
         description={`Welcome, ${me.user.name}. You are signed in as ${ROLE_LABELS[membership.role] ?? membership.role}.`}
@@ -108,9 +174,16 @@ export default function DashboardPage() {
                       <td>
                         <span className={`badge ${SEVERITY_BADGE[a.severity]}`}>
                           {a.severity.toLowerCase()}
-                        </span>
+                        </span>{' '}
+                        {a.isDrill ? <span className="badge drill">DRILL</span> : null}
                       </td>
-                      <td>{a.summary}</td>
+                      <td>
+                        {a.sosEventId || a.incidentId ? (
+                          <Link href={alarmPath(a)}>{a.summary}</Link>
+                        ) : (
+                          a.summary
+                        )}
+                      </td>
                       <td className="faint" title={a.openedAt}>
                         {formatRelative(a.openedAt, now)}
                       </td>

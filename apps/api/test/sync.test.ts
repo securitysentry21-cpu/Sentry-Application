@@ -254,6 +254,16 @@ describe('sync batch (ARCH §9)', () => {
 
   it('ADV-X06 every offline item type: a duplicate has one effect and the same result', async () => {
     const { phone, shiftId } = await onShift();
+    const report = item('INCIDENT', {
+      shiftId,
+      incident: {
+        type: 'THEFT',
+        severity: 'LOW',
+        description: 'Gate padlock missing',
+        occurredAt: t.clock.now().toISOString(),
+      },
+      fix: { ...AT_SITE, fixAgeS: 2 },
+    });
     const items: Item[] = [
       item('LOCATION', { shiftId, fix: AT_SITE }),
       item('HEARTBEAT', { shiftId }),
@@ -267,20 +277,52 @@ describe('sync batch (ARCH §9)', () => {
           batteryPct: 64,
         },
       }),
+      report,
+      item('INCIDENT_NOTE', { shiftId, incidentClientEventId: report.clientEventId, body: 'Found it open' }),
       item('SHIFT_END', { shiftId, fix: AT_SITE }),
     ];
+    const typesCovered = new Set(items.map((i) => i.type));
+    // Every main-lane type but the ones with their own idempotency tests (start: ADV-SH, scans: ADV-Q04).
+    for (const type of syncItemSchema.options.map((o) => o.shape.type.value)) {
+      if (type !== 'SHIFT_START' && type !== 'CHECKPOINT_SCAN') expect(typesCovered, type).toContain(type);
+    }
     const first = await send(phone, items);
-    expect(first.results.map((r) => r.status)).toEqual(['ACCEPTED', 'ACCEPTED', 'ACCEPTED', 'ACCEPTED']);
+    expect(first.results.map((r) => r.status)).toEqual([
+      'ACCEPTED',
+      'ACCEPTED',
+      'ACCEPTED',
+      'ACCEPTED',
+      'ACCEPTED',
+      'ACCEPTED',
+    ]);
     const again = await send(phone, items);
     // Heartbeats carry no record of their own; every other type reports DUPLICATE on a resubmit.
-    expect(again.results.map((r) => r.status)).toEqual(['DUPLICATE', 'ACCEPTED', 'DUPLICATE', 'DUPLICATE']);
+    expect(again.results.map((r) => r.status)).toEqual([
+      'DUPLICATE',
+      'ACCEPTED',
+      'DUPLICATE',
+      'DUPLICATE',
+      'DUPLICATE',
+      'DUPLICATE',
+    ]);
+    const reference = (r: { incident?: { referenceNumber: string } } | undefined) =>
+      r?.incident?.referenceNumber;
+    expect(reference(again.results[3] as never)).toBe(reference(first.results[3] as never));
     const counts = await asOwner(t.db, async (c) => ({
       points: (await c.query('select 1 from location_points where shift_id = $1', [shiftId])).rowCount,
       statuses: (await c.query('select 1 from device_status_events where shift_id = $1', [shiftId])).rowCount,
       ends: (await c.query(`select 1 from shift_events where shift_id = $1 and type = 'ENDED'`, [shiftId]))
         .rowCount,
+      incidents: (await c.query('select 1 from incidents where shift_id = $1', [shiftId])).rowCount,
+      notes: (
+        await c.query(
+          `select 1 from incident_events e join incidents i on i.id = e.incident_id
+            where i.shift_id = $1 and e.type = 'NOTE_ADDED'`,
+          [shiftId],
+        )
+      ).rowCount,
     }));
-    expect(counts).toEqual({ points: 1, statuses: 1, ends: 1 });
+    expect(counts).toEqual({ points: 1, statuses: 1, ends: 1, incidents: 1, notes: 1 });
   });
 
   it('ADV-O09 one item that triggers a server error is quarantined; the rest of the batch is accepted', async () => {

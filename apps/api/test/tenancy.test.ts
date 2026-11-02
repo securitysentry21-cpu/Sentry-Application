@@ -34,6 +34,11 @@ const B = {
   alert: randomUUID(),
   route: randomUUID(),
   run: randomUUID(),
+  sos: randomUUID(),
+  incident: randomUUID(),
+  attachment: randomUUID(),
+  drill: randomUUID(),
+  subscription: randomUUID(),
 };
 
 async function seedBResources(): Promise<void> {
@@ -81,6 +86,41 @@ async function seedBResources(): Promise<void> {
        due_at, window_ends_at, required_count)
      values ($1, $2, $3, $4, $5, $6, 1, now(), now() + interval '20 minutes', 1)`,
     [B.run, orgB.id, B.shift, B.guard, B.site, B.route],
+  );
+  const bAdmin = orgB.members['admin@b.test'];
+  await seedB(
+    `insert into sos_drills (id, organization_id, started_by_user_id, started_at, ends_at)
+     values ($1, $2, $3, now(), now() + interval '1 hour')`,
+    [B.drill, orgB.id, bAdmin?.userId],
+  );
+  await seedB(
+    `insert into sos_events (id, organization_id, guard_id, device_id, client_event_id, activated_at_recorded,
+       activated_at, received_at, clock_status, last_triggered_at)
+     values ($1, $2, $3, $4, $5, now(), now(), now(), 'VERIFIED_MONOTONIC', now())`,
+    [B.sos, orgB.id, B.guard, B.device, randomUUID()],
+  );
+  await seedB(
+    `insert into incidents (id, organization_id, reference_number, reported_by_user_id, type, severity, title,
+       occurred_at, reported_at, received_at)
+     values ($1, $2, 1, $3, 'THEFT', 'LOW', 'Bravo theft', now(), now(), now())`,
+    [B.incident, orgB.id, bAdmin?.userId],
+  );
+  await seedB(
+    `insert into incident_attachments (id, organization_id, incident_id, client_event_id, capture_source,
+       declared_type, declared_size, original_key, view_key, status, completed_at, upload_expires_at)
+     values ($1, $2, $3, $4, 'IN_APP_CAMERA', 'image/jpeg', 100, 'o', 'v', 'AVAILABLE', now(), now())`,
+    [B.attachment, orgB.id, B.incident, randomUUID()],
+  );
+  await seedB(
+    `insert into web_push_subscriptions (id, organization_id, member_id, user_id, endpoint, p256dh, auth, client)
+     values ($1, $2, $3, $4, $5, repeat('B', 87), repeat('A', 22), 'DESKTOP')`,
+    [
+      B.subscription,
+      orgB.id,
+      bAdmin?.memberId,
+      bAdmin?.userId,
+      `https://fcm.googleapis.com/fcm/send/${B.subscription}`,
+    ],
   );
 }
 
@@ -146,6 +186,32 @@ const CROSS_TENANT_RESOURCES: Record<string, Probe> = {
   'POST /api/v1/alerts/:id/dismiss': { id: fixed(() => B.alert), body: { reason: 'x' } },
   'POST /api/v1/shifts/:id/start': { guardOnly: 'shifts.test.ts › ADV-A03' },
   'POST /api/v1/shifts/:id/end': { guardOnly: 'shifts.test.ts › ADV-A03' },
+  // Phase 8
+  'PUT /api/v1/members/:id/alert-phone': {
+    id: fixed(() => orgB.members['admin@b.test']?.memberId ?? ''),
+    body: { phone: '+923001112223' },
+  },
+  'GET /api/v1/incidents/:id': { id: fixed(() => B.incident) },
+  'PATCH /api/v1/incidents/:id': { id: fixed(() => B.incident), body: { version: 1, severity: 'HIGH' } },
+  'POST /api/v1/incidents/:id/notes': { id: fixed(() => B.incident), body: { body: 'x' } },
+  'POST /api/v1/incidents/:id/acknowledge': { id: fixed(() => B.incident) },
+  'POST /api/v1/incidents/:id/resolve': { id: fixed(() => B.incident), body: { note: 'x' } },
+  'POST /api/v1/incidents/:id/reopen': { id: fixed(() => B.incident), body: { reason: 'x' } },
+  'POST /api/v1/incidents/:id/attachments': { guardOnly: 'attachments.test.ts › ADV-T10' },
+  'POST /api/v1/attachments/:id/complete': { guardOnly: 'attachments.test.ts › ADV-T10' },
+  'GET /api/v1/attachments/:id/url': { id: fixed(() => B.attachment) },
+  'GET /api/v1/attachments/:id/original-url': { id: fixed(() => B.attachment) },
+  'GET /api/v1/sos/:id/status': { guardOnly: 'sos.test.ts › ADV-A03' },
+  'POST /api/v1/sos/:id/locations': { guardOnly: 'sos.test.ts › ADV-A03' },
+  'POST /api/v1/sos/:id/cancel-request': { guardOnly: 'sos.test.ts › ADV-A03' },
+  'GET /api/v1/sos/:id': { id: fixed(() => B.sos) },
+  'POST /api/v1/sos/:id/acknowledge': { id: fixed(() => B.sos) },
+  'POST /api/v1/sos/:id/resolve': { id: fixed(() => B.sos), body: { resolution: 'OTHER', note: 'x' } },
+  'GET /api/v1/sos-drills/:id': { id: fixed(() => B.drill) },
+  'POST /api/v1/sos-drills/:id/end': { id: fixed(() => B.drill) },
+  'DELETE /api/v1/push-subscriptions/:id': { id: fixed(() => B.subscription) },
+  'POST /api/v1/alerts/:id/seen': { id: fixed(() => B.alert), body: { client: 'DESKTOP' } },
+  'POST /api/v1/alerts/:id/delivered': { id: fixed(() => B.alert), body: { deliveryId: randomUUID() } },
 };
 beforeAll(async () => {
   t = await startTestApp();

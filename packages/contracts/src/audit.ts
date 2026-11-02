@@ -9,6 +9,7 @@ export const AUDIT_ACTIONS = [
   'MEMBER_DISABLED',
   'MEMBER_ENABLED',
   'MEMBER_REMOVED',
+  'MEMBER_PHONE_CHANGED',
   'USER_DISABLED',
   // Guards & devices
   'GUARD_CREATED',

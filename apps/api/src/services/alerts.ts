@@ -21,6 +21,7 @@ import {
 import type { AppDeps } from '../deps.ts';
 import { uuidv7 } from '../ids.ts';
 import {
+  getAlert,
   insertAlert,
   insertAlertEvent,
   lastClosedByKey,
@@ -33,6 +34,7 @@ import {
 import { numberSetting, organizationSettings } from '../repositories/organizations.ts';
 import type { ShiftRow } from '../repositories/shifts.ts';
 import { lastGoodReportAt } from '../repositories/tracking.ts';
+import { firstEscalationAt, queueAlertStep } from './notifications.ts';
 import { publish } from './realtime.ts';
 
 export type AlertIntent = {
@@ -46,6 +48,10 @@ export type AlertIntent = {
   /** When the condition started (ensure): an episode closed by a person after this stays closed. */
   readonly since?: Date;
   readonly detectedLate?: boolean;
+  readonly sosEventId?: string | null;
+  readonly incidentId?: string | null;
+  /** A drill (PROD §11.10): its notifications reach only the drill's participants. */
+  readonly isDrill?: boolean;
 };
 
 export type RaiseOutcome = { alertId: string; outcome: 'OPENED' | 'RETRIGGERED' | 'REOPENED' | 'UNCHANGED' };
@@ -68,7 +74,7 @@ async function apply(
     if (open) {
       if (mode === 'ensure') return { alertId: open.id, outcome: 'UNCHANGED' };
       await updateAlert(trx, organizationId, open.id, { lastTriggeredAt: now, incrementTrigger: true }, now);
-      await event(trx, deps, organizationId, open.id, 'RETRIGGERED', null, intent.details);
+      await alertEvent(trx, deps, organizationId, open.id, 'RETRIGGERED', null, intent.details);
       return { alertId: open.id, outcome: 'RETRIGGERED' };
     }
     const last = await lastClosedByKey(trx, organizationId, intent.dedupeKey);
@@ -83,31 +89,42 @@ async function apply(
         closedAt &&
         now.getTime() - closedAt.getTime() <= suppressionMs
       ) {
+        const settings = await organizationSettings(trx, organizationId);
+        const status = last.acknowledgedAt ? 'ACKNOWLEDGED' : 'OPEN';
+        const nextEscalationAt = status === 'OPEN' ? firstEscalationAt(last, settings, now) : null;
         await updateAlert(
           trx,
           organizationId,
           last.id,
           {
-            status: last.acknowledgedAt ? 'ACKNOWLEDGED' : 'OPEN',
+            status,
             resolvedAt: null,
             resolvedBy: null,
             resolutionType: null,
             resolutionNote: null,
             lastTriggeredAt: now,
             incrementTrigger: true,
+            escalationLevel: 0,
+            escalationStartedAt: nextEscalationAt ? now : null,
+            nextEscalationAt,
           },
           now,
         );
-        await event(trx, deps, organizationId, last.id, 'REOPENED', null, intent.details);
+        await alertEvent(trx, deps, organizationId, last.id, 'REOPENED', null, intent.details);
+        // A reopened alert alarms like a new one (PROD §12.3), unless someone is already on it.
+        const reopened = status === 'OPEN' ? await getAlert(trx, organizationId, last.id) : null;
+        if (reopened) await queueAlertStep(trx, deps, organizationId, reopened, 0, 'REOPENED');
         return { alertId: last.id, outcome: 'REOPENED' };
       }
     }
     const id = uuidv7(deps.clock);
+    const severity = ALERT_TYPES[intent.type].severity;
+    const settings = await organizationSettings(trx, organizationId);
     const inserted = await insertAlert(trx, {
       id,
       organizationId,
       type: intent.type,
-      severity: ALERT_TYPES[intent.type].severity,
+      severity,
       dedupeKey: intent.dedupeKey,
       summary: intent.summary,
       guardId: intent.guardId ?? null,
@@ -116,10 +133,17 @@ async function apply(
       details: intent.details ?? {},
       at: now,
       detectedLate: intent.detectedLate ?? false,
+      sosEventId: intent.sosEventId ?? null,
+      incidentId: intent.incidentId ?? null,
+      isDrill: intent.isDrill ?? false,
+      nextEscalationAt: firstEscalationAt({ type: intent.type, severity }, settings, now),
     });
     if (inserted) {
-      await event(trx, deps, organizationId, id, 'OPENED', null, intent.details);
+      await alertEvent(trx, deps, organizationId, id, 'OPENED', null, intent.details);
       deps.metrics.increment(`alert_opened_${intent.type.toLowerCase()}`);
+      // The first step goes in this transaction; the worker sends it (ARCH §13.1: never inline).
+      const opened = await getAlert(trx, organizationId, id);
+      if (opened) await queueAlertStep(trx, deps, organizationId, opened, 0, 'OPENED');
       return { alertId: id, outcome: 'OPENED' };
     }
     // Lost a race with a concurrent opener: go round again and count on theirs.
@@ -182,11 +206,12 @@ async function systemResolve(
       resolvedAt: now,
       resolvedBy: null,
       resolutionType: resolution,
+      nextEscalationAt: null,
       ...(details ? { details: { ...alert.details, ...details } } : {}),
     },
     now,
   );
-  await event(trx, deps, organizationId, alert.id, 'AUTO_RESOLVED', null, { resolution, ...details });
+  await alertEvent(trx, deps, organizationId, alert.id, 'AUTO_RESOLVED', null, { resolution, ...details });
 }
 
 /** PROD §12.4: a shift's condition alerts resolve as "shift ended" when it ends. */
@@ -201,7 +226,8 @@ export async function resolveShiftAlerts(
   return open.length;
 }
 
-async function event(
+/** Records an alert event and tells the dashboards; a reopened alert alarms like a new one. */
+export async function alertEvent(
   trx: Database,
   deps: AppDeps,
   organizationId: string,
@@ -241,14 +267,15 @@ export async function acknowledge(
   if (alert.status === 'ACKNOWLEDGED') return { ok: true, alert, changed: false };
   if (alert.status !== 'OPEN') return { ok: false, reason: 'CLOSED' };
   const now = deps.clock.now();
+  // Acknowledgement stops escalation (ARCH §13.3).
   await updateAlert(
     trx,
     organizationId,
     alert.id,
-    { status: 'ACKNOWLEDGED', acknowledgedBy: userId, acknowledgedAt: now },
+    { status: 'ACKNOWLEDGED', acknowledgedBy: userId, acknowledgedAt: now, nextEscalationAt: null },
     now,
   );
-  await event(trx, deps, organizationId, alert.id, 'ACKNOWLEDGED', userId);
+  await alertEvent(trx, deps, organizationId, alert.id, 'ACKNOWLEDGED', userId);
   return { ok: true, alert, changed: true };
 }
 
@@ -272,11 +299,12 @@ export async function resolveManually(
       resolvedBy: userId,
       resolutionType: 'MANUAL',
       resolutionNote: note,
+      nextEscalationAt: null,
       ...(alert.acknowledgedAt ? {} : { acknowledgedAt: now, acknowledgedBy: userId }),
     },
     now,
   );
-  await event(trx, deps, organizationId, alert.id, 'RESOLVED', userId, {}, note);
+  await alertEvent(trx, deps, organizationId, alert.id, 'RESOLVED', userId, {}, note);
   return { ok: true, alert, changed: true };
 }
 
@@ -296,10 +324,16 @@ export async function dismiss(
     trx,
     organizationId,
     alert.id,
-    { status: 'DISMISSED', dismissedAt: now, dismissedBy: userId, dismissReason: reason },
+    {
+      status: 'DISMISSED',
+      dismissedAt: now,
+      dismissedBy: userId,
+      dismissReason: reason,
+      nextEscalationAt: null,
+    },
     now,
   );
-  await event(trx, deps, organizationId, alert.id, 'DISMISSED', userId, {}, reason);
+  await alertEvent(trx, deps, organizationId, alert.id, 'DISMISSED', userId, {}, reason);
   return { ok: true, alert, changed: true };
 }
 
@@ -326,6 +360,11 @@ export function alertDto(a: AlertRow) {
     dismissReason: a.dismissReason,
     detectedLate: a.detectedLate,
     dismissible: ALERT_TYPES[a.type].dismissible,
+    sosEventId: a.sosEventId,
+    incidentId: a.incidentId,
+    isDrill: a.isDrill,
+    drillId: a.drillId,
+    escalationLevel: a.escalationLevel,
     version: a.version,
   };
 }

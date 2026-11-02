@@ -17,8 +17,9 @@ import { DiagnosticsScreen } from './screens/Diagnostics.tsx';
 import { DisclosureScreen } from './screens/Disclosure.tsx';
 import { EnrollmentScreen } from './screens/Enrollment.tsx';
 import { HomeScreen } from './screens/Home.tsx';
-import { IncidentScreen } from './screens/Incident.tsx';
+import { IncidentScreen, type CheckpointProblem } from './screens/Incident.tsx';
 import { LanguageScreen } from './screens/Language.tsx';
+import { MyIncidentsScreen } from './screens/MyIncidents.tsx';
 import { PatrolScreen } from './screens/Patrol.tsx';
 import { ShiftScreen } from './screens/Shift.tsx';
 import { SignedOutScreen } from './screens/SignedOut.tsx';
@@ -28,7 +29,9 @@ import { UpdateRequiredScreen } from './screens/UpdateRequired.tsx';
 export type Route =
   | { readonly name: 'home' }
   | { readonly name: 'shift'; readonly shiftId: string }
-  | { readonly name: 'incident'; readonly shiftId: string }
+  // shiftId null: a report during an SOS off shift (INV-08).
+  | { readonly name: 'incident'; readonly shiftId: string | null; readonly checkpoint?: CheckpointProblem }
+  | { readonly name: 'myIncidents' }
   | { readonly name: 'patrol'; readonly shiftId: string }
   | { readonly name: 'sos' }
   | { readonly name: 'diagnostics' }
@@ -110,15 +113,11 @@ function Root() {
   useEffect(() => {
     const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
       if (route.name === 'home') return false;
-      setRoute(
-        route.name === 'incident' || route.name === 'patrol'
-          ? { name: 'shift', shiftId: route.shiftId }
-          : { name: 'home' },
-      );
+      setRoute(backFrom(route, snap.sos !== null));
       return true;
     });
     return () => subscription.remove();
-  }, [route]);
+  }, [route, snap.sos]);
 
   useEffect(() => {
     if (snap.phase === 'READY') setReEnroll(false);
@@ -167,7 +166,13 @@ function Root() {
     case 'shift':
       return <ShiftScreen shiftId={route.shiftId} navigate={setRoute} />;
     case 'incident':
-      return <IncidentScreen shiftId={route.shiftId} navigate={setRoute} />;
+      return <IncidentScreen shiftId={route.shiftId} checkpoint={route.checkpoint} navigate={setRoute} />;
+    case 'myIncidents':
+      return snap.settings.features.incidents ? (
+        <MyIncidentsScreen navigate={setRoute} />
+      ) : (
+        <HomeScreen navigate={setRoute} />
+      );
     case 'patrol':
       return snap.settings.features.patrols ? (
         <PatrolScreen shiftId={route.shiftId} navigate={setRoute} />
@@ -178,5 +183,19 @@ function Root() {
       return <LanguageScreen onDone={() => setRoute({ name: 'home' })} />;
     default:
       return <HomeScreen navigate={setRoute} />;
+  }
+}
+
+/** Where the Android back button leads. */
+function backFrom(route: Route, sos: boolean): Route {
+  switch (route.name) {
+    case 'incident':
+      if (route.shiftId && route.checkpoint) return { name: 'patrol', shiftId: route.shiftId };
+      if (route.shiftId) return { name: 'shift', shiftId: route.shiftId };
+      return sos ? { name: 'sos' } : { name: 'home' };
+    case 'patrol':
+      return { name: 'shift', shiftId: route.shiftId };
+    default:
+      return { name: 'home' };
   }
 }

@@ -52,3 +52,16 @@ export async function openDialer(number: string | null = null): Promise<void> {
     // no dialer on this device
   }
 }
+
+/**
+ * Opens the messaging app with a prefilled SOS text (PROD §11.7). The guard must press send: the app
+ * never sends a text itself (store policy, EXT-34) and never claims one was sent.
+ */
+export async function openSmsComposer(number: string | null, body: string): Promise<void> {
+  const separator = Platform.OS === 'ios' ? '&' : '?';
+  try {
+    await Linking.openURL(`sms:${number ?? ''}${separator}body=${encodeURIComponent(body)}`);
+  } catch {
+    // no messaging app on this device
+  }
+}

@@ -1,10 +1,15 @@
 'use client';
 
 // Organization settings. Only the keys the server lists as editable get inputs; the server
-// validates ranges and cross-field rules (PROD §8.3) and returns the reasons when it refuses.
+// validates ranges and cross-field rules (PROD §8.3) and returns the reasons when it refuses. The SOS
+// settings have their own form (escalation ladder, emergency contacts, "Call supervisor" number,
+// coordinates in texts), checked here before saving the way the server will check them. Each member
+// sets up their own device under Settings, Notifications.
+import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { PageHead } from '../../../components/shell';
+import { SOS_FORM_KEYS, SosSettings, sosChange, sosProblems } from '../../../components/sos-settings';
 import { api, errorText } from '../../../lib/api';
 import { useSession } from '../../../lib/session';
 
@@ -38,7 +43,7 @@ function display(value: unknown): string {
 export default function SettingsPage() {
   const { membership } = useSession();
   const [data, setData] = useState<SettingsBody | null>(null);
-  const [draft, setDraft] = useState<Record<string, string | boolean>>({});
+  const [draft, setDraft] = useState<Record<string, unknown>>({});
   const [message, setMessage] = useState<{ kind: 'error' | 'success'; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -66,29 +71,44 @@ export default function SettingsPage() {
 
   if (!data) return <div className="loading">Loading…</div>;
   const editable = new Set(data.editableKeys);
+  const problems = sosProblems(draft);
 
-  function changes(): Record<string, unknown> {
-    const out: Record<string, unknown> = {};
+  function changes(): { values: Record<string, unknown>; problems: string[] } {
+    const values: Record<string, unknown> = {};
+    const invalid: string[] = [];
     for (const [key, raw] of Object.entries(draft)) {
       const current = data?.settings[key];
-      if (typeof current === 'number') out[key] = Number(raw);
-      else if (typeof current === 'boolean') out[key] = raw === true;
+      if (SOS_FORM_KEYS.has(key)) values[key] = sosChange(key, raw);
+      else if (typeof current === 'number') values[key] = Number(raw);
+      else if (typeof current === 'boolean') values[key] = raw === true;
       else if (Array.isArray(current))
-        out[key] = String(raw)
+        values[key] = String(raw)
           .split(',')
           .map((s) => s.trim())
           .filter(Boolean);
-      else out[key] = raw === '' ? null : raw;
+      else if (current !== null && typeof current === 'object') {
+        // Other structured settings are edited as JSON text.
+        try {
+          values[key] = JSON.parse(String(raw)) as unknown;
+        } catch {
+          invalid.push(`${key} is not valid JSON.`);
+        }
+      } else values[key] = raw === '' ? null : raw;
     }
-    return out;
+    return { values, problems: invalid };
   }
 
   async function save() {
     if (!data) return;
+    const { values, problems: invalid } = changes();
+    if (invalid.length > 0 || problems.length > 0) {
+      setMessage({ kind: 'error', text: [...invalid, ...problems].join(' ') });
+      return;
+    }
     setBusy(true);
     setMessage(null);
     try {
-      await api('/settings', { method: 'PATCH', body: { changes: changes(), version: data.version } });
+      await api('/settings', { method: 'PATCH', body: { changes: values, version: data.version } });
       setMessage({ kind: 'success', text: 'Settings saved.' });
       await load();
     } catch (e) {
@@ -98,46 +118,62 @@ export default function SettingsPage() {
     }
   }
 
+  const setValue = (key: string, value: unknown) => setDraft((d) => ({ ...d, [key]: value }));
+
   return (
     <>
       <PageHead
         title="Settings"
         description="Thresholds for this organization. Values not editable here are set by the platform operator."
         actions={
-          editable.size > 0 ? (
-            <button
-              className="btn primary"
-              disabled={busy || Object.keys(draft).length === 0}
-              onClick={() => void save()}
-            >
-              {busy ? 'Saving…' : 'Save changes'}
-            </button>
-          ) : null
+          <>
+            <Link className="btn" href="/settings/notifications">
+              Notifications on this device
+            </Link>
+            {editable.size > 0 ? (
+              <button
+                className="btn primary"
+                disabled={busy || Object.keys(draft).length === 0 || problems.length > 0}
+                onClick={() => void save()}
+              >
+                {busy ? 'Saving…' : 'Save changes'}
+              </button>
+            ) : null}
+          </>
         }
       />
       {message ? <div className={`banner ${message.kind}`}>{message.text}</div> : null}
       <div className="grid cols-2">
-        {[...groups.entries()].map(([group, keys]) => (
-          <div className="card" key={group}>
-            <h2>{GROUPS[group] ?? group}</h2>
-            <dl className="kv">
-              {keys.map((key) => {
-                const value = data.settings[key];
-                const name = key.slice(group.length + 1).replaceAll('_', ' ');
-                return (
-                  <SettingRow
-                    key={key}
-                    name={name}
-                    value={value}
-                    editable={editable.has(key)}
-                    draft={draft[key]}
-                    onChange={(v) => setDraft((d) => ({ ...d, [key]: v }))}
-                  />
-                );
-              })}
-            </dl>
-          </div>
-        ))}
+        {[...groups.entries()].map(([group, keys]) => {
+          const others = group === 'sos' ? keys.filter((k) => !SOS_FORM_KEYS.has(k)) : keys;
+          return (
+            <div className={`card${group === 'sos' ? ' wide-card' : ''}`} key={group}>
+              <h2>{GROUPS[group] ?? group}</h2>
+              {group === 'sos' ? (
+                <SosSettings settings={data.settings} editable={editable} draft={draft} onChange={setValue} />
+              ) : null}
+              {others.length > 0 ? (
+                <dl className="kv">
+                  {others.map((key) => {
+                    const value = data.settings[key];
+                    const name = key.slice(group.length + 1).replaceAll('_', ' ');
+                    return (
+                      <SettingRow
+                        key={key}
+                        name={name}
+                        value={value}
+                        editable={editable.has(key)}
+                        // Only the SOS form keeps other kinds of value in the draft.
+                        draft={draft[key] as string | boolean | undefined}
+                        onChange={(v) => setValue(key, v)}
+                      />
+                    );
+                  })}
+                </dl>
+              ) : null}
+            </div>
+          );
+        })}
       </div>
     </>
   );
@@ -166,6 +202,16 @@ function SettingRow(props: {
       <input
         type="number"
         value={draft === undefined ? String(value) : String(draft)}
+        onChange={(e) => onChange(e.target.value)}
+      />
+    );
+  else if (value !== null && typeof value === 'object' && !Array.isArray(value))
+    control = (
+      <textarea
+        className="mono"
+        rows={6}
+        aria-label={name}
+        value={draft === undefined ? JSON.stringify(value, null, 2) : String(draft)}
         onChange={(e) => onChange(e.target.value)}
       />
     );

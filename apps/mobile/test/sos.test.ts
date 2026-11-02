@@ -135,17 +135,26 @@ describe('SOS lane (ARCH §13.1, INV-15)', () => {
     });
   });
 
-  it('during a shift, the best fix within 10 s follows the SOS as a location update of that shift', async () => {
-    const h = await makeApp();
-    await readyGuard(h);
-    expect((await h.app.startShift(SHIFT_1)).kind).toBe('OK');
-    await settle();
-    const before = h.server.batches.flatMap((b) => b.items).length;
-    h.location.nextFix = fixAt(h.clocks.wall.nowMs(), { accuracyM: 5 });
-    await h.app.triggerSos();
-    await settle();
-    await h.app.flush({ urgent: true });
-    const after = h.server.batches.flatMap((b) => b.items as { type: string }[]).slice(before);
-    expect(after.some((i) => i.type === 'LOCATION')).toBe(true);
+  it('the best fix within 10 s follows the SOS as an SOS point, on the SOS lane, during a shift or off it (PROD §11.2)', async () => {
+    for (const onShift of [true, false]) {
+      const h = await makeApp();
+      await readyGuard(h);
+      if (onShift) {
+        expect((await h.app.startShift(SHIFT_1)).kind).toBe('OK');
+        await settle();
+      }
+      h.location.nextFix = fixAt(h.clocks.wall.nowMs(), { accuracyM: 5 });
+      const id = await h.app.triggerSos();
+      await settle();
+      await h.app.flush({ urgent: true });
+      const sosEventId = h.server.sos.get(id)?.sosEventId;
+      expect(
+        h.server.sosPoints.filter((p) => p.sosEventId === sosEventId),
+        String(onShift),
+      ).toHaveLength(1);
+      // SOS tracking runs at the SOS interval, whatever the shift.
+      expect(h.location.running, String(onShift)).toBe(true);
+      expect(h.location.starts.at(-1)?.timeIntervalMs, String(onShift)).toBe(10_000);
+    }
   });
 });

@@ -45,4 +45,10 @@ export type RoutePolicy = {
    * captured before the replacement (ARCH §5.4, ADV-A08). Every other route refuses it.
    */
   readonly replacedDeviceDrain?: true;
+  /**
+   * The guard app's SOS routes (INV-15, ADV-S04, S11): accepted while the organization is suspended
+   * and from a phone REPLACED within its 72 hours; when the session can't be used, a request signed
+   * with the device key (X-Device-Signature) is accepted instead. Never rate-limited.
+   */
+  readonly sos?: true;
 };

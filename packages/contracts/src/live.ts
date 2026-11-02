@@ -4,6 +4,7 @@ import { z } from 'zod';
 
 import { alertSchema } from './alerts.ts';
 import { GUARD_LOCATION, siteBoundarySchema } from './geo.ts';
+import { incidentSummarySchema } from './incidents.ts';
 
 const uuid = z.uuid();
 const instant = z.iso.datetime({ offset: true });
@@ -65,6 +66,8 @@ export const snapshotResponseSchema = z.object({
   guards: z.array(liveGuardSchema),
   /** Scheduled shifts whose start time has passed without a start (PROD §14.2). */
   shiftsNotStarted: z.int(),
+  /** Incidents not yet resolved (PROD §14.2). */
+  openIncidents: z.int(),
   coverage: coverageSchema,
 });
 export type Snapshot = z.infer<typeof snapshotResponseSchema>;
@@ -77,6 +80,10 @@ export const REALTIME_EVENT_TYPES = [
   'alert.updated',
   'shift.updated',
   'coverage.updated',
+  'sos.activated',
+  'sos.updated',
+  'incident.created',
+  'incident.updated',
 ] as const;
 export type RealtimeEventType = (typeof REALTIME_EVENT_TYPES)[number];
 
@@ -86,6 +93,12 @@ export type RealtimeEventType = (typeof REALTIME_EVENT_TYPES)[number];
  * never has to fetch per event. `resync` means the client's position is outside the replay buffer:
  * reload the snapshot.
  */
+/** An open SOS's newest position (PROD §11.2), sent only to people who can see SOS alerts. */
+export const sosLivePositionSchema = z
+  .object({ lat: z.number(), lng: z.number(), accuracyM: z.number().nullable(), capturedAt: instant })
+  .meta(GUARD_LOCATION);
+export type SosLivePosition = z.infer<typeof sosLivePositionSchema>;
+
 export const streamEventSchema = z.discriminatedUnion('type', [
   z.object({
     type: z.literal('guard.state'),
@@ -107,6 +120,26 @@ export const streamEventSchema = z.discriminatedUnion('type', [
     type: z.literal('coverage.updated'),
     occurredAt: instant,
     data: z.object({ coverage: coverageSchema }),
+  }),
+  z.object({
+    /**
+     * An SOS changed: its alert carries the state, and the SOS page reloads its detail (audited).
+     * `positionOnly`: only a newer position arrived, carried here live like the live map's, so the
+     * page moves the marker without reloading the history (INV-14 audits every history read).
+     */
+    type: z.enum(['sos.activated', 'sos.updated']),
+    occurredAt: instant,
+    data: z.object({
+      sosEventId: uuid,
+      alert: alertSchema.nullable(),
+      position: sosLivePositionSchema.nullable(),
+      positionOnly: z.boolean(),
+    }),
+  }),
+  z.object({
+    type: z.enum(['incident.created', 'incident.updated']),
+    occurredAt: instant,
+    data: z.object({ incidentId: uuid, incident: incidentSummarySchema.nullable() }),
   }),
   z.object({ type: z.literal('resync'), occurredAt: instant, data: z.object({}) }),
 ]);

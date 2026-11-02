@@ -3,20 +3,29 @@
 // session has expired, X-Device-Signature). Every response body is parsed with the shared contract
 // schemas, so a response the phone does not understand is never mistaken for a success.
 import {
+  attachmentCompleteResponseSchema,
+  attachmentSlotResponseSchema,
   enrollmentRedeemResponseSchema,
   errorEnvelopeSchema,
+  guardIncidentsResponseSchema,
   guardPatrolsResponseSchema,
   meShiftsResponseSchema,
   mobileConfigSchema,
   sessionRefreshResponseSchema,
+  sosLocationsResponseSchema,
   sosResponseSchema,
+  sosStatusResponseSchema,
   syncBatchResponseSchema,
+  type AttachmentSlotRequest,
+  type AttachmentSlotResponse,
   type EnrollmentRedeemRequest,
   type EnrollmentRedeemResponse,
   type ErrorCode,
+  type GuardIncidentsResponse,
   type GuardPatrolsResponse,
   type MobileConfig,
   type SessionTokens,
+  type SosStatusResponse,
   type SyncBatchRequest,
   type SyncBatchResponse,
 } from '@sentryops/contracts';
@@ -207,6 +216,62 @@ export class ApiClient {
       bodyText,
       schema: sosResponseSchema,
       timeoutMs: TIMEOUT.sos,
+    });
+  }
+
+  /** What the server can confirm about the SOS (PROD §11.3). Signed like the SOS when needed. */
+  getSosStatus(auth: Auth, sosEventId: string): Promise<SosStatusResponse> {
+    return this.request('GET', `/sos/${encodeURIComponent(sosEventId)}/status`, {
+      auth,
+      schema: sosStatusResponseSchema,
+      timeoutMs: TIMEOUT.sos,
+    });
+  }
+
+  postSosLocations(auth: Auth, sosEventId: string, bodyText: string) {
+    return this.request('POST', `/sos/${encodeURIComponent(sosEventId)}/locations`, {
+      auth,
+      bodyText,
+      schema: sosLocationsResponseSchema,
+      timeoutMs: TIMEOUT.sos,
+    });
+  }
+
+  postSosCancel(auth: Auth, sosEventId: string, bodyText: string): Promise<SosStatusResponse> {
+    return this.request('POST', `/sos/${encodeURIComponent(sosEventId)}/cancel-request`, {
+      auth,
+      bodyText,
+      schema: sosStatusResponseSchema,
+      timeoutMs: TIMEOUT.sos,
+    });
+  }
+
+  /** The guard's own reports of the last two weeks (status, photos, notes). */
+  getMyIncidents(token: string): Promise<GuardIncidentsResponse> {
+    return this.request('GET', '/me/incidents', {
+      auth: { kind: 'bearer', token },
+      schema: guardIncidentsResponseSchema,
+    });
+  }
+
+  /** A signed upload slot for one photo of the guard's own report (ARCH §12). */
+  requestAttachmentSlot(
+    token: string,
+    incidentId: string,
+    body: AttachmentSlotRequest,
+  ): Promise<AttachmentSlotResponse> {
+    return this.request('POST', `/incidents/${encodeURIComponent(incidentId)}/attachments`, {
+      auth: { kind: 'bearer', token },
+      bodyText: JSON.stringify(body),
+      schema: attachmentSlotResponseSchema,
+    });
+  }
+
+  completeAttachment(token: string, attachmentId: string, sha256: string) {
+    return this.request('POST', `/attachments/${encodeURIComponent(attachmentId)}/complete`, {
+      auth: { kind: 'bearer', token },
+      bodyText: JSON.stringify({ sha256 }),
+      schema: attachmentCompleteResponseSchema,
     });
   }
 }

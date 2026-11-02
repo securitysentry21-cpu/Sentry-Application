@@ -30,12 +30,14 @@ export type PointRow = {
   capturedAt: Date;
   receivedAt: Date;
   clockStatus: 'VERIFIED_MONOTONIC' | 'DEVICE_CLOCK_ONLY' | 'SKEWED';
-  source: 'TRACKING' | 'SHIFT_START' | 'SHIFT_END';
+  source: 'TRACKING' | 'SHIFT_START' | 'SHIFT_END' | 'SOS';
   provider: string | null;
   isMock: boolean | null;
   flags: string[];
   appVersion: string | null;
-  batchId: string;
+  batchId: string | null;
+  /** An open SOS's point (PROD §11.2): with or without a shift (INV-08's one exception). */
+  sosEventId?: string | null;
 };
 
 /** True when inserted; false when that device already sent this client event (INV-06). */
@@ -65,6 +67,7 @@ export async function insertPoint(trx: Database, p: PointRow): Promise<boolean> 
       flags: p.flags,
       app_version: p.appVersion,
       sync_batch_id: p.batchId,
+      sos_event_id: p.sosEventId ?? null,
       created_at: p.receivedAt,
     })
     .onConflict((oc) => oc.columns(['device_id', 'client_event_id']).doNothing())

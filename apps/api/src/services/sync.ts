@@ -34,11 +34,18 @@ import {
 } from '../repositories/tracking.ts';
 import { deviceReportAlerts, raiseAlert, reopenSuppressionMs } from './alerts.ts';
 import { evaluateGeofence } from './geofence.ts';
+import { processIncidentItem, processNoteItem } from './incidents.ts';
 import { processScan } from './patrols.ts';
 import { publish } from './realtime.ts';
 import { guardEnd, guardStart, type GuardOutcome, type GuardRef } from './shifts.ts';
 
-type Result = { clientEventId: string; status: SyncItemStatus; code?: ErrorCode; scan?: ScanResult };
+type Result = {
+  clientEventId: string;
+  status: SyncItemStatus;
+  code?: ErrorCode;
+  scan?: ScanResult;
+  incident?: { id: string; referenceNumber: string };
+};
 
 const MAX_ACCURACY_M = 50_000;
 const IMPLAUSIBLE_SPEED_MPS = 70;
@@ -403,8 +410,15 @@ async function processItem(
         receivedAt: limits.receivedAt,
         settings: limits.settings,
       });
-    case 'INCIDENT':
-      // Incidents (Phase 8) are off in /mobile/config; the app doesn't send them.
-      return { status: 'REJECTED', code: 'VALIDATION_FAILED' };
+    case 'INCIDENT': {
+      // Only during a shift or an open SOS, judged by capture time (INV-08, PROD §10.1).
+      const result = await processIncidentItem(trx, deps, guard, item, {
+        estimate,
+        receivedAt: limits.receivedAt,
+      });
+      return result;
+    }
+    case 'INCIDENT_NOTE':
+      return processNoteItem(trx, deps, guard, item, limits.receivedAt);
   }
 }

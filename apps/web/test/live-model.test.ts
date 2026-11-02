@@ -1,8 +1,15 @@
-import type { Alert, LiveGuard, Snapshot } from '@sentryops/contracts';
+import type { Alert, IncidentSummary, LiveGuard, Snapshot } from '@sentryops/contracts';
 import { describe, expect, it } from 'vitest';
 
 import { locationLine, trackingLine } from '../components/guard-panel';
-import { applyEvent, fromSnapshot, guardView, homeCounts, type Envelope } from '../lib/live-model';
+import {
+  applyEvent,
+  fromSnapshot,
+  guardView,
+  homeCounts,
+  type Envelope,
+  type LiveModel,
+} from '../lib/live-model';
 import { parseFrames } from '../lib/stream';
 
 const T0 = Date.parse('2026-10-20T21:00:00Z');
@@ -36,13 +43,14 @@ function guard(overrides: Partial<LiveGuard> = {}): LiveGuard {
   };
 }
 
-function snapshot(guards: LiveGuard[], lastEventId = 10): Snapshot {
+function snapshot(guards: LiveGuard[], lastEventId = 10, openIncidents = 0): Snapshot {
   return {
     serverTime: iso(0),
     lastEventId,
     freshness: FRESHNESS,
     guards,
     shiftsNotStarted: 0,
+    openIncidents,
     coverage: { desktop: 1, phone: 0 },
   };
 }
@@ -70,10 +78,47 @@ function alert(overrides: Partial<Alert> = {}): Alert {
     dismissReason: null,
     detectedLate: false,
     dismissible: true,
+    sosEventId: null,
+    incidentId: null,
+    isDrill: false,
+    drillId: null,
+    escalationLevel: 0,
     version: 1,
     ...overrides,
   };
 }
+
+function incident(overrides: Partial<IncidentSummary> = {}): IncidentSummary {
+  return {
+    id: '0190a0d2-7c5e-7000-8000-0000000000dd',
+    referenceNumber: 'INC-000001',
+    type: 'THEFT',
+    severity: 'MEDIUM',
+    status: 'OPEN',
+    title: 'Theft',
+    guard: null,
+    reportedBy: null,
+    site: null,
+    checkpoint: null,
+    shiftId: null,
+    sosEventId: null,
+    occurredAt: iso(-7200),
+    reportedAt: iso(-7200),
+    receivedAt: iso(-7200),
+    acknowledgedAt: null,
+    resolvedAt: null,
+    photoCount: 0,
+    isDrill: false,
+    version: 1,
+    ...overrides,
+  };
+}
+
+const incidentEvent = (
+  i: IncidentSummary,
+  id: string,
+  type: 'incident.created' | 'incident.updated' = 'incident.updated',
+): Envelope => ({ id, type, occurredAt: iso(1), data: { incidentId: i.id, incident: i } });
 
 describe('the dashboard keeps time on its own (D-36, INV-09)', () => {
   it('ADV-U01 with no events for 6 minutes after a current fix from a live phone: DELAYED, then OFFLINE, and LAST KNOWN, never live', () => {
@@ -173,5 +218,153 @@ describe('applying the stream (ARCH §14)', () => {
     const second = parseFrames(first.rest + whole.slice(cut));
     expect(second.events.map((e) => e.id)).toEqual(['6']);
     expect(second.rest).toBe('');
+  });
+});
+
+describe('SOS and incident events (ARCH §14, PROD §11.6, §14.2)', () => {
+  const SOS = '0190a0d2-7c5e-7000-8000-0000000000ee';
+  const sosAlert = (overrides: Partial<Alert> = {}) =>
+    alert({
+      type: 'SOS_ACTIVATED',
+      severity: 'CRITICAL',
+      summary: 'SOS: Ahmed Khan (ABC Warehouse)',
+      sosEventId: SOS,
+      dismissible: false,
+      ...overrides,
+    });
+  const sosEvent = (
+    a: Alert | null,
+    id: string,
+    type: 'sos.activated' | 'sos.updated' = 'sos.updated',
+  ): Envelope => ({
+    id,
+    type,
+    occurredAt: iso(1),
+    data: { sosEventId: SOS, alert: a, position: null, positionOnly: false },
+  });
+
+  it('an SOS event carries its alert: it opens, is acknowledged, pressed again and resolved, and a late copy never rolls it back', () => {
+    let model = fromSnapshot(snapshot([]), []);
+    let applied = applyEvent(model, sosEvent(sosAlert(), '11', 'sos.activated'));
+    expect(applied.reload).toBe(false);
+    model = applied.model;
+    expect(model.alerts.get(sosAlert().id)?.status).toBe('OPEN');
+    expect(model.lastEventId).toBe(11);
+    model = applyEvent(model, sosEvent(sosAlert({ status: 'ACKNOWLEDGED', version: 2 }), '12')).model;
+    // The activation again, from a replay: older, ignored.
+    model = applyEvent(model, sosEvent(sosAlert(), '13', 'sos.activated')).model;
+    expect(model.alerts.get(sosAlert().id)?.status).toBe('ACKNOWLEDGED');
+    // Pressed again after the acknowledgement: open again (owner decision 2026-11-02).
+    model = applyEvent(
+      model,
+      sosEvent(sosAlert({ status: 'OPEN', triggerCount: 2, version: 3 }), '14'),
+    ).model;
+    expect(model.alerts.get(sosAlert().id)?.triggerCount).toBe(2);
+    expect(model.alerts.get(sosAlert().id)?.status).toBe('OPEN');
+    model = applyEvent(model, sosEvent(sosAlert({ status: 'RESOLVED', version: 4 }), '15')).model;
+    expect(model.alerts.size).toBe(0);
+    // An SOS event whose alert isn't visible to this dashboard only moves the position on.
+    applied = applyEvent(model, sosEvent(null, '16'));
+    expect(applied.model.alerts.size).toBe(0);
+    expect(applied.model.lastEventId).toBe(16);
+  });
+
+  it('an alert the server returned (after an acknowledgement) applies like an event, without moving the stream position', () => {
+    let model = fromSnapshot(snapshot([], 20), [sosAlert()]);
+    model = applyEvent(model, {
+      id: null,
+      type: 'alert.updated',
+      occurredAt: iso(2),
+      data: { alertId: sosAlert().id, alert: sosAlert({ status: 'ACKNOWLEDGED', version: 2 }) },
+    }).model;
+    expect(model.alerts.get(sosAlert().id)?.status).toBe('ACKNOWLEDGED');
+    expect(model.lastEventId).toBe(20);
+  });
+
+  it('a new incident counts once, however often its events arrive, and leaves the count when resolved', () => {
+    let model: LiveModel = fromSnapshot(snapshot([], 10, 2), []);
+    expect(model.openIncidents).toBe(2);
+    const fresh = incident({ receivedAt: iso(5), reportedAt: iso(5), occurredAt: iso(4) });
+    let applied = applyEvent(model, incidentEvent(fresh, '11', 'incident.created'));
+    expect(applied.reload).toBe(false);
+    model = applied.model;
+    expect(model.openIncidents).toBe(3);
+    // The same event replayed after a reconnection changes nothing.
+    model = applyEvent(model, incidentEvent(fresh, '11', 'incident.created')).model;
+    expect(model.openIncidents).toBe(3);
+    // A note, then an acknowledgement: still open.
+    model = applyEvent(model, incidentEvent({ ...fresh, version: 2 }, '12')).model;
+    model = applyEvent(model, incidentEvent({ ...fresh, status: 'ACKNOWLEDGED', version: 3 }, '13')).model;
+    expect(model.openIncidents).toBe(3);
+    applied = applyEvent(
+      model,
+      incidentEvent({ ...fresh, status: 'RESOLVED', resolvedAt: iso(30), version: 4 }, '14'),
+    );
+    expect(applied.reload).toBe(false);
+    model = applied.model;
+    expect(model.openIncidents).toBe(2);
+    // Reopened: back in the count.
+    model = applyEvent(
+      model,
+      incidentEvent({ ...fresh, status: 'OPEN', resolvedAt: null, version: 5 }, '15'),
+    ).model;
+    expect(model.openIncidents).toBe(3);
+    expect(model.lastEventId).toBe(15);
+  });
+
+  it('an incident older than the snapshot moves the count only by what changed since the snapshot', () => {
+    const base = fromSnapshot(snapshot([], 10, 2), []);
+    // Resolved after the snapshot: it was open in its count.
+    const resolvedSince = applyEvent(
+      base,
+      incidentEvent(incident({ status: 'RESOLVED', resolvedAt: iso(10), version: 3 }), '11'),
+    );
+    expect(resolvedSince.model.openIncidents).toBe(1);
+    expect(resolvedSince.reload).toBe(false);
+    // Resolved before the snapshot and given a note since: the count already left it out.
+    const noteOnResolved = applyEvent(
+      base,
+      incidentEvent(incident({ status: 'RESOLVED', resolvedAt: iso(-60), version: 4 }), '11'),
+    );
+    expect(noteOnResolved.model.openIncidents).toBe(2);
+    expect(noteOnResolved.reload).toBe(false);
+    // Acknowledged since: open then, open now.
+    const acknowledged = applyEvent(
+      base,
+      incidentEvent(incident({ status: 'ACKNOWLEDGED', acknowledgedAt: iso(10), version: 2 }), '11'),
+    );
+    expect(acknowledged.model.openIncidents).toBe(2);
+    expect(acknowledged.reload).toBe(false);
+    // Open, with a note or a reopen since: the count stays and is checked against a fresh snapshot.
+    const openNow = applyEvent(base, incidentEvent(incident({ version: 2 }), '11'));
+    expect(openNow.model.openIncidents).toBe(2);
+    expect(openNow.reload).toBe('counts');
+    // Created just as the snapshot was read: it may be in its count already. Checked, not guessed.
+    const justBefore = applyEvent(
+      base,
+      incidentEvent(incident({ receivedAt: iso(-1) }), '11', 'incident.created'),
+    );
+    expect(justBefore.model.openIncidents).toBe(2);
+    expect(justBefore.reload).toBe('counts');
+  });
+
+  it('the open-incident count never goes below zero, and an incident this dashboard may not see only moves the position on', () => {
+    const base = fromSnapshot(snapshot([], 10, 0), []);
+    const resolved = applyEvent(
+      base,
+      incidentEvent(incident({ status: 'RESOLVED', resolvedAt: iso(10), version: 3 }), '11'),
+    );
+    expect(resolved.model.openIncidents).toBe(0);
+    const hidden = applyEvent(base, {
+      id: '12',
+      type: 'incident.updated',
+      occurredAt: iso(1),
+      data: { incidentId: incident().id, incident: null },
+    });
+    expect(hidden.model.openIncidents).toBe(0);
+    expect(hidden.model.lastEventId).toBe(12);
+    // A new snapshot starts over from its own count.
+    expect(fromSnapshot(snapshot([], 30, 5), []).openIncidents).toBe(5);
+    expect(fromSnapshot(snapshot([], 30, 5), []).incidents.size).toBe(0);
   });
 });

@@ -9,6 +9,14 @@ describe('role → permission map (PROD §3.2)', () => {
     }
   });
 
+  it('whoever reads alerts also reads SOS events and live positions: SOS stream events carry the live SOS position', () => {
+    for (const role of ROLES) {
+      if (!hasPermission(role, 'alerts.read')) continue;
+      expect(hasPermission(role, 'sos.read'), role).toBe(true);
+      expect(hasPermission(role, 'live.read'), role).toBe(true);
+    }
+  });
+
   it('keeps the owner-only capabilities with the owner', () => {
     const ownerOnly: Permission[] = ['owners.manage', 'audit.read', 'org.settings.write'];
     for (const permission of ownerOnly) {

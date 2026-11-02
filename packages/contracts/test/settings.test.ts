@@ -21,6 +21,19 @@ describe('settings validation (PROD §8.3, Appendix B)', () => {
     expect(validateSettings(withChanges({ 'retention.audit_months': 6 })).success).toBe(false);
   });
 
+  it('no SOS escalation step can turn the dashboard alarm off (PROD §11.4, §11.5)', () => {
+    const ladder = defaultSettings()['sos.escalation'] as {
+      steps: { dashboardAlarm: boolean }[];
+      repeatEverySeconds: number;
+    };
+    const quiet = {
+      ...ladder,
+      steps: ladder.steps.map((step, i) => (i === 1 ? { ...step, dashboardAlarm: false } : step)),
+    };
+    expect(validateSettings(withChanges({ 'sos.escalation': ladder })).success).toBe(true);
+    expect(validateSettings(withChanges({ 'sos.escalation': quiet })).success).toBe(false);
+  });
+
   // Each cross-field rule must be able to fail: these are the thresholds that, if violated, make
   // a healthy phone trip freshness alerts (review C-01).
   const violations: Record<string, Record<string, number>> = {

@@ -148,7 +148,7 @@ describe('incidents (PROD §7.8, INV-08)', () => {
     await readyGuard(h);
     const input = {
       shiftId: SHIFT_1,
-      type: 'THEFT',
+      type: 'THEFT' as const,
       severity: 'HIGH' as const,
       title: 'Gate forced',
       description: 'Back gate',
@@ -177,7 +177,7 @@ describe('incidents (PROD §7.8, INV-08)', () => {
     await settle();
     const input = {
       shiftId: SHIFT_1,
-      type: 'OTHER',
+      type: 'OTHER' as const,
       severity: 'LOW' as const,
       title: 'Note',
       description: '',

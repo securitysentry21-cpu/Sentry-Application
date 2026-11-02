@@ -6,7 +6,9 @@ import { z } from 'zod';
 import { ROLES } from './permissions.ts';
 
 const int = (min: number, max: number) => z.number().int().min(min).max(max);
-const e164 = z.string().regex(/^\+[1-9]\d{7,14}$/, 'must be an E.164 phone number');
+/** A phone number in E.164 (8–15 digits): emergency contacts, "Call supervisor", members' SOS numbers. */
+export const phoneNumberSchema = z.string().regex(/^\+[1-9]\d{7,14}$/, 'must be an E.164 phone number');
+const e164 = phoneNumberSchema;
 
 const SEVERITIES = ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW'] as const;
 const CHANNELS = ['DASHBOARD', 'WEB_PUSH', 'SMS'] as const;
@@ -118,7 +120,20 @@ export const SETTINGS = {
   ),
   'sos.hold_duration_ms': s(int(1000, 10000), 3000, '', { scope: 'system' }),
   'sos.escalation': s(
-    z.object({ steps: z.array(escalationStep).min(1), repeatEverySeconds: int(30, 3600) }),
+    z
+      .object({ steps: z.array(escalationStep).min(1).max(10), repeatEverySeconds: int(30, 3600) })
+      .refine(
+        (l) =>
+          l.steps[0]?.atSeconds === 0 &&
+          l.steps.every((st, i) => i === 0 || st.atSeconds > (l.steps[i - 1]?.atSeconds ?? 0)),
+        'escalation steps start at 0 s and are in increasing time order',
+      )
+      // The staffed dashboard is the primary receiver (PROD §11.5): its alarm rings from the first
+      // second until someone acknowledges, so no step may claim to turn it off (agent-decided).
+      .refine(
+        (l) => l.steps.every((st) => st.dashboardAlarm),
+        'the dashboard alarm cannot be turned off for an SOS',
+      ),
     {
       steps: [
         {

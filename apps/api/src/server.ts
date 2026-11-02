@@ -7,15 +7,35 @@ import { OidcClient } from './auth/oidc.ts';
 import type { Config } from './config.ts';
 import type { AppDeps } from './deps.ts';
 import { Metrics } from './metrics.ts';
+import { createProviders, type Providers } from './notify/providers.ts';
 import { RateLimiter } from './rate-limit.ts';
+import { LocalObjectStore } from './storage/local.ts';
+import type { ObjectStore } from './storage/objects.ts';
+import { containerCredentials, S3ObjectStore } from './storage/s3.ts';
 
 /** The dependencies the API runs with; tests build the same thing around a test database. */
 export function createDeps(
   config: Config,
   pool: Pool,
-  overrides: { clock?: Clock; oidc?: OidcClient | null } = {},
+  overrides: { clock?: Clock; oidc?: OidcClient | null; objects?: ObjectStore; notify?: Providers } = {},
 ): AppDeps {
   const clock = overrides.clock ?? systemClock;
+  const objects =
+    overrides.objects ??
+    (config.OBJECT_STORE === 's3' && config.S3_BUCKET
+      ? new S3ObjectStore({
+          bucket: config.S3_BUCKET,
+          region: config.S3_REGION ?? config.CELL_REGION,
+          credentials: containerCredentials(process.env, clock),
+          clock,
+        })
+      : new LocalObjectStore({
+          root: config.OBJECT_STORE_DIR,
+          secret: config.LOCAL_OBJECT_SECRET,
+          baseUrl: config.LOCAL_OBJECT_BASE_URL ?? new URL(config.PUBLIC_ORIGIN).origin,
+          clock,
+        }));
+  const notify = overrides.notify ?? createProviders(config, () => Math.floor(clock.now().getTime() / 1000));
   const oidc =
     overrides.oidc !== undefined
       ? overrides.oidc
@@ -35,6 +55,8 @@ export function createDeps(
     rateLimiter: new RateLimiter(clock),
     metrics: new Metrics(),
     oidc,
+    objects,
+    notify,
   };
 }
 

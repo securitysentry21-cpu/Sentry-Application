@@ -11,6 +11,11 @@ export const longitudeSchema = z.number().min(-180).max(180);
  */
 export const SITE_GEOMETRY = { siteGeometry: true } as const;
 export const GUARD_LOCATION = { guardLocation: true } as const;
+/**
+ * Where a guard was when they filed an incident: shown to everyone who can see the incident (owner
+ * decision 2026-11-02). The meta-test allows it only on routes that need an incident permission.
+ */
+export const INCIDENT_LOCATION = { incidentLocation: true } as const;
 
 export const latLngSchema = z.strictObject({ lat: latitudeSchema, lng: longitudeSchema }).meta(SITE_GEOMETRY);
 export type LatLng = z.infer<typeof latLngSchema>;

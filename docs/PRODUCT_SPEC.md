@@ -932,7 +932,7 @@ Status: **OPEN** unless marked APPROVED or REJECTED; `docs/DECISIONS.md` holds t
 | D-15 | Starting outside the geofence | block · allow and flag | allow and flag | Phase 3 |
 | D-16 | Patrol accountability | per shift · per site (shared) | **APPROVED 2026-11-02** (owner): per shift | Phase 7 |
 | D-17 | Do QR-only (location unconfirmed) scans count? | yes, labelled · no | **APPROVED 2026-11-02** (owner): yes, labelled "QR only"; an organization may turn it off | Phase 7 |
-| D-18 | Incident photos from gallery | camera only · gallery allowed, labelled | allowed, labelled | Phase 8 |
+| D-18 | Incident photos from gallery | camera only · gallery allowed, labelled | **APPROVED 2026-11-02** (owner): allowed, labelled; through the system photo picker only | Phase 8 |
 | D-21 | Reason for viewing location history | optional · mandatory · per-organization setting | **APPROVED 2026-11-01** (owner): field always present, optional by default, organization may require | Phase 6 |
 | D-22 | Guard sees own location trail | yes · no | **REJECTED 2026-11-01** (owner): no; the guard sees their own shift history only | Phase 6 |
 | D-24 | Checkpoint coordinates calibrated on site with the app | V1 · V1.1 | **APPROVED 2026-11-02** (owner): V1.1; map pin in V1 | Phase 7 |
