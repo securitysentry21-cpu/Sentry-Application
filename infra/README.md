@@ -66,10 +66,26 @@ aws login
 export AWS_PROFILE=sentry-test
 infra/scripts/build-image.sh test <commit that passed CI>
 infra/scripts/release.sh test <commit>
+infra/scripts/smoke.sh test
 git add infra/terraform/env/test.release.tfvars && git commit -m "Release <commit> to test"
 ```
 
 The migrations run first, as a one-off task. If they fail, the services aren't touched. A service deployment that fails its health checks rolls back by itself.
+
+`smoke.sh` checks the release from outside: health, readiness, the sign-in page, and the live stream refusing a request without a session. It then checks the object store from inside, as one-off tasks with each service's own role:
+
+- the worker uploads through a signed link as a phone would, can't overwrite the object, downloads it through a signed link and deletes it;
+- the API is refused a delete.
+
+## Restore drill
+
+ARCH §19.6 asks for a restore drill before launch and every quarter. With the environment switched on (`paused = false`), run `infra/scripts/restore-drill.sh test`. It:
+
+1. restores the database, as it was at its latest restorable time, into a new private instance beside it;
+2. checks the copy with `packages/db/scripts/restore-check.ts`: every migration, the schema linter, the runtime roles and the rows in every table;
+3. deletes the copy and prints the restore point and the times, against the targets (RPO ≤ 15 minutes, RTO ≤ 4 hours).
+
+The live database isn't touched. The copy costs what the database does, for the hour or less the drill takes. Record each drill in `docs/testing/restore-drills.md`. For an image built before the check existed (before Phase 10), add `RESTORE_CHECK_FROM_CHECKOUT=1`.
 
 ## Incident photos, notifications and the canary (Phase 8)
 

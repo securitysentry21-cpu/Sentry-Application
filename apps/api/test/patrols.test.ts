@@ -353,7 +353,7 @@ describe('checkpoint scans (ARCH §11.2)', () => {
     expect(rows.rows[0]!.row).not.toContain(qr('Main gate').slice(4));
   });
 
-  it('ADV-Q02 a photographed QR scanned far away is OUTSIDE_RADIUS and does not count', async () => {
+  it('ADV-Q02 a photographed QR scanned far away is OUTSIDE_RADIUS and does not count (INV-11)', async () => {
     const { phone, shiftId } = await onShift();
     const far = await scanOne(phone, scan(shiftId, qr('Store room'), at(north(2_200), 15)));
     expect(far.scan).toMatchObject({
@@ -474,7 +474,7 @@ describe('checkpoint scans (ARCH §11.2)', () => {
     ]);
   });
 
-  it('ADV-Q06 a checkpoint of another site is WRONG_SITE and does not count', async () => {
+  it('ADV-Q06 a checkpoint of another site is WRONG_SITE and does not count (INV-11)', async () => {
     const { phone, shiftId } = await onShift();
     const result = await scanOne(phone, scan(shiftId, qr('Depot door'), at(north(3_000))));
     expect(result.scan).toEqual({
@@ -487,7 +487,7 @@ describe('checkpoint scans (ARCH §11.2)', () => {
     });
   });
 
-  it('ADV-Q07 a scan with no active shift is NO_ACTIVE_SHIFT and keeps no coordinates (INV-08)', async () => {
+  it('ADV-Q07 a scan with no active shift is NO_ACTIVE_SHIFT and keeps no coordinates (INV-08, INV-11)', async () => {
     const { phone, guardId } = await newPhone();
     await createShift(guardId, siteId); // scheduled, never started
     const result = await scanOne(phone, scan(null, qr('Main gate'), at(north(30))));

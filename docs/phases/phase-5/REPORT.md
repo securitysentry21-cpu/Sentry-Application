@@ -4,7 +4,7 @@
 |---|---|
 | Date | 2026-10-08 |
 | Result | **Core built.** `pnpm verify` passes: all 13 checks, including the dependency audit; 49 test files, 376 tests; 83 IDs cited. |
-| Commit | Local only (round 6). |
+| Commit | `98edc2a` (Phase 5 core, 2026-10-08) and the commits after it; on GitHub. |
 
 ## What was built
 

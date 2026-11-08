@@ -113,12 +113,15 @@ Current phase: 3. IDs due through this phase: ADV-X01, ADV-X02, ADV-X07, ADV-T01
 | ADV-X07 | apps/api/test/startup.test.ts<br>packages/db/test/runtime-role.test.ts |
 | INV-01 | apps/api/test/tenancy.test.ts<br>packages/db/test/rls.test.ts |
 | INV-02 | apps/api/test/attachments.test.ts<br>apps/api/test/sos.test.ts |
+| INV-03 | apps/api/test/members.test.ts |
+| INV-04 | packages/db/test/rls.test.ts |
 | INV-05 | apps/api/test/incidents.test.ts<br>packages/db/test/rls.test.ts |
 | INV-06 | apps/mobile/test/ids.test.ts<br>apps/mobile/test/outbox.test.ts<br>apps/mobile/test/sync-engine.test.ts |
 | INV-07 | packages/domain/test/tracking.test.ts |
 | INV-08 | apps/api/test/attachments.test.ts<br>apps/api/test/incidents.test.ts<br>apps/api/test/patrols.test.ts<br>apps/api/test/sync.test.ts<br>apps/mobile/test/app-flows.test.ts<br>apps/mobile/test/app-status.test.ts<br>apps/mobile/test/incidents-phase8.test.ts<br>apps/mobile/test/local-shift.test.ts<br>apps/mobile/test/patrol.test.ts |
 | INV-09 | apps/mobile/test/presenter.test.ts<br>apps/web/test/live-model.test.ts<br>packages/domain/test/tracking.test.ts |
 | INV-10 | apps/api/test/sos.test.ts<br>apps/mobile/test/presenter.test.ts<br>apps/mobile/test/sos.test.ts<br>apps/web/test/alarm.test.tsx<br>apps/web/test/service-worker.test.ts<br>apps/web/test/sos-incidents.test.ts<br>packages/domain/test/sos.test.ts |
+| INV-11 | apps/api/test/patrols.test.ts |
 | INV-12 | apps/api/test/route-registry.test.ts |
 | INV-13 | packages/db/test/rls.test.ts |
 | INV-14 | apps/api/test/live.test.ts<br>apps/api/test/realtime.test.ts<br>apps/api/test/sos.test.ts |

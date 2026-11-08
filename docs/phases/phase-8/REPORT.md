@@ -4,8 +4,8 @@
 |---|---|
 | Date | 2026-11-02 |
 | Result | **Built.** `pnpm verify` passes: all 12 checks it runs, and the dependency audit run on its own; 73 test files, 633 tests; 115 IDs cited. Phase 8's exit IDs (ADV-S01–S11, F01–F05, T10) each have a passing test. **SOS stays off for pilot guards** (`FEATURE_SOS=false`) until the checks on real phones pass and the owner approves (ARCH §22). |
-| Commit | Not committed; waiting for the owner. |
-| AWS | The Terraform for photos, push keys and alarms is written and validated, **not applied**: it waits for the owner's go-ahead on cost (under $0.10 a month at test volume). A Phase 8 release needs it first. |
+| Commit | `e73f688`, pushed 2026-11-02 (with `a14f49f`, two reviewed secret-scan false positives). |
+| AWS | Applied 2026-11-02 with Phase 9's, at the owner's go-ahead (under $0.10 a month). Phase 9, which includes Phase 8, was released to the test environment the same day (`8854af8`). `infra/scripts/smoke.sh` passed against real S3, then the environment was paused again. Guard pushes still need the Firebase key. |
 
 ## What was built
 

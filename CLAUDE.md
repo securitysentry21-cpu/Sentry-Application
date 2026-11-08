@@ -34,6 +34,7 @@ pnpm check:licences  # licence allow-list (also part of verify)
 pnpm docs:generate   # regenerate docs/generated/* after changing contracts or routes
 pnpm db:codegen      # regenerate Kysely types after adding a migration
 pnpm negative-controls
+node scripts/traceability.ts --through 10   # test IDs still missing if every phase up to 10 were done
 ```
 
 On this Windows machine, run pnpm unattended (`CI=true`, `--reporter=append-only`). If `pnpm add` hangs after finishing, edit the `package.json` instead and run `pnpm install --no-frozen-lockfile`. Dependency install scripts are blocked unless listed, with a reason, under `allowBuilds` in `pnpm-workspace.yaml`.

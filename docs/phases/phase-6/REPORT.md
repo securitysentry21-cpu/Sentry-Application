@@ -4,7 +4,7 @@
 |---|---|
 | Date | 2026-11-01 |
 | Result | **Built.** `pnpm verify` passes: all 13 checks; 57 test files, 431 tests; 90 IDs cited. Phase 6's exit IDs (ADV-T02, A04, W01, P02, U01) each have a passing test. The visual check at 1,000 guards is still for a person. |
-| Commit | Not committed; waiting for the owner. |
+| Commit | `aaf9d03`, pushed 2026-11-01. |
 
 ## What was built
 

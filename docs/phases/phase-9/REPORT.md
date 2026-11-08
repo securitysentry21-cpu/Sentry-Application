@@ -4,8 +4,8 @@
 |---|---|
 | Date | 2026-11-02 |
 | Result | **Built.** `pnpm verify` passes: all 12 checks it runs; 78 test files, 686 tests; 120 IDs cited; all 5 negative controls turn their checks red. Phase 9 adds no dependency (the audit last ran this morning, clean). Phase 9's exit IDs (ADV-T03, W02, P03, P04, TM02) each have a passing test. |
-| Commit | Not committed; waiting for the owner. |
-| AWS | The Terraform additions (the retention connection, delete rights for the worker, an expiry rule for export files) are written and validated, **not applied**. Like Phase 8's, they wait for the owner's go-ahead. A Phase 9 release needs them: the worker refuses to start in AWS without its retention connection. They add no measurable cost. |
+| Commit | `8854af8`, pushed 2026-11-02; CI green. |
+| AWS | Applied 2026-11-02 with Phase 8's, at the owner's go-ahead. `8854af8` was released to the test environment the same day: migrations 0010 and 0011 applied and the worker's first retention run logged. `infra/scripts/smoke.sh` passed (on real S3: signed upload, no overwrite, signed download and delete; the API was refused a delete). A restore drill passed (`docs/testing/restore-drills.md`). Then the environment was paused again. |
 
 **Owner decisions (2026-11-02):**
 

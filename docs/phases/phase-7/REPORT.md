@@ -4,7 +4,7 @@
 |---|---|
 | Date | 2026-11-02 |
 | Result | **Built.** `pnpm verify` passes: all 13 checks; 61 test files, 497 tests; 99 IDs cited. Phase 7's exit IDs (ADV-Q01–Q09, T08) each have a passing test. Scanning a printed label with a real phone is still for a person. |
-| Commit | Not committed; waiting for the owner. |
+| Commit | `bc02e8b`, with Q-22 in `63a3d6b`; pushed 2026-11-02. |
 
 ## What was built
 

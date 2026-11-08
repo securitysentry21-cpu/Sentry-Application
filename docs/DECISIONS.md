@@ -104,6 +104,20 @@ Made as a co-founder would make them, while the owner was away. Each is reversib
 - **No SMS aggregator yet.** Guard enrollment codes are shown in the dashboard, as a code and a QR code, for the supervisor to hand to the guard in person. SMS goes behind an `SmsProvider` interface and switches on when EXT-10 is done. Member invitations work the same way: the dashboard shows the invitation link to send by hand until an email provider is chosen.
 - **Device key (ARCH §5.3).** The P-256 key pair is generated on the phone and the private key is kept in the secure store (Keychain or Android Keystore-encrypted storage). It is not yet generated inside the Secure Enclave or Keystore hardware, which needs a native module; revisit with Phase 0B.
 
+## Phase 10 · hardening and launch · owner decisions 2026-11-02
+
+The owner approved Phase 10 ("After all this, we proceed to phase 10"). Three questions, about privacy, process and cost, answered the same day, each as recommended:
+
+- **Crash reports from the guard app (ARCH §18.6): our own server only.**
+  - The app sends its own error reports to our API: no names, phone numbers, locations or incident text, scrubbed as the logs are (SEC §15). It also notes when it was last closed unexpectedly.
+  - No new company receives data from the guard's phone.
+  - Native crash details come from Google Play's own crash reports once the app is on Play. The directly installed pilot app (D-34) has none.
+- **The Fable audit: the owner runs it, now and at the end of Phase 10.**
+  - Claude Code writes a neutral brief: what was built, where each rule is enforced, how to run everything. It points at code and tests, not at conclusions.
+  - The owner gives Fable the brief with the repo, as with the pre-build audit.
+  - Findings on Phases 0–9 are fixed during Phase 10; a second pass checks Phase 10's changes.
+- **The test environment on AWS: Phase 9 released there and the restore drill run there,** about $0.30 of credit, then paused again. This comes on top of the Phase 8 and 9 Terraform additions approved the same day (under $0.10 a month).
+
 ## Phase 9 · reports, exports and retention · owner decisions 2026-11-02
 
 The owner approved Phase 9 ("commit and push phase 8 and then proceed to phase 9"). Three gaps touching retention, privacy and access to exports, asked under the STOP rule and answered the same day:

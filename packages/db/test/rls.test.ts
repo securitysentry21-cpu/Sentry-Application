@@ -314,6 +314,18 @@ describe('row-level security (ARCH §4.3)', () => {
     });
   }
 
+  it('INV-04 every table holding a position is a tenant table, so the read test above covers it', async () => {
+    const located = await asMigrator(async (m) => {
+      const result = await m.query<{ table_name: string }>(
+        `select distinct table_name from information_schema.columns
+          where table_schema = 'public' and (column_name like '%latitude' or column_name = 'polygon')`,
+      );
+      return result.rows.map((r) => r.table_name).sort();
+    });
+    expect(located.length).toBeGreaterThan(0);
+    expect(located.filter((table) => !TENANT_TABLES.includes(table))).toEqual([]);
+  });
+
   it('ADV-T06 with no context, every tenant table returns zero rows on a fresh connection', async () => {
     const client = new pg.Client({ connectionString: db.urls.app_runtime });
     await client.connect();

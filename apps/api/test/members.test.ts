@@ -37,7 +37,7 @@ afterAll(async () => {
 });
 
 describe('member rules through the API (SEC §6 rule 3)', () => {
-  it('ADV-A02 nobody can change their own role or status', async () => {
+  it('ADV-A02, INV-03 nobody can change their own role or status', async () => {
     const own = seat(org, 'admin@rules.test');
     for (const body of [{ role: 'OWNER' }, { status: 'DISABLED' }]) {
       const res = await patch(admin, org.id, own, { ...body, version: await versionOf(own) });
@@ -51,7 +51,7 @@ describe('member rules through the API (SEC §6 rule 3)', () => {
     ).toBe('SELF_ROLE_CHANGE');
   });
 
-  it('ADV-A05 an administrator cannot create, change or remove owners or administrators', async () => {
+  it('ADV-A05, INV-03 an administrator cannot create, change or remove owners or administrators', async () => {
     const attempts = [
       patch(admin, org.id, seat(org, 'owner@rules.test'), {
         status: 'DISABLED',

@@ -20,9 +20,19 @@ Things only you can do, in order. Tick an item by changing `[ ]` to `[x]`, or te
 - [ ] **Look at incidents and SOS in the demo** on a computer (`pnpm demo`, as for the map):
   - at 2 minutes, a report with a photo arrives on the Incidents page;
   - at 3 minutes, an SOS covers the screen. Click "Enable alarm sound", then acknowledge and resolve it on its SOS page.
-- [ ] **Say yes or no to Phase 8 and 9's additions on AWS:** photo and export storage, the push keys, alarm emails and the retention connection, under $0.10 a month in all. Until they are added, the test setup stays on Phase 7.
+- [x] **Phase 8 and 9's additions on AWS:** approved and applied 2026-11-02 (photo and export storage, the push keys, alarm emails and the retention connection, under $0.10 a month in all). Phase 9 released to the test setup the same day.
+- [ ] **Confirm the AWS alarm emails.** AWS sent "AWS Notification - Subscription Confirmation" to your email. Click "Confirm subscription" in it, or the SOS pipeline alarms reach nobody. Check the spam folder if it isn't there.
 - [ ] **Look at reports and exports** on a computer (`pnpm demo` fills them): Reports → each tab, then "Export CSV", and the Exports page to download it.
-- [ ] **Create a free Firebase project** (console.firebase.google.com, the free Spark plan) for pushes to the guard app (D-26). I'll guide you through adding the app and its key.
+- [ ] **Create the test Firebase project** for pushes to the guard app (D-26). It's free (the Spark plan); never click "Upgrade". This one is for testing only: production gets its own project later, because each environment keeps its own push keys (ARCH §19.1).
+  1. Go to console.firebase.google.com and sign in with the company Google account.
+  2. **Create a project** named `SENTRY Test`. Turn **off** Google Analytics and the Gemini (AI assistance) option; neither is needed.
+  3. On the project's page choose **Add app → Android**. Package name `pk.sentryops.guard.dev`, nickname `SENTRY Dev`. Leave the SHA-1 empty. Click **Register app**, then skip the remaining steps (Next, Next, Continue to console).
+  4. Add a second Android app the same way: `pk.sentryops.guard.staging`, nickname `SENTRY Staging`.
+  5. Open **Project settings** (the gear icon) → **General**, scroll to "Your apps" and download **`google-services.json`**. Downloaded now, it covers both apps.
+  6. In **Project settings → Cloud Messaging**, check that "Firebase Cloud Messaging API (V1)" says **Enabled**.
+  7. In **Project settings → Service accounts**, click **Generate new private key**, then **Generate key**. A `.json` file downloads. **This is a real secret:** it can send notifications to every installed test app. Never email it, paste it in chat or put it in the repository folder.
+  8. Move both files into one folder **outside** the repository, for example `C:\Users\HP\Documents\SENTRY keys\firebase-test\`. Tell me the folder. I'll load the key into the git-ignored Terraform file without printing it, apply it (no cost), and use `google-services.json` for the next guard-app build.
+- [ ] **Run the Fable audit, pass 1.** Give Fable `docs/FABLE_LAUNCH_AUDIT.md` as the prompt, with the repository at commit `8854af8` (download it from https://github.com/securitysentry21-cpu/Sentry-Application/archive/8854af8.zip). Send me its findings; I'll fix them during Phase 10. Pass 2 comes at the end of Phase 10.
 
 ## Start now: these take weeks of waiting on others
 
