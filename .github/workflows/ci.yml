@@ -71,9 +71,16 @@ jobs:
         run: pnpm exec expo prebuild --platform android --no-install
       - name: Merge the release manifest (Gradle)
         working-directory: apps/mobile/android
+        # Gradle downloads itself and the Android libraries from public servers, which fail now and
+        # then (the first run met an HTTP 504). Three attempts; a real failure fails all three.
         run: |
           chmod +x gradlew
-          ./gradlew :app:processReleaseManifest --no-daemon --console=plain
+          for attempt in 1 2 3; do
+            if ./gradlew :app:processReleaseManifest --no-daemon --console=plain; then exit 0; fi
+            echo "Gradle attempt $attempt failed"
+            [ "$attempt" = 3 ] || sleep 30
+          done
+          exit 1
       - name: Check the merged manifest (ADV-X08)
         run: node apps/mobile/scripts/check-android-manifest.ts apps/mobile/android
 
