@@ -43,7 +43,7 @@ Current phase: 3. IDs due through this phase: ADV-X01, ADV-X02, ADV-X07, ADV-T01
 | ADV-L08 | apps/api/test/sync.test.ts |
 | ADV-L09 | apps/api/test/sync.test.ts |
 | ADV-L10 | packages/domain/test/tracking.test.ts |
-| ADV-L11 | apps/api/test/alerts.test.ts<br>packages/domain/test/patrols.test.ts |
+| ADV-L11 | apps/api/test/alerts.test.ts<br>apps/api/test/sync.test.ts<br>packages/domain/test/patrols.test.ts |
 | ADV-L12 | apps/mobile/test/backoff.test.ts<br>apps/mobile/test/sync-engine.test.ts |
 | ADV-O01 | apps/mobile/test/sync-engine.test.ts |
 | ADV-O02 | apps/mobile/test/app-flows.test.ts<br>apps/mobile/test/local-shift.test.ts<br>apps/mobile/test/presenter.test.ts |

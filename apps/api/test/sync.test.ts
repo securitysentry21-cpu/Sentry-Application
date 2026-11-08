@@ -352,6 +352,92 @@ describe('sync batch (ARCH §9)', () => {
   });
 });
 
+describe('one batch, many items (the batch keeps what it learns, and the result is the same as item by item)', () => {
+  const liveState = async (shiftId: string) =>
+    (
+      await asOwner(t.db, (c) =>
+        c.query<{ lat: number | null; fix_at: Date | null; contact_at: Date | null }>(
+          `select last_fix_latitude as lat, last_fix_captured_at as fix_at, last_contact_at as contact_at
+             from shift_live_state where id = $1`,
+          [shiftId],
+        ),
+      )
+    ).rows[0];
+
+  it('ADV-L11 a jump inside one batch is judged against the previous point of that same batch', async () => {
+    const { phone, shiftId } = await onShift();
+    const far = { ...AT_SITE, lat: AT_SITE.lat + 0.45 }; // about 50 km away
+    const res = await send(phone, [
+      item('LOCATION', { shiftId, fix: AT_SITE }, 30_000),
+      item('LOCATION', { shiftId, fix: far }, 20_000),
+      item('LOCATION', { shiftId, fix: AT_SITE }, 25_000),
+    ]);
+    expect(res.results.map((r) => r.status)).toEqual(['ACCEPTED', 'ACCEPTED', 'ACCEPTED']);
+    const stored = await points(shiftId);
+    expect(stored).toHaveLength(3);
+    // Oldest first: the first has nothing before it; the other two are far too fast for a walking guard.
+    expect(stored.map((p) => p.flags.includes('IMPLAUSIBLE_SPEED'))).toEqual([false, true, true]);
+  });
+
+  it('ADV-L06 the live state ends at the newest fix and the latest contact, whatever order the points came in', async () => {
+    const { phone, shiftId } = await onShift();
+    const newest = { ...AT_SITE, lat: 31.4705 };
+    const res = await send(phone, [
+      item('LOCATION', { shiftId, fix: { ...AT_SITE, lat: 31.4703 } }, 40_000),
+      item('LOCATION', { shiftId, fix: newest }, 10_000),
+      item('LOCATION', { shiftId, fix: { ...AT_SITE, lat: 31.4704 } }, 25_000),
+      item('HEARTBEAT', { shiftId }, 5_000),
+    ]);
+    expect(res.results.map((r) => r.status)).toEqual(['ACCEPTED', 'ACCEPTED', 'ACCEPTED', 'ACCEPTED']);
+    const live = await liveState(shiftId);
+    expect(live?.lat).toBeCloseTo(31.4705, 6);
+    // Each item is dated from its place in the phone's monotonic clock: the newest fix is the second of four.
+    expect(live?.fix_at?.getTime()).toBe(t.clock.now().getTime() - 10_000 - 2 * 10);
+    // Contact is the server's receive time (INV-07), however old the points were.
+    expect(live?.contact_at?.getTime()).toBe(t.clock.now().getTime());
+  });
+
+  it('a start and the points after it in one batch: the points are judged against the shift that just started', async () => {
+    const number = `+9230022${String(60_000 + seq++).padStart(5, '0')}`;
+    const guardId = await createGuard(t.app, admin, org.id, {
+      employeeNumber: `B-${number.slice(-5)}`,
+      displayName: 'Same batch',
+      phone: number,
+    });
+    const phone = await enrollPhone(t.app, admin, org.id, guardId, number);
+    const startsAt = new Date(t.clock.now().getTime() + 5 * 60_000);
+    const created = await call(t.app, {
+      method: 'POST',
+      url: '/api/v1/shifts',
+      cookie: admin,
+      org: org.id,
+      body: {
+        guardId,
+        siteId,
+        startsAt: startsAt.toISOString(),
+        endsAt: new Date(startsAt.getTime() + 8 * H).toISOString(),
+      },
+    });
+    const shiftId = created.json<{ id: string }>().id;
+    const res = await send(phone, [
+      item('HEARTBEAT', { shiftId }, 9_000), // before the start: nothing to refresh yet
+      item(
+        'SHIFT_START',
+        { shiftId, fix: { ...AT_SITE, fixAgeS: 2 }, permission: { location: 'ALWAYS', precise: true } },
+        8_000,
+      ),
+      item('LOCATION', { shiftId, fix: AT_SITE }, 4_000),
+    ]);
+    expect(res.results.map((r) => [r.status, r.code])).toEqual([
+      ['ACCEPTED', undefined],
+      ['ACCEPTED', undefined],
+      ['ACCEPTED', undefined],
+    ]);
+    expect(await points(shiftId)).toHaveLength(1);
+    expect(res.shifts).toEqual([expect.objectContaining({ shiftId, status: 'ACTIVE' })]);
+  });
+});
+
 describe('a quarantined start (ARCH §9.3)', () => {
   it("holds the shift's later points for retry, in the same batch and in later ones, instead of losing them", async () => {
     const number = `+9230022${String(30_000 + seq++).padStart(5, '0')}`;

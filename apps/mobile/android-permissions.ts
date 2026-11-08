@@ -14,6 +14,10 @@ export const ANDROID_PERMISSIONS = [
   'android.permission.CAMERA', // QR codes (enrollment, patrol checkpoints) and incident photos (PROD §7.8)
   'android.permission.VIBRATE', // haptic feedback on critical actions and the SOS hold (PROD §7.1, §11.1)
   'android.permission.ACCESS_NETWORK_STATE', // expo-network: upload when the network returns (never proof of delivery)
+  'com.google.android.c2dm.permission.RECEIVE', // Firebase Cloud Messaging: receive the pushes our server sends (D-26)
+  // FCM holds a wake lock for the moments it handles a push. Declared, never held through a shift: heartbeats ride
+  // on location callbacks (SEC pitfall 32, EXT-46). Play's wake-lock vitals are checked on the device tests.
+  'android.permission.WAKE_LOCK',
   // android.permission.INTERNET comes from React Native itself (BASELINE_PERMISSIONS in
   // scripts/android-manifest.ts).
 ] as const;
@@ -53,4 +57,24 @@ export const BLOCKED_ANDROID_PERMISSIONS = [
   'android.permission.USE_BIOMETRIC',
   'android.permission.USE_FINGERPRINT',
   'com.google.android.gms.permission.AD_ID',
+  // App-icon badge counts for vendor launchers, added by `badgin` (a dependency of expo-notifications).
+  // The app never sets a badge (shouldSetBadge: false), so none of these is needed.
+  'android.permission.READ_APP_BADGE',
+  'com.anddoes.launcher.permission.UPDATE_COUNT',
+  'com.htc.launcher.permission.READ_SETTINGS',
+  'com.htc.launcher.permission.UPDATE_SHORTCUT',
+  'com.huawei.android.launcher.permission.CHANGE_BADGE',
+  'com.huawei.android.launcher.permission.READ_SETTINGS',
+  'com.huawei.android.launcher.permission.WRITE_SETTINGS',
+  'com.majeur.launcher.permission.UPDATE_BADGE',
+  'com.oppo.launcher.permission.READ_SETTINGS',
+  'com.oppo.launcher.permission.WRITE_SETTINGS',
+  'com.sec.android.provider.badge.permission.READ',
+  'com.sec.android.provider.badge.permission.WRITE',
+  'com.sonyericsson.home.permission.BROADCAST_BADGE',
+  'com.sonymobile.home.permission.PROVIDER_INSERT_BADGE',
+  'me.everything.badger.permission.BADGE_COUNT_READ',
+  'me.everything.badger.permission.BADGE_COUNT_WRITE',
+  // Play's install referrer, pulled in by expo-application (a dependency of expo-notifications). Unused.
+  'com.google.android.finsky.permission.BIND_GET_INSTALL_REFERRER_SERVICE',
 ] as const;

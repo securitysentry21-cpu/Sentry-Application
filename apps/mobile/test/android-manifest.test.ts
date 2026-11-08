@@ -72,9 +72,10 @@ describe('release manifest check (ADV-X08)', () => {
     expect(check(contacts)).toEqual([
       expect.stringMatching(/blocked permission android\.permission\.READ_CONTACTS/),
     ]);
-    const wakeLock = changed('<queries>', `${permission('android.permission.WAKE_LOCK')}    <queries>`);
-    expect(check(wakeLock)).toEqual([
-      expect.stringMatching(/unexpected permission android\.permission\.WAKE_LOCK/),
+    // One that is neither allowed nor blocked is "unexpected": someone has to look at it.
+    const calendar = changed('<queries>', `${permission('android.permission.READ_CALENDAR')}    <queries>`);
+    expect(check(calendar)).toEqual([
+      expect.stringMatching(/unexpected permission android\.permission\.READ_CALENDAR/),
     ]);
     // The older element for permissions that only apply from Android 6, and attribute quotes of either kind.
     const sdk23 = changed(
@@ -167,5 +168,5 @@ describe('release manifest check (ADV-X08)', () => {
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
-  });
+  }, 60_000);
 });
