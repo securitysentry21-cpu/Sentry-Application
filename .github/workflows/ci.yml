@@ -69,10 +69,20 @@ jobs:
           EXPO_PUBLIC_API_BASE_URL: https://api.staging.invalid
           EXPO_NO_TELEMETRY: '1'
         run: pnpm exec expo prebuild --platform android --no-install
+      - name: Fetch Gradle from its own GitHub release
+        working-directory: apps/mobile/android
+        # The wrapper asks services.gradle.org, which answered HTTP 504 to GitHub's runners on every
+        # try (it works from elsewhere). The same file is published as a release asset of
+        # github.com/gradle/gradle-distributions: ask for that, same version, in the generated project.
+        run: |
+          version=$(sed -n 's#.*/gradle-\(.*\)-bin\.zip#\1#p' gradle/wrapper/gradle-wrapper.properties)
+          test -n "$version"
+          sed -i "s#^distributionUrl=.*#distributionUrl=https://github.com/gradle/gradle-distributions/releases/download/v${version}/gradle-${version}-bin.zip#" gradle/wrapper/gradle-wrapper.properties
+          grep distributionUrl gradle/wrapper/gradle-wrapper.properties
       - name: Merge the release manifest (Gradle)
         working-directory: apps/mobile/android
-        # Gradle downloads itself and the Android libraries from public servers, which fail now and
-        # then (the first run met an HTTP 504). Three attempts; a real failure fails all three.
+        # Gradle also downloads the Android libraries from public servers, which fail now and then.
+        # Three attempts; a real failure fails all three.
         run: |
           chmod +x gradlew
           for attempt in 1 2 3; do
