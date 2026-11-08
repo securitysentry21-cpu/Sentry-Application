@@ -48,3 +48,7 @@ Thumbs.db
 *.tfplan
 infra/terraform/env/*.backend.hcl
 infra/terraform/**/local.auto.tfvars
+
+# Playwright (apps/web/e2e): reports, traces and screenshots of a run
+apps/web/test-results/
+apps/web/playwright-report/

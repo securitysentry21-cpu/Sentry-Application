@@ -34,6 +34,7 @@ pnpm check:licences  # licence allow-list (also part of verify)
 pnpm docs:generate   # regenerate docs/generated/* after changing contracts or routes
 pnpm db:codegen      # regenerate Kysely types after adding a migration
 pnpm negative-controls
+pnpm e2e             # browser tests (Playwright) against a throwaway local stack: sign-in, SOS alarm to resolution, CSV export; first `pnpm --filter @sentryops/web exec playwright install chromium`; not part of verify
 pnpm load            # load and simulator harness (minutes, not part of verify); LOAD_PHONES=1000 LOAD_NIGHT_MINUTES=60 for the full scenarios; report in .local/load-report.md
 node scripts/traceability.ts --through 10   # test IDs still missing if every phase up to 10 were done
 ```

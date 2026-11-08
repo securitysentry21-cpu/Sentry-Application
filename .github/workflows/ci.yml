@@ -94,6 +94,33 @@ jobs:
       - name: Check the merged manifest (ADV-X08)
         run: node apps/mobile/scripts/check-android-manifest.ts apps/mobile/android
 
+  # ARCH §21.1: the dashboard's critical flows in a real browser, against a throwaway stack that
+  # apps/web/e2e/stack.ts builds (PostgreSQL, API, worker, dashboard) and seeds: sign-in, an SOS from
+  # alarm to resolution, a CSV export downloaded. Not yet a condition of the image job: it joins
+  # `needs` there once it has proved steady on this runner.
+  browser-tests:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Install Chromium
+        run: pnpm --filter @sentryops/web exec playwright install --with-deps chromium
+      - name: Browser tests
+        run: pnpm e2e
+      - name: Keep the traces of a failed run
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-results
+          path: apps/web/test-results
+          retention-days: 7
+
   secrets:
     runs-on: ubuntu-24.04
     timeout-minutes: 10

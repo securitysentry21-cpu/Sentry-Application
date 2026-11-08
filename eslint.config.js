@@ -80,8 +80,16 @@ export default tseslint.config(
     },
   },
   {
-    // Where SQL is allowed.
-    files: ['packages/db/**', '**/repositories/**', 'apps/api/src/db/**', 'apps/api/test/**', 'scripts/**'],
+    // Where SQL is allowed. The browser tests' stack (apps/web/e2e) seeds a throwaway database as the
+    // table owner, like the API tests' helpers do; the dashboard itself never touches a database.
+    files: [
+      'packages/db/**',
+      '**/repositories/**',
+      'apps/api/src/db/**',
+      'apps/api/test/**',
+      'apps/web/e2e/**',
+      'scripts/**',
+    ],
     rules: { 'no-restricted-imports': 'off' },
   },
   {
