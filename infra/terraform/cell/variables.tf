@@ -172,3 +172,28 @@ variable "canary_device_key" {
   default     = ""
   sensitive   = true
 }
+
+# ── Guard app versions (ARCH §15.2; runbook "Revoking an app version") ─────────────────────────
+
+variable "mobile_min_version" {
+  description = "The oldest guard app the API accepts. An older app is told to update; on a shift it keeps tracking (PROD §7)."
+  type        = string
+  default     = "0.1.0"
+}
+
+variable "mobile_recommended_version" {
+  description = "The version the app suggests updating to."
+  type        = string
+  default     = "0.1.0"
+}
+
+variable "mobile_revoked_versions" {
+  description = "Exact app versions that must stop working now (a security flaw). A revoked app is refused until it is updated; set it in the environment's tfvars and apply. Empty for none."
+  type        = list(string)
+  default     = []
+
+  validation {
+    condition     = alltrue([for v in var.mobile_revoked_versions : can(regex("^[0-9A-Za-z.+-]{1,40}$", v))])
+    error_message = "Each revoked version must look like 0.1.3 (letters, digits, dots, plus and hyphen)."
+  }
+}

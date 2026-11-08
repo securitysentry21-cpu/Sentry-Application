@@ -67,17 +67,28 @@ export type TestApp = {
 };
 
 export async function startTestApp(
-  options: { config?: Partial<Config>; realtime?: BuildOptions['realtime']; notify?: Providers } = {},
+  options: {
+    config?: Partial<Config>;
+    realtime?: BuildOptions['realtime'];
+    notify?: Providers;
+    /** Default off. A test that reads the log passes pino options with its own `stream`. */
+    logger?: BuildOptions['logger'];
+    /** Default 4. The load harness uses the API's own default of 10. */
+    poolMax?: number;
+  } = {},
 ): Promise<TestApp> {
   const db = await createTestDatabase(inject('adminUrl'));
-  const pool: Pool = createPool(db.urls.app_runtime, { max: 4 });
+  const pool: Pool = createPool(db.urls.app_runtime, { max: options.poolMax ?? 4 });
   const clock = new FakeClock(NOW);
   const deps = createDeps(testConfig(db.urls.app_runtime, options.config), pool, {
     clock,
     oidc: null,
     ...(options.notify ? { notify: options.notify } : {}),
   });
-  const app = buildApp(deps, { logger: false, ...(options.realtime ? { realtime: options.realtime } : {}) });
+  const app = buildApp(deps, {
+    logger: options.logger ?? false,
+    ...(options.realtime ? { realtime: options.realtime } : {}),
+  });
   await app.ready();
   return {
     app,

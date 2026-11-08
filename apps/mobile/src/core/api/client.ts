@@ -16,6 +16,7 @@ import {
   sosResponseSchema,
   sosStatusResponseSchema,
   syncBatchResponseSchema,
+  type AppErrorsRequest,
   type AttachmentSlotRequest,
   type AttachmentSlotResponse,
   type EnrollmentRedeemRequest,
@@ -23,6 +24,7 @@ import {
   type ErrorCode,
   type GuardIncidentsResponse,
   type GuardPatrolsResponse,
+  type GuardPushTokenRequest,
   type MobileConfig,
   type SessionTokens,
   type SosStatusResponse,
@@ -243,6 +245,24 @@ export class ApiClient {
       bodyText,
       schema: sosStatusResponseSchema,
       timeoutMs: TIMEOUT.sos,
+    });
+  }
+
+  /** This phone's Firebase token, so the server can push "SOS acknowledged" and shift notices (D-26). */
+  postPushToken(token: string, body: GuardPushTokenRequest): Promise<void> {
+    return this.request('POST', '/me/push-token', {
+      auth: { kind: 'bearer', token },
+      bodyText: JSON.stringify(body),
+      schema: null,
+    });
+  }
+
+  /** Crash reports for our own server's log (ARCH §18.6). The body is built to the contract's patterns. */
+  postAppErrors(token: string, body: AppErrorsRequest): Promise<void> {
+    return this.request('POST', '/diagnostics/app-errors', {
+      auth: { kind: 'bearer', token },
+      bodyText: JSON.stringify(body),
+      schema: null,
     });
   }
 

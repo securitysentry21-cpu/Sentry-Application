@@ -34,6 +34,8 @@ pnpm check:licences  # licence allow-list (also part of verify)
 pnpm docs:generate   # regenerate docs/generated/* after changing contracts or routes
 pnpm db:codegen      # regenerate Kysely types after adding a migration
 pnpm negative-controls
+pnpm e2e             # browser tests (Playwright) against a throwaway local stack: sign-in, SOS alarm to resolution, CSV export; first `pnpm --filter @sentryops/web exec playwright install chromium`; not part of verify
+pnpm load            # load and simulator harness (minutes, not part of verify); LOAD_PHONES=1000 LOAD_NIGHT_MINUTES=60 for the full scenarios; report in .local/load-report.md
 node scripts/traceability.ts --through 10   # test IDs still missing if every phase up to 10 were done
 ```
 
@@ -66,6 +68,10 @@ On this Windows machine, run pnpm unattended (`CI=true`, `--reporter=append-only
 | Location history writes its audit row before reading any point; the reason is required when the organization says so. The SOS page's trail is history too (`SOS_VIEWED`); a newer SOS position alone travels live on the stream, without a reload | `routes/live.ts`, `routes/sos.ts`, `realtime/hub.ts`; `live.test.ts`, `realtime.test.ts` (ADV-P02, A04, INV-14) |
 | The dashboard has no HTML sink (no `innerHTML`, map-popup HTML or `dangerouslySetInnerHTML`); map details open in a plain-text panel | ESLint; `apps/web/test/plain-text.test.tsx` (ADV-W01) |
 | SQL only in `packages/db` or `**/repositories/**`; time only from the injected `Clock` in domain logic and services; no `dangerouslySetInnerHTML` | ESLint rules |
+| The guard app's release manifest, merged by Gradle in CI, declares the Play monitoring tool, holds exactly the allow-listed permissions, declares the location service's foreground type, targets API ≥ 36 and allows neither cloud backup nor plain HTTP | `apps/mobile/android-permissions.ts`, `apps/mobile/scripts/*`, CI job `android-manifest`; `android-manifest.test.ts` (ADV-X08), negative control |
+| Crash reports from the guard app go to our own API only, which writes them to its service log (30 days) and nowhere else. Every field is held to an identifier-like pattern, so no message text, name, number, coordinate or incident text fits; the phone rebuilds the error name and frames from allow-listed characters and never reads the message; one bad report refuses the batch | `packages/contracts/src/diagnostics.ts`, `routes/diagnostics.ts`, `apps/mobile/src/core/diagnostics/*`; `diagnostics.test.ts`, `crash-reports.test.ts` (mutation-checked) |
+| A guard app below the minimum version is refused with 426 on guard routes, except the config, queued uploads (sync, photos), crash reports and SOS; a revoked version is refused everywhere but the config, SOS included (INV-15's one exception). Set per route by `policy.appVersion` | `apps/api/src/app-version.ts`, `context.ts`, route policies; `app-version.test.ts` (mutation-checked) |
+| Operator commands into an organization need a reason and write a `PLATFORM_ACCESS` audit row first; they run as `app_runtime` in that organization's tenant transaction and print counts, ages, IDs and codes only. A quarantined item is replayed through the real sync pipeline as its own phone, never from a lost or compromised one, and the runtime role may update only its `replayed_at` | `services/operator.ts`, `cli/operator*.ts`, migration 0012; `operator.test.ts` |
 | Defaults, error codes and audit actions equal the spec tables | spec-consistency tests (ADV-X04) |
 | Generated docs and DB types match the code | `docs:check`, `db:codegen --check` |
 | Each security check can fail | `scripts/negative-controls.ts` (ADV-X02) |

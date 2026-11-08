@@ -21,6 +21,7 @@ import {
   staleSosOrganizations,
 } from './workers/notifications.ts';
 import { runDispatcher, sweepStaleStreams } from './workers/outbox.ts';
+import { heartbeatLine, JobClock, notificationRunLine } from './workers/health.ts';
 import { runExportWork, runRetentionSweep } from './workers/retention.ts';
 
 const env = z.object({
@@ -59,6 +60,12 @@ if (retentionPool) await verifyRuntimeRole(retentionPool, ['retention_worker']);
 const deps = { ...createDeps(config, runtime, { oidc: null }), sweep: createKysely(sweepPool) };
 const retentionDb = retentionPool ? createKysely(retentionPool) : null;
 
+// How far behind schedule the most overdue loop is, logged every 30 s for the operator's alarms
+// (ARCH §18.3: detector lag at most 2 minutes). A stuck loop shows as lag; a dead worker, as silence.
+const jobs = new JobClock();
+const nowMs = () => deps.clock.now().getTime();
+const HEARTBEAT_MS = 30_000;
+
 const failed = (msg: string, error: unknown) =>
   console.error(JSON.stringify({ msg, error: error instanceof Error ? error.message : 'unknown' }));
 
@@ -79,6 +86,7 @@ async function tick(): Promise<void> {
   } catch (error) {
     failed('shift detectors failed', error);
   }
+  jobs.done('tick', nowMs());
   if (!stopping) setTimeout(() => void tick(), extra.DETECTOR_INTERVAL_S * 1000);
 }
 
@@ -89,12 +97,15 @@ async function escalate(): Promise<void> {
   } catch (error) {
     failed('sos pipeline error: escalation failed', error);
   }
+  jobs.done('escalate', nowMs());
   if (!stopping) setTimeout(() => void escalate(), extra.ESCALATION_INTERVAL_S * 1000);
 }
 
 async function send(): Promise<void> {
   try {
     const result = await runSender(deps);
+    const run = notificationRunLine(result.sent, result.failures.length);
+    if (run) console.log(JSON.stringify(run));
     for (const failure of result.failures) {
       // Codes only: never a number, a token or a message (SEC §15).
       console.error(
@@ -108,6 +119,7 @@ async function send(): Promise<void> {
   } catch (error) {
     failed('sos pipeline error: sender failed', error);
   }
+  jobs.done('send', nowMs());
   if (!stopping) setTimeout(() => void send(), extra.SENDER_INTERVAL_MS);
 }
 
@@ -118,6 +130,7 @@ async function processPhotos(): Promise<void> {
   } catch (error) {
     failed('attachment processor failed', error);
   }
+  jobs.done('processPhotos', nowMs());
   if (!stopping) setTimeout(() => void processPhotos(), extra.ATTACHMENT_INTERVAL_S * 1000);
 }
 
@@ -127,6 +140,7 @@ async function dispatch(): Promise<void> {
   } catch (error) {
     failed('outbox dispatcher failed', error);
   }
+  jobs.done('dispatch', nowMs());
   if (!stopping) setTimeout(() => void dispatch(), extra.DISPATCH_INTERVAL_MS);
 }
 
@@ -138,6 +152,7 @@ async function exportWork(): Promise<void> {
   } catch (error) {
     failed('export runner failed', error);
   }
+  jobs.done('exportWork', nowMs());
   if (!stopping) setTimeout(() => void exportWork(), extra.EXPORT_INTERVAL_S * 1000);
 }
 
@@ -153,6 +168,7 @@ async function retention(): Promise<void> {
   } catch (error) {
     failed('retention run failed', error);
   }
+  jobs.done('retention', nowMs());
   if (!stopping) setTimeout(() => void retention(), extra.RETENTION_CHECK_INTERVAL_S * 1000);
 }
 
@@ -184,8 +200,19 @@ async function canaryRun(): Promise<void> {
   } catch (error) {
     failed('canary failed', error);
   }
+  jobs.done('canaryRun', nowMs());
   if (!stopping) setTimeout(() => void canaryRun(), extra.CANARY_INTERVAL_S * 1000);
 }
+
+jobs.register('tick', extra.DETECTOR_INTERVAL_S * 1000, nowMs());
+jobs.register('dispatch', extra.DISPATCH_INTERVAL_MS, nowMs());
+jobs.register('escalate', extra.ESCALATION_INTERVAL_S * 1000, nowMs());
+jobs.register('send', extra.SENDER_INTERVAL_MS, nowMs());
+jobs.register('processPhotos', extra.ATTACHMENT_INTERVAL_S * 1000, nowMs());
+jobs.register('exportWork', extra.EXPORT_INTERVAL_S * 1000, nowMs());
+if (retentionDb) jobs.register('retention', extra.RETENTION_CHECK_INTERVAL_S * 1000, nowMs());
+if (canary) jobs.register('canaryRun', extra.CANARY_INTERVAL_S * 1000, nowMs());
+setInterval(() => console.log(JSON.stringify(heartbeatLine(jobs, nowMs()))), HEARTBEAT_MS);
 
 void tick();
 void dispatch();

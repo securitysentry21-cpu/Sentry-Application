@@ -19,6 +19,12 @@ export const META_KEYS = {
   shiftsCache: 'shifts.cache',
   patrolsCache: 'patrols.cache',
   trackingRuntime: 'tracking.runtime',
+  /** Crash reports waiting to be sent (ARCH §18.6). */
+  crashQueue: 'diagnostics.crashQueue',
+  /** Whether the last run ended cleanly (core/diagnostics/crash-reporter.ts). */
+  runMarker: 'diagnostics.runMarker',
+  /** Which phone token the server last accepted: a hash, never the token (core/push/registrar.ts). */
+  pushRegistered: 'push.registered',
 } as const;
 
 export type MetaKey = (typeof META_KEYS)[keyof typeof META_KEYS];

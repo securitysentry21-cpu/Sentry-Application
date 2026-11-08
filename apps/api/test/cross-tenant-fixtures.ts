@@ -262,4 +262,10 @@ export const CROSS_TENANT_FIXTURES: Readonly<Record<string, Coverage>> = {
     covered: 'test',
     test: "notifications.test.ts: the token goes on the caller's own phone",
   },
+
+  // Phase 10
+  'POST /api/v1/diagnostics/app-errors': {
+    covered: 'test',
+    test: 'diagnostics.test.ts: organization and device come from the session; nothing is stored',
+  },
 };

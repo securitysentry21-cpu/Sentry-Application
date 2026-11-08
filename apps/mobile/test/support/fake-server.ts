@@ -4,6 +4,7 @@
 import { createHash, createPublicKey, type KeyObject, verify } from 'node:crypto';
 
 import {
+  type AppErrorReport,
   type ErrorCode,
   type GuardIncidentsResponse,
   type GuardPatrolsResponse,
@@ -11,9 +12,11 @@ import {
   type MobileConfig,
   type ScanResult,
   type SosStatusResponse,
+  appErrorsRequestSchema,
   attachmentCompleteRequestSchema,
   attachmentSlotRequestSchema,
   enrollmentRedeemRequestSchema,
+  guardPushTokenRequestSchema,
   sessionRefreshRequestSchema,
   sosCancelRequestSchema,
   sosLocationsRequestSchema,
@@ -147,6 +150,10 @@ export class FakeServer {
   myIncidents: GuardIncidentsResponse['incidents'] = [];
   readonly requests: { method: string; path: string; headers: Record<string, string> }[] = [];
   readonly consents: { disclosureVersion: string; locale: string; guardId: string }[] = [];
+  /** Crash reports that passed the contract's strict schema (what the real server logs). */
+  readonly appErrors: AppErrorReport[] = [];
+  /** Firebase tokens the server accepted, with the device whose session sent them (D-26). */
+  readonly pushTokens: { deviceId: string; token: string }[] = [];
   /** How each new item is answered. Default: SHIFT_START activates the shift, everything ACCEPTED. */
   decide: (item: SyncItem) => ItemDecision = () => ({ status: 'ACCEPTED' });
   /** How an accepted checkpoint scan is judged (the real server's verdict, ARCH §11.2). */
@@ -224,6 +231,20 @@ export class FakeServer {
           if (!body.success) return this.#error(400, 'VALIDATION_FAILED');
           this.consents.push({ ...body.data, guardId: session.guardId });
           return this.#json(201, { recorded: true });
+        });
+      case 'POST /api/v1/me/push-token':
+        return this.#authed(request, (session) => {
+          const body = guardPushTokenRequestSchema.safeParse(JSON.parse(request.body ?? '{}'));
+          if (!body.success) return this.#error(400, 'VALIDATION_FAILED');
+          this.pushTokens.push({ deviceId: session.deviceId, token: body.data.token });
+          return this.#response(204, null);
+        });
+      case 'POST /api/v1/diagnostics/app-errors':
+        return this.#authed(request, () => {
+          const body = appErrorsRequestSchema.safeParse(JSON.parse(request.body ?? '{}'));
+          if (!body.success) return this.#error(400, 'VALIDATION_FAILED');
+          this.appErrors.push(...body.data.reports);
+          return this.#response(204, null);
         });
       case 'GET /api/v1/me/shifts':
         return this.#authed(request, () =>

@@ -5,6 +5,7 @@
 import {
   DEVICE_KEY_ALGORITHM,
   MAX_INCIDENT_PHOTOS,
+  type AppErrorKind,
   type DeviceStatus,
   type Fix,
   type GuardIncidentsResponse,
@@ -28,6 +29,7 @@ import {
   type VersionGate,
 } from './config.ts';
 import { publicKeySpkiBase64 } from './device-key.ts';
+import { CrashReporter } from './diagnostics/crash-reporter.ts';
 import { disclosureFor } from './i18n/disclosure.ts';
 import {
   DEFAULT_LOCALE,
@@ -55,7 +57,8 @@ import {
 } from './outbox/outbox.ts';
 import { isCheckpointLabel } from './patrol.ts';
 import { type CaptureSource, PhotoQueue } from './photos/queue.ts';
-import type { DevicePort, LocationPort, PhotoPort, SecureKV } from './ports.ts';
+import { PushRegistrar } from './push/registrar.ts';
+import type { DevicePort, LocationPort, PhotoPort, PushPort, SecureKV } from './ports.ts';
 import { ServerTime } from './server-time.ts';
 import {
   canResume,
@@ -214,6 +217,8 @@ export type GuardAppDeps = {
   readonly location: LocationPort;
   readonly device: DevicePort;
   readonly photos: PhotoPort;
+  /** The phone's Firebase token (D-26). Absent in builds and tests without pushes. */
+  readonly push?: PushPort;
   readonly runtime: RuntimeConfig;
   readonly appVersion: string;
   readonly clocks: Clocks;
@@ -221,6 +226,11 @@ export type GuardAppDeps = {
   readonly random01: () => number;
   readonly logger: Logger;
   readonly schedule?: Scheduler;
+  /**
+   * Send crash reports to our own server (ARCH §18.6). Off by default; release builds turn it on
+   * (src/platform/runtime.ts). Development builds never report.
+   */
+  readonly crashReports?: boolean;
 };
 
 /** What the phone remembers about tracking across process runs (meta `tracking.runtime`). */
@@ -278,6 +288,8 @@ export class GuardApp {
   #engine: SyncEngine | null = null;
   #sos: SosLane | null = null;
   #photos: PhotoQueue | null = null;
+  #crashes: CrashReporter | null = null;
+  #push: PushRegistrar | null = null;
   #pendingPhotos = 0;
   #installation: Installation | null = null;
 
@@ -401,6 +413,33 @@ export class GuardApp {
     if (stored && this.#identity && stored.guardId !== this.#identity.guardId) {
       // Never pair one guard's session with another guard's identity.
       await session.signOut('NO_SESSION');
+    }
+
+    if (deps.crashReports) {
+      this.#crashes = new CrashReporter({
+        meta,
+        wall: deps.clocks.wall,
+        appVersion: deps.appVersion,
+        platform: deps.device.info.platform,
+        osVersion: deps.device.info.osVersion,
+        send: (reports) => session.withAuth((token) => api.postAppErrors(token, { reports })),
+        logger: deps.logger,
+      });
+      // Notes whether the previous run ended badly, then marks this one open.
+      await this.#crashes.onStart();
+    }
+
+    if (deps.push) {
+      this.#push = new PushRegistrar({
+        port: deps.push,
+        meta,
+        wall: deps.clocks.wall,
+        deviceId: () => this.#identity?.deviceId ?? null,
+        register: (pushToken) =>
+          session.withAuth((token) => api.postPushToken(token, { provider: 'FCM', token: pushToken })),
+        logger: deps.logger,
+      });
+      this.#push.start();
     }
 
     const engine = new SyncEngine({
@@ -737,6 +776,7 @@ export class GuardApp {
     this.#emit();
     this.#deps.logger.info('enrollment.done', { deviceId: identity.deviceId });
     void this.refresh().then(() => this.flush({ urgent: true }));
+    void this.#push?.sync();
     return { kind: 'OK' };
   }
 
@@ -1614,6 +1654,8 @@ export class GuardApp {
     const now = this.#deps.clocks.wall.nowMs();
     if (now >= this.#lastHousekeepingMs && now - this.#lastHousekeepingMs < HOUSEKEEPING_EVERY_MS) return;
     this.#lastHousekeepingMs = now;
+    await this.#crashes?.touch();
+    await this.#crashes?.flush();
     // A margin beyond the server's limit, so a slightly wrong clock never drops data the server
     // would still have accepted.
     const maxAgeMs = this.settings.sync.maxOfflineAgeHours * HOUR + 6 * HOUR;
@@ -1634,11 +1676,34 @@ export class GuardApp {
 
   async onForeground(): Promise<void> {
     await this.start();
+    await this.#crashes?.onForeground();
     await this.probeDevice();
     await this.refresh();
     if (this.#trackedShift()) await this.#reportDeviceStatus(false);
     await this.#sos?.retryNow();
     await this.flush();
+    await this.#crashes?.flush();
+    await this.#push?.sync();
+  }
+
+  /** The app left the front: a stop from here on is the system's doing, not a crash. */
+  async onBackground(): Promise<void> {
+    await this.start();
+    await this.#crashes?.onBackground();
+  }
+
+  /**
+   * An error the screens or the global handler caught (ARCH §18.6). Only its class and the places in
+   * our code it passed through are kept, never its message (core/diagnostics/crash-report.ts).
+   * Resolves once the report is queued (and a send tried), so a fatal handler can wait for it.
+   */
+  async reportError(kind: AppErrorKind, error: unknown, fatal: boolean): Promise<void> {
+    try {
+      await this.start();
+      await this.#crashes?.record(kind, error, fatal);
+    } catch {
+      // Reporting never makes things worse.
+    }
   }
 
   async acknowledgeDiscarded(): Promise<void> {
@@ -1658,8 +1723,10 @@ export class GuardApp {
   }
 
   /** For tests: closes the database (simulates the process dying). */
-  async close(): Promise<void> {
+  async close(options: { clean?: boolean } = {}): Promise<void> {
     this.#sos?.stop();
+    this.#push?.stop();
+    if (options.clean) await this.#crashes?.onBackground();
     await this.#db?.close();
   }
 }

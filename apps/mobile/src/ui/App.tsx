@@ -12,6 +12,7 @@ import { errorKind } from '../core/log.ts';
 import { getGuardApp } from '../platform/runtime.ts';
 import { Screen, Txt } from './components.tsx';
 import { AppProvider, useGuardApp, useSnapshot } from './context.tsx';
+import { CrashBoundary } from './CrashBoundary.tsx';
 import { colors } from './theme.ts';
 import { DiagnosticsScreen } from './screens/Diagnostics.tsx';
 import { DisclosureScreen } from './screens/Disclosure.tsx';
@@ -83,7 +84,9 @@ export default function App() {
         </View>
       ) : (
         <AppProvider app={boot.app}>
-          <Root />
+          <CrashBoundary app={boot.app}>
+            <Root />
+          </CrashBoundary>
         </AppProvider>
       )}
     </SafeAreaProvider>
@@ -100,6 +103,7 @@ function Root() {
   useEffect(() => {
     const subscription = AppState.addEventListener('change', (state) => {
       if (state === 'active') void app.onForeground();
+      else if (state === 'background') void app.onBackground();
     });
     return () => subscription.remove();
   }, [app]);

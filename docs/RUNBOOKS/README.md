@@ -1,0 +1,145 @@
+# SENTRY operator runbooks
+
+For the owner (`<owner>`) and for an on-call engineer, reading at 3 a.m. on a laptop. Each runbook has the same headings: When to use · First five minutes · Decide · Fix · Confirm it is fixed · Tell · Afterwards · Status. They are the nine runbooks named in `docs/ARCHITECTURE.md §18.7`.
+
+**Honesty rule.** A runbook says `Tried on the test environment: not yet` unless a repository file shows it was tried. Steps marked "never tried" are a plan, not a proven procedure. Of the procedures in these runbooks, only one has been rehearsed on AWS: the database restore drill (2026-11-02). Where something an operator needs does not exist, the text says `[GAP: ...]` and the gap is listed below.
+
+If documents disagree: SEC wins, then DECISIONS, PROD, ARCH (`CLAUDE.md`).
+
+## Index
+
+| Runbook                                                                       | Use it when                                                                      | Alarms that point at it (`sentryops-<env>-` + name)                                                      | Tried on the test environment                        |
+| ----------------------------------------------------------------------------- | -------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- | ---------------------------------------------------- |
+| [01 SOS notifications failing](01-sos-notifications-failing.md)               | An SOS or test alert did not reach the control room; the worker is down or stuck | `sos-pipeline-error`, `sos-unacknowledged`, `worker-silent`, `job-lag`, `canary-failed`, `canary-silent` | not yet                                              |
+| [02 Notification provider outage](02-notification-provider-outage.md)         | Web push, Firebase or SMS is failing                                             | `notification-provider-failure`, `notification-failure-rate`                                             | not yet                                              |
+| [03 Database restore](03-database-restore.md)                                 | Database lost, corrupt or data damaged; region loss                              | `db-cpu` (if it does not settle), `db-storage`, `api-unhealthy`                                          | the **drill** passed 2026-11-02; switch-over not yet |
+| [04 Mass device offline](04-mass-device-offline.md)                           | Many guards offline at once; API down or erroring                                | `api-unhealthy`, `api-error-rate`                                                                        | not yet                                              |
+| [05 Key rotation](05-key-rotation.md)                                         | A secret leaked, or a scheduled rotation                                         | none                                                                                                     | not yet                                              |
+| [06 Replaying quarantined sync items](06-replaying-quarantined-sync-items.md) | A guard's start, end, scan or incident is missing                                | none (G17)                                                                                               | not yet                                              |
+| [07 Onboarding a large organization](07-onboarding-a-large-organization.md)   | A new company, or a company growing by hundreds of guards                        | none                                                                                                     | not yet                                              |
+| [08 Tenant data incident response](08-tenant-data-incident-response.md)       | Someone may have seen, copied or lost a company's data                           | GuardDuty e-mail (production only)                                                                       | not yet                                              |
+| [09 Revoking an app version](09-revoking-an-app-version.md)                   | A guard app build is broken or has a security flaw                               | `app-error-burst`                                                                                        | not yet                                              |
+
+## Every alarm, and where it points
+
+Alarms e-mail the address in `alerts_email` through the SNS topic `sentryops-<env>-operations`, and e-mail again when they recover. Source: `infra/terraform/cell/notifications.tf`, `operations.tf`.
+
+| Alarm                                                                        | Means                                                                                    | Runbook                                                |
+| ---------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- | ------------------------------------------------------ |
+| `sos-pipeline-error`                                                         | The escalation or sender loop failed                                                     | 01                                                     |
+| `sos-unacknowledged`                                                         | A real SOS waited 10 minutes without acknowledgement                                     | 01                                                     |
+| `worker-silent`                                                              | No worker heartbeat for 5 minutes (not while paused)                                     | 01                                                     |
+| `job-lag`                                                                    | A background loop is over 2 minutes late                                                 | 01                                                     |
+| `canary-failed` / `canary-silent`                                            | The synthetic SOS failed, or none succeeded for 30 minutes (only where `canary_enabled`) | 01                                                     |
+| `notification-provider-failure`                                              | 3 failed sends in 5 minutes                                                              | 02 (and 01)                                            |
+| `notification-failure-rate`                                                  | More than 5% of at least 10 sends failed in 15 minutes                                   | 02                                                     |
+| `api-unhealthy`                                                              | No healthy API task for 2 minutes (not while paused)                                     | 04                                                     |
+| `api-error-rate`                                                             | More than 2% of API requests ended in a server error                                     | 04                                                     |
+| `db-cpu`                                                                     | Database processor over 85% for 15 minutes                                               | 03 if it persists                                      |
+| `db-storage`                                                                 | Under 15% of database disk left                                                          | 03 (Decide)                                            |
+| `app-error-burst`                                                            | 20 or more crash reports from guard phones in 15 minutes                                 | 09                                                     |
+| `certificate-expiry` (production only)                                       | The certificate expires in under 21 days and was not renewed                             | none [GAP: check its DNS validation record, `edge.tf`] |
+| GuardDuty finding (production only), topic `sentryops-<env>-security-alerts` | Medium or higher threat finding                                                          | 08                                                     |
+| Budget warnings (`sentryops-<env>-monthly`)                                  | Spending at 85% or 100% of the budget                                                    | the owner                                              |
+
+## Before you start
+
+You need the AWS CLI v2 (2.32 or newer), Terraform (1.10 or newer), Node.js (`operator.sh` uses it) and Git Bash. Run commands from the repository root. Source: `infra/README.md`.
+
+1. Sign in. A browser page asks you to approve. The session lasts 12 hours. There are no access keys.
+
+```bash
+aws login
+```
+
+2. Choose the profile (this one is for `test`; the production profile does not exist yet).
+
+```bash
+export AWS_PROFILE=sentry-test
+```
+
+3. Stop Git Bash rewriting log-group names that start with `/`.
+
+```bash
+export MSYS_NO_PATHCONV=1
+```
+
+4. Replace the placeholders: `<env>` is `test` or `production`; `<region>` is `ap-southeast-2` for `test`, `eu-central-1` for `production`; `<org>` is an organization ID; `<owner>` is the owner.
+5. Is the environment switched on? `test` is kept **paused** (`paused = true` in `infra/terraform/env/test.tfvars`) to save credit: no service runs and the database is stopped, and RDS restarts a stopped database by itself every 7 days. Switching on costs money: ask the owner. The dashboard address:
+
+```bash
+infra/scripts/tf.sh <env> output -raw dashboard_url
+```
+
+6. Which alarms are firing now? (A standard AWS command; no repo script uses it.)
+
+```bash
+aws cloudwatch describe-alarms --region <region> --state-value ALARM --alarm-name-prefix sentryops-<env>- --query 'MetricAlarms[].[AlarmName,StateReason]' --output text
+```
+
+## Rules for every runbook
+
+- `operator.sh <env> <command>` runs the operator CLI as a one-off task, about a minute per command. Its output arrives with tabs between lines: add `| tr '\t' '\n'` (G19). Commands that look into a company (`delivery-health`, `quarantine-list`, `quarantine-replay`) need `--org` and `--reason`, and write a `PLATFORM_ACCESS` row the company's owner can read. Write the reason as a fact, 200 characters at most, no personal data.
+- The repository is **public**. Never put into it, an issue or a ticket: the owner's name or e-mail, an AWS account number, phone numbers, tokens, codes, keys, guard or company names, coordinates, incident text. Organization IDs and item IDs are safe.
+- Secrets (the Firebase JSON, the canary key) live in git-ignored `infra/terraform/cell/local.auto.tfvars`. Never print or paste them.
+- Keep the incident log, the contact sheet and the organization-ID register in a private place outside the repository.
+- Prefer the narrowest action. When a step says "never tried", say so to the owner before doing it, unless people are in danger.
+- There is no SMS provider or e-mail sender yet (EXT-10, EXT-15): "tell" always means a phone call by a person.
+
+## Commands used here that no repository script runs
+
+These are standard AWS or Terraform commands. Check each with `aws <service> <command> help` or `terraform <command> -help` the first time.
+
+- `aws ecs update-service ... --force-new-deployment` (runbooks 01, 04, 05)
+- `aws cloudwatch describe-alarms` (this page)
+- `aws rds modify-db-instance ... --new-db-instance-identifier`, and `restore-db-instance-to-point-in-time ... --restore-time` (runbook 03; the drill script uses `--use-latest-restorable-time`)
+- `aws rds create-db-snapshot` (runbook 08)
+- `terraform apply -replace=...` through `tf.sh` (runbook 05)
+
+## Where the documents and the code disagree
+
+| Statement                                                                                          | What the code does                                                                                                               |
+| -------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `infra/scripts/restore-drill.sh` says the restore steps are in `docs/RUNBOOKS/database-restore.md` | The file is `03-database-restore.md` (script not changed)                                                                        |
+| ARCH §9.3, §16.2: a quarantine monitor pages the operator                                          | None exists (G17)                                                                                                                |
+| ARCH §18.7, SEC §13: rotate "session signing keys"                                                 | None exist: sessions are random tokens stored as hashes                                                                          |
+| ARCH §11.1: changing the QR secret "requires reprinting all labels"                                | Old labels keep scanning (lookup is by stored hash); labels printed after the change do not scan until the checkpoint is rotated |
+| ARCH §19.6, §19.8: photo bucket versioned and replicated to Ireland                                | Not in Terraform (`attachments.tf`); also `docs/legal/README.md` finding 10                                                      |
+| ARCH §9.5, SEC §9: sync 60 per minute sustained, burst 120                                         | One fixed window of 120 per minute per device (`rate-limit.ts`)                                                                  |
+| PROD §4.2: send guard invitations in batches after import                                          | Import creates guard records only; codes are issued one guard at a time                                                          |
+| `notifications.tf`: `sos-unacknowledged` fires "longer than the organization's limit"              | Fixed 10 minutes in the worker (`SOS_UNACKNOWLEDGED_ALARM_MS`)                                                                   |
+| PROD §4.1, SEC §4.3: suspension is a deliberate operator action                                    | No command or screen can set it (G23)                                                                                            |
+
+## All gaps
+
+Size: S = a day or less of code, M = a few days, L = a project or an outside decision. "By hand" is what to do today.
+
+| ID  | Runbooks    | What is missing                                                                                                                                         | Why it matters                                                          | Fix                                                                   | By hand today                                                                             |
+| --- | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------- | --------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| G01 | 01 03 04 05 | No script restarts a service; tasks read secrets only at start                                                                                          | Every secret change and every stuck worker needs a redeploy             | S: `restart.sh <env> <service>`                                       | `aws ecs update-service --force-new-deployment`, then `aws ecs wait services-stable`      |
+| G02 | 01 06 07    | No operator command lists organizations or finds an ID                                                                                                  | Every look-in command needs `--org`                                     | S: `operator list-organizations`                                      | A private register; the company's owner reads `organizationId` at `<dashboard>/api/v1/me` |
+| G03 | 01          | The `sos unacknowledged` line has a count, not organization IDs                                                                                         | The alarm does not say whose SOS                                        | S: add IDs to the line (IDs may be logged)                            | `delivery-health` for each organization                                                   |
+| G04 | 01 02 08    | No contact register or on-call rota                                                                                                                     | The phone fallback needs numbers                                        | S (process)                                                           | A private sheet outside the repo                                                          |
+| G05 | 04          | The platform cannot message anyone (no SMS provider, no e-mail sender, no status page)                                                                  | All "tell" steps are phone calls                                        | L: needs EXT-10 and EXT-15                                            | Phone calls                                                                               |
+| G06 | 01 02       | The sender sends one message at a time, up to 10 s each                                                                                                 | A hanging provider delays an SOS push behind it, for every organization | M                                                                     | Watch `job-lag`; phone control rooms                                                      |
+| G07 | 02          | No SMS provider; `SMS_PROVIDER` accepts only `none` and `memory`; no second provider                                                                    | Every text fails today; no fail-over                                    | L                                                                     | Dashboard alarm plus phone calls                                                          |
+| G08 | 03          | The real switch-over to a restored database is not scripted; Terraform, standby, deletion protection and the Ireland copy afterwards are not worked out | The 4-hour target is unproven                                           | L                                                                     | The manual steps in 03, rehearsed on `test`                                               |
+| G09 | 03          | No way to check or query a restored copy by hand                                                                                                        | A damaged-data case needs improvisation                                 | M                                                                     | A one-off task like `restore-drill.sh` builds                                             |
+| G10 | 03 08       | The photo and export bucket has no versioning or replication                                                                                            | Photos are lost with the bucket or region; nothing recovers a deletion  | M                                                                     | None                                                                                      |
+| G11 | 03 05       | Second-region rebuild untried; the Cognito user pool is not backed up and sign-in does not re-link existing accounts to a new pool                      | Region or pool loss locks dashboard users out                           | L                                                                     | None known                                                                                |
+| G12 | 03          | Restore time with real data and the production drill are unmeasured                                                                                     | RTO unproven                                                            | process                                                               | Run the drill on production before the first guard                                        |
+| G13 | 04          | No platform alarm for "many guards offline"; reconnection storm at scale never tested                                                                   | Only per-guard alerts, which flood the control room                     | M                                                                     | Watch the API alarms and customers' calls                                                 |
+| G14 | 05          | No bulk "rotate all checkpoints" after a QR secret change                                                                                               | Each checkpoint by hand; unrotated ones fail on new prints              | M                                                                     | "New QR label" one checkpoint at a time                                                   |
+| G15 | 05 08       | No "sign out everyone"; no operator command to disable a dashboard user                                                                                 | Containment is slow and partial                                         | M                                                                     | Per device, guard or member                                                               |
+| G16 | 05          | Cognito client-secret rotation untested; no canary-key rotate command                                                                                   | Procedures are guesses                                                  | S                                                                     | As written in 05, with care                                                               |
+| G17 | 06          | No quarantine monitor or alarm                                                                                                                          | Items sit unseen and are deleted at 30 days                             | S–M                                                                   | Weekly `quarantine-list` per organization                                                 |
+| G18 | 06          | A quarantine's cause is not recorded (code is always `INTERNAL_ERROR`)                                                                                  | A bug cannot be diagnosed                                               | S: log the error class                                                | None                                                                                      |
+| G19 | 06          | `operator.sh` hides the CLI's exit code and prints tab-separated lines                                                                                  | `STILL_FAILING` is easy to miss                                         | S                                                                     | `                                                                                         | tr '\t' '\n'` and read the result words |
+| G20 | 07          | No bulk staff invitations, bulk enrollment codes or code sheet, or CSV shift import                                                                     | 1,000 guards means 1,000 manual steps                                   | M each                                                                | The dashboard, one by one                                                                 |
+| G21 | 07 09       | No organization-wide device or app-version list                                                                                                         | Cannot count guards on a bad build                                      | S–M                                                                   | Each guard's page                                                                         |
+| G22 | 07          | Sizes never load-tested (Pilot 0 sizes; no 1,000-guard run)                                                                                             | Capacity is a guess                                                     | L: the Phase 10 load harness                                          | Grow in steps; watch runbook 04's signs                                                   |
+| G23 | 08          | No command to set an organization SUSPENDED                                                                                                             | The strongest containment is SQL only                                   | S: `operator suspend-organization` with the active-shift confirmation | An engineer, with a one-off task                                                          |
+| G24 | 08          | The operator cannot read a company's audit log (owners only)                                                                                            | Investigations depend on the owner                                      | S–M                                                                   | The company's Owner reads and shares it                                                   |
+| G25 | 08          | No evidence-freeze script; no legal hold                                                                                                                | Retention deletes data during an investigation                          | M                                                                     | Copy logs, take a snapshot early                                                          |
+
+Not gaps but limits to keep in mind: SOS is off for pilot guards; production does not exist, so the canary, the web firewall, GuardDuty and the certificate alarm have never run for real; `test` is paused and its database keeps 1 day of backups.

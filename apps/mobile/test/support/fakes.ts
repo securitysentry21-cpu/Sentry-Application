@@ -10,6 +10,7 @@ import type {
   LocationUpdateOptions,
   PhotoPort,
   PreparedPhoto,
+  PushPort,
   SecureKV,
 } from '../../src/core/ports.ts';
 import type { DeviceProbe } from '../../src/core/tracking/device-status.ts';
@@ -146,5 +147,23 @@ export class FakePhotos implements PhotoPort {
   remove(uri: string): Promise<void> {
     this.removed.push(uri);
     return Promise.resolve();
+  }
+}
+
+/** The phone's Firebase token (D-26): hand out a token, or none, and announce a new one on command. */
+export class FakePush implements PushPort {
+  token: string | null = `fcm-${'a'.repeat(40)}`;
+  readonly listeners = new Set<(token: string) => void>();
+  getToken(): Promise<string | null> {
+    return Promise.resolve(this.token);
+  }
+  onTokenChange(listener: (token: string) => void): () => void {
+    this.listeners.add(listener);
+    return () => this.listeners.delete(listener);
+  }
+  /** The system issues a new token. */
+  refresh(token: string): void {
+    this.token = token;
+    for (const listener of this.listeners) listener(token);
   }
 }

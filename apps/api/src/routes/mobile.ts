@@ -29,7 +29,14 @@ export const mobileRoutes = [
     method: 'GET',
     url: '/api/v1/mobile/config',
     summary: 'Versions, tracking and sync parameters and feature flags for the guard app.',
-    policy: { access: GUARD_SELF, ownership: 'guard-self', rateLimit: 'default', audit: null },
+    // Never refused for its version: it is how an out-of-date app learns that it is.
+    policy: {
+      access: GUARD_SELF,
+      ownership: 'guard-self',
+      rateLimit: 'default',
+      audit: null,
+      appVersion: 'config',
+    },
     responses: { 200: mobileConfigSchema },
     handler: async ({ deps, ctx }) => {
       const org = orgOf(ctx);

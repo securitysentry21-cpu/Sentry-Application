@@ -51,4 +51,12 @@ export type RoutePolicy = {
    * with the device key (X-Device-Signature) is accepted instead. Never rate-limited.
    */
   readonly sos?: true;
+  /**
+   * How the guard app's version applies to this route (ARCH §15.2, INV-15). Unset: an app below the
+   * minimum version is refused with 426, and so is a revoked one. `upload`: the route takes data
+   * already captured on the phone (the sync upload, incident photos) or an SOS, so it keeps working
+   * below the minimum, and only a version revoked for security is refused. `config`: never refused,
+   * so the app can always learn that it is out of date. SOS routes count as `upload`.
+   */
+  readonly appVersion?: 'upload' | 'config';
 };

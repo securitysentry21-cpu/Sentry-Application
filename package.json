@@ -25,7 +25,9 @@
     "api:dev": "pnpm --filter @sentryops/api run dev",
     "web:dev": "pnpm --filter @sentryops/web run dev",
     "worker:dev": "pnpm --filter @sentryops/api run worker",
-    "demo": "pnpm --filter @sentryops/api run demo"
+    "demo": "pnpm --filter @sentryops/api run demo",
+    "load": "vitest run --config apps/api/load/vitest.config.ts",
+    "e2e": "pnpm --filter @sentryops/web run e2e"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

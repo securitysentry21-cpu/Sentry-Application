@@ -35,6 +35,8 @@ export async function startCluster(): Promise<Cluster> {
   const child = spawn(process.execPath, [SERVER_SCRIPT, String(port), join(dir, 'data')], {
     stdio: ['pipe', 'pipe', 'inherit'],
   });
+  // Asking a server that has already gone to stop writes to a closed pipe: that is not an error.
+  child.stdin.on('error', () => undefined);
 
   await new Promise<void>((resolve, reject) => {
     const timer = setTimeout(

@@ -45,6 +45,14 @@ export interface DevicePort {
   readonly info: DeviceInfo;
 }
 
+/** The phone's Firebase push address (D-26): src/platform/push.ts with expo-notifications. */
+export interface PushPort {
+  /** This phone's Firebase token, or null when the build has no Firebase file or the system refuses. */
+  getToken(): Promise<string | null>;
+  /** Calls back when the system hands out a new token. Returns a function that stops listening. */
+  onTokenChange(listener: (token: string) => void): () => void;
+}
+
 /** A photo re-encoded into app-private storage, ready to upload (ARCH §12 step 3). */
 export type PreparedPhoto = {
   readonly uri: string;

@@ -13,6 +13,7 @@ import { expoDevice } from './device.ts';
 import { fetchTransport } from './http.ts';
 import { expoLocation } from './location.ts';
 import { expoPhotos } from './photos.ts';
+import { configureNotifications, expoPush } from './push.ts';
 import { appLogger } from './logger.ts';
 import { secureKV } from './secure-store.ts';
 import { openOutboxDatabase } from './sqlite.ts';
@@ -47,14 +48,19 @@ export function getGuardApp(): GuardApp {
     location: expoLocation,
     device: expoDevice,
     photos: expoPhotos,
+    push: expoPush,
     runtime,
     appVersion: appVersion(),
     clocks,
     random: (n) => getRandomBytes(n),
     random01: () => Math.random(),
     logger: appLogger,
+    // Release and staging builds report their own errors to our server (ARCH §18.6); a development
+    // build, full of half-written code, does not.
+    crashReports: !__DEV__,
   });
   instance = app;
+  void configureNotifications();
   watchNetwork(app);
   return app;
 }
