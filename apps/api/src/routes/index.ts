@@ -1,6 +1,7 @@
 import { alertRoutes } from './alerts.ts';
 import { auditLogRoutes } from './audit-logs.ts';
 import { authRoutes } from './auth.ts';
+import { diagnosticsRoutes } from './diagnostics.ts';
 import { enrollmentRoutes } from './enrollment.ts';
 import { guardRoutes } from './guards.ts';
 import { healthRoutes } from './health.ts';
@@ -34,6 +35,7 @@ export const ROUTES: readonly RouteDefinition[] = [
   ...guardRoutes,
   ...enrollmentRoutes,
   ...mobileRoutes,
+  ...diagnosticsRoutes,
   ...siteRoutes,
   ...patrolRoutes,
   ...shiftRoutes,

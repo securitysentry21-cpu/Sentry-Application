@@ -2,10 +2,11 @@
 // Negative controls (ADV-X02, review M-04): prove the security checks CAN fail. Each control breaks
 // one mechanism on purpose and asserts that the check guarding it turns red for the right reason.
 // A control that stays green fails the build: the lesson of the lint step that did nothing.
-import { rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { ROOT, runBin, vitestFailed, type RunResult } from './lib/run.ts';
+import { ROOT, runBin, runNode, vitestFailed, type RunResult } from './lib/run.ts';
 
 type Control = {
   name: string;
@@ -44,6 +45,37 @@ const controls: Control[] = [
     name: 'route mounted without a policy → the route meta-test (ADV-A09) must fail',
     expect: /× .*ADV-A09/,
     run: vitest('api', 'test/route-registry.test.ts', 'route-without-policy'),
+  },
+  {
+    name: 'a library adds READ_CONTACTS to the release manifest → the ADV-X08 manifest check must fail',
+    expect: /blocked permission android\.permission\.READ_CONTACTS/,
+    run: async () => {
+      const mobile = join(ROOT, 'apps', 'mobile');
+      const good = readFileSync(join(mobile, 'test', 'fixtures', 'merged-release-manifest.xml'), 'utf8');
+      const dir = mkdtempSync(join(tmpdir(), 'negative-control-'));
+      const planted = join(dir, 'AndroidManifest.xml');
+      writeFileSync(
+        planted,
+        good.replace(
+          '<queries>',
+          '<uses-permission android:name="android.permission.READ_CONTACTS" /><queries>',
+        ),
+      );
+      try {
+        const result = await runNode(
+          [
+            join(mobile, 'scripts', 'check-android-manifest.ts'),
+            planted,
+            '--application-id',
+            'pk.sentryops.guard.staging',
+          ],
+          { quiet: true },
+        );
+        return { ...result, failed: result.code !== 0 };
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    },
   },
   {
     name: 'wall-clock read planted in domain code → lint must fail',

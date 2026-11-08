@@ -6,6 +6,7 @@ export const en = {
   'app.misconfigured': 'This build is misconfigured ({reason}). Install the correct build from your company.',
   'app.storageError':
     "The phone's storage could not be opened ({reason}). Update the app and call your supervisor.",
+  'app.crashed': 'The app hit a problem. Tap "Try again". If it keeps happening, call your supervisor.',
 
   'common.retry': 'Try again',
   'common.back': 'Back',

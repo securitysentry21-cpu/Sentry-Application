@@ -7,6 +7,7 @@ import type { FastifyRequest } from 'fastify';
 
 import { withTenantTransaction } from '@sentryops/db';
 
+import { enforceAppVersion } from './app-version.ts';
 import { parseDeviceSignature, verifyDeviceSignature } from './auth/device-signature.ts';
 import { readSessionCookie } from './cookies.ts';
 import type { AppDeps } from './deps.ts';
@@ -129,6 +130,7 @@ async function resolveGuard(
   }
   const permissions = ROLE_PERMISSIONS.GUARD;
   if (policy.access.kind === 'permission' && !permissions.has(policy.access.permission)) throw forbidden();
+  enforceAppVersion(request.headers['x-app-version'], policy, deps.config);
   return {
     ...base,
     actor: {
@@ -195,6 +197,7 @@ async function resolveSignedDevice(
   if (guard.organization_status !== 'ACTIVE' && guard.organization_status !== 'SUSPENDED') throw forbidden();
   const permissions = ROLE_PERMISSIONS.GUARD;
   if (policy.access.kind === 'permission' && !permissions.has(policy.access.permission)) throw forbidden();
+  enforceAppVersion(request.headers['x-app-version'], policy, deps.config);
   return {
     ...base,
     actor: {

@@ -373,3 +373,4 @@ export const guardPushTokenRequestSchema = z.strictObject({
   provider: z.literal('FCM'),
   token: z.string().min(20).max(4096),
 });
+export type GuardPushTokenRequest = z.infer<typeof guardPushTokenRequestSchema>;

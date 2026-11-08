@@ -14,6 +14,7 @@ import {
   FakeDevice,
   FakeLocation,
   FakePhotos,
+  FakePush,
   fixAt,
   MemoryKV,
 } from './fakes.ts';
@@ -43,6 +44,7 @@ export type Harness = {
   location: FakeLocation;
   device: FakeDevice;
   photos: FakePhotos;
+  push: FakePush;
   scheduler: ManualScheduler;
   lines: ReturnType<typeof capturingLogger>['lines'];
   dbPath: string | null;
@@ -56,6 +58,10 @@ export type HarnessOptions = {
   device?: FakeDevice;
   /** Use an on-disk database (to simulate the app being killed and reopened). */
   dbPath?: string | null;
+  /** Crash reports to the (fake) server; off unless a test is about them. */
+  crashReports?: boolean;
+  /** The phone's Firebase token; by default the phone has one. */
+  push?: FakePush;
 };
 
 export function tempDbPath(): string {
@@ -69,6 +75,7 @@ export async function makeApp(options: HarnessOptions = {}): Promise<Harness> {
   const location = options.location ?? new FakeLocation();
   const device = options.device ?? new FakeDevice();
   const photos = new FakePhotos();
+  const push = options.push ?? new FakePush();
   const scheduler = new ManualScheduler();
   const { logger, lines } = capturingLogger();
   const dbPath = options.dbPath ?? null;
@@ -80,6 +87,7 @@ export async function makeApp(options: HarnessOptions = {}): Promise<Harness> {
     location,
     device,
     photos,
+    push,
     runtime: { variant: 'development', apiBaseUrl: 'http://10.0.2.2:4000' },
     appVersion: '0.1.0',
     clocks,
@@ -87,9 +95,10 @@ export async function makeApp(options: HarnessOptions = {}): Promise<Harness> {
     random01: () => 0.5,
     logger,
     schedule: scheduler.schedule,
+    ...(options.crashReports ? { crashReports: true } : {}),
   });
   await app.start();
-  return { app, server, clocks, kv, location, device, photos, scheduler, lines, dbPath };
+  return { app, server, clocks, kv, location, device, photos, push, scheduler, lines, dbPath };
 }
 
 /** Language chosen, phone enrolled, disclosure accepted, today's shift known: ready to start. */

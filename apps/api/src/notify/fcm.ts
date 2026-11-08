@@ -77,7 +77,12 @@ export function createFcmSender(options: {
                 token: input.token,
                 notification: { title: input.title, body: input.body },
                 data: input.data,
-                android: { priority: input.urgent ? 'HIGH' : 'NORMAL' },
+                // The channels the guard app creates (apps/mobile/src/platform/push.ts): an SOS is
+                // heard on the loud one. A phone without the channel falls back to its default.
+                android: {
+                  priority: input.urgent ? 'HIGH' : 'NORMAL',
+                  notification: { channel_id: input.urgent ? 'sos' : 'shift' },
+                },
               },
             }),
             signal: AbortSignal.timeout(10_000),

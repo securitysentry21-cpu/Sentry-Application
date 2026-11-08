@@ -43,6 +43,40 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm verify
 
+  # ADV-X08 (SEC §11, ARCH §19.3): the guard app's release manifest after Gradle has merged every
+  # library's manifest into ours. It must declare the Play monitoring tool (EXT-20) and ask for exactly
+  # the allow-listed permissions (apps/mobile/android-permissions.ts), so a library that quietly adds
+  # one fails the build. Only here can it run: it needs the Android SDK, which GitHub's runner has.
+  android-manifest:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - run: pnpm install --frozen-lockfile
+      - name: Generate the Android project (a staging build)
+        working-directory: apps/mobile
+        env:
+          APP_VARIANT: staging
+          EXPO_PUBLIC_API_BASE_URL: https://api.staging.invalid
+          EXPO_NO_TELEMETRY: '1'
+        run: pnpm exec expo prebuild --platform android --no-install
+      - name: Merge the release manifest (Gradle)
+        working-directory: apps/mobile/android
+        run: |
+          chmod +x gradlew
+          ./gradlew :app:processReleaseManifest --no-daemon --console=plain
+      - name: Check the merged manifest (ADV-X08)
+        run: node apps/mobile/scripts/check-android-manifest.ts apps/mobile/android
+
   secrets:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
@@ -58,7 +92,7 @@ jobs:
   # only push images (infra/terraform/production/github.tf); no AWS key is stored in GitHub.
   # Deploying it is a separate, deliberate step: infra/scripts/release.sh <commit>.
   image:
-    needs: [verify, secrets]
+    needs: [verify, android-manifest, secrets]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.AWS_IMAGES_ROLE_ARN != ''
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 30

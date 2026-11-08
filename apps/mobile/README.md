@@ -15,6 +15,8 @@ bundle builds; everything that needs a real device is listed under [Device tests
 ```text
 apps/mobile/
   app.config.ts        variants, identifiers, permissions, iOS texts, config plugins
+  android-permissions.ts   the Android permissions allowed and blocked (read by the config and by the CI check)
+  scripts/             the release-manifest check (ADV-X08), run in CI after Gradle merges the manifest
   eas.json             EAS build profiles (development, staging, production)
   index.ts             entry: defines the background location task, then registers the app
   src/core/            the app's logic, pure TypeScript: no React Native, no Expo (a test enforces it)
@@ -203,14 +205,27 @@ add and the product must not have (microphone, contacts, phone, SMS, storage, mo
 battery-optimization requests, full-screen intents, Wi-Fi state, Bluetooth, NFC, biometrics, the
 advertising ID; and the dev-menu overlay outside development). The Play monitoring-tool declaration
 (`<meta-data android:name="isMonitoringTool" android:value="enterprise_management"/>`, EXT-20) is
-added by a config plugin in every variant. iOS: `UIBackgroundModes` = `location` only (the plugin
+added by a config plugin in every variant. **CI checks the result, not the config** (ADV-X08, the
+`android-manifest` job): it generates the Android project, has Gradle merge every library's manifest into
+ours, and fails unless the merged release manifest declares the Play monitoring tool, holds exactly the
+permissions above plus `INTERNET` and AndroidX's signature-level receiver permission, declares the
+location service's `foregroundServiceType`, targets API 36 or higher (EXT-06), and allows neither cloud
+backups nor plain HTTP. A library that adds a permission fails the build by name: review it, then block
+it (`BLOCKED_ANDROID_PERMISSIONS`) or allow it with its reason (`android-permissions.ts`). To look at
+the same file locally you need the Android SDK, which only CI has; `expo prebuild --platform android`
+shows the manifest before the merge. iOS: `UIBackgroundModes` = `location` only (the plugin
 removes the `fetch` mode expo-task-manager adds), product-specific location and camera texts, no
 Face ID, microphone or motion texts, App Transport Security strict outside development, and a
 privacy manifest declaring the boot-time API behind `monoMs`.
 
 Checked with `npx expo config --type introspect` (the app's own manifest and Info.plist after all
 plugins). The **merged** release manifest, which includes every library's manifest, only exists after
-a Gradle build: the CI check ADV-X08 needs the Android SDK and is not built yet.
+a Gradle build: the CI check ADV-X08 (above) needs the Android SDK, so it runs only in GitHub's CI.
+
+## Pushes and crash reports (Phase 10)
+
+- **Pushes (D-26).** `src/core/push/registrar.ts` tells the server this phone's Firebase token (`POST /me/push-token`) after enrollment, when the system issues a new token, when the phone is enrolled again and once a day while the app is used; a failure is retried the next time the app is in front, and nothing else depends on it. The phone keeps only a hash of the token. `src/platform/push.ts` wraps `expo-notifications` (token, the `sos` and `shift` Android channels the server's pushes name, and showing a push while the app is open). **The build needs Firebase's app file:** point `GOOGLE_SERVICES_JSON` at it (EAS: a file variable; locally: a copy outside the repository). Without it the app builds and runs, and `getToken()` answers null, so no pushes.
+- **Crash reports (ARCH §18.6, owner decision 2026-11-02).** `src/core/diagnostics/` builds a report from an error without ever reading its message: the error's class name and, for each of up to 12 stack frames, the function, the file's base name and the position, all rebuilt from allow-listed characters; plus app and OS version, platform and a time. It is queued in the local database and sent to our own API (`POST /diagnostics/app-errors`), which writes it to its service log (30 days) and nowhere else. A run marker also notes when the previous run ended while the app was in front and never closed itself ("closed unexpectedly"; going to the background counts as a clean close). Only release and staging builds report (`!__DEV__`). Native crashes are not seen here; Google Play shows those once the app is on Play.
 
 ## Device tests (human)
 

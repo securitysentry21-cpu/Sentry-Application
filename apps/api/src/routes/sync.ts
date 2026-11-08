@@ -16,6 +16,8 @@ export const syncRoutes = [
       rateLimit: 'sync',
       audit: null,
       replacedDeviceDrain: true,
+      // Already-captured data keeps coming in below the minimum version (ARCH §15.2).
+      appVersion: 'upload',
     },
     body: syncBatchRequestSchema,
     responses: { 200: syncBatchResponseSchema, 429: errorEnvelopeSchema },

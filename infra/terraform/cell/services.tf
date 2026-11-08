@@ -50,8 +50,9 @@ locals {
     { name = "OBJECT_STORE", value = "s3" },
     { name = "S3_BUCKET", value = aws_s3_bucket.attachments.bucket },
     { name = "S3_REGION", value = var.region },
-    { name = "MOBILE_MIN_VERSION", value = "0.1.0" },
-    { name = "MOBILE_RECOMMENDED_VERSION", value = "0.1.0" },
+    { name = "MOBILE_MIN_VERSION", value = var.mobile_min_version },
+    { name = "MOBILE_RECOMMENDED_VERSION", value = var.mobile_recommended_version },
+    { name = "MOBILE_REVOKED_VERSIONS", value = join(",", var.mobile_revoked_versions) },
   ]
 
   logs = {

@@ -82,7 +82,8 @@ export const TABLES: TableRegistry = {
   location_points: { kind: 'tenant-append-only' },
   device_status_events: { kind: 'tenant-append-only' },
   shift_live_state: { kind: 'tenant', retentionClears: ['last_fix_latitude', 'last_fix_longitude'] },
-  quarantined_items: { kind: 'tenant-append-only' },
+  // Not append-only: an operator's replay sets `replayed_at`, and only that column (migration 0012).
+  quarantined_items: { kind: 'tenant' },
 
   // Phase 5: alerts.
   alerts: { kind: 'tenant' },
