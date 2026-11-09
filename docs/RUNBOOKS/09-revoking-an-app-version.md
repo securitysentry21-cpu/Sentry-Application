@@ -52,13 +52,13 @@ Letters, digits, dots, plus and hyphen only, 40 characters at most (`variables.t
 2. See what will change. Only the `api` and `worker` task definitions should change (`MOBILE_REVOKED_VERSIONS`).
 
 ```bash
-infra/scripts/tf.sh <env> plan
+infra/scripts/tf.sh <env> plan -out=revoke.tfplan
 ```
 
-3. Apply it. Never run an unreviewed plan.
+3. Apply the plan you read, and nothing else (a fresh `apply` would also apply whatever changed since):
 
 ```bash
-infra/scripts/tf.sh <env> apply -auto-approve
+infra/scripts/tf.sh <env> apply-plan revoke.tfplan
 ```
 
 4. Wait until the services have restarted. The apply returns before they finish; on `test` the apply plus the wait took about 5 to 6 minutes. The API keeps answering during the swap (the new task starts before the old one stops).

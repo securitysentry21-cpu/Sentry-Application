@@ -52,7 +52,54 @@ export function validationError(error: z.ZodError): AppError {
   return new AppError('VALIDATION_FAILED', 'The request is invalid.', details);
 }
 
+// Fable pass 2, review L-27 (and docs/testing/load-baseline.md, note 4): a database the API cannot
+// reach, a connection pool with none free, or a server refusing new connections is "dependency
+// unavailable": 503 NOT_READY (ARCH §15.1, Appendix B), not 500. The phone retries both; 503 lets an
+// alarm or a reader of the log tell "saturated" from "bug". pg gives its own timeouts no code.
+const UNAVAILABLE_MESSAGES = new Set([
+  'timeout exceeded when trying to connect', // pg-pool: no connection free within connectionTimeoutMillis
+  'timeout expired', // pg: a new connection not established in time
+  'Connection terminated unexpectedly', // pg: the server went away
+]);
+const UNAVAILABLE_CODES = new Set([
+  'ECONNREFUSED',
+  'ECONNRESET',
+  'ETIMEDOUT',
+  'EHOSTUNREACH',
+  'ENOTFOUND',
+  'EAI_AGAIN',
+  '53300', // too_many_connections
+  '57P01', // admin_shutdown
+  '57P02', // crash_shutdown
+  '57P03', // cannot_connect_now (starting, failing over)
+  '08000', // connection_exception
+  '08001',
+  '08003',
+  '08004',
+  '08006',
+  '28P01', // invalid_password: the window of a password rotation (runbook 05)
+]);
+/** Seconds a phone's ordinary uploads wait before trying again; SOS gets no Retry-After. */
+export const UNAVAILABLE_RETRY_AFTER_S = 5;
+
+export function databaseUnavailable(error: unknown): boolean {
+  if (!(error instanceof Error)) return false;
+  const code = (error as { code?: unknown }).code;
+  return UNAVAILABLE_MESSAGES.has(error.message) || (typeof code === 'string' && UNAVAILABLE_CODES.has(code));
+}
+
 export function errorHandler(error: FastifyError | AppError, request: FastifyRequest, reply: FastifyReply) {
+  if (!(error instanceof AppError) && databaseUnavailable(error)) {
+    request.log.warn({ err: error }, 'database unavailable');
+    // The phone's SOS lane retries on its own short backoff (2 s, with jitter); a Retry-After would
+    // only hold an SOS back (INV-15).
+    if (!request.routeOptions.config.policy?.sos) {
+      void reply.header('retry-after', String(UNAVAILABLE_RETRY_AFTER_S));
+    }
+    return reply
+      .code(503)
+      .send(envelope('NOT_READY', 'The service is busy. Try again in a moment.', request.id));
+  }
   if (error instanceof AppError) {
     if (error.retryAfterS !== undefined) void reply.header('retry-after', String(error.retryAfterS));
     const body = envelope(error.code, error.message, request.id, error.details);

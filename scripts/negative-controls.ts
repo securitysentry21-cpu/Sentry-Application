@@ -36,6 +36,26 @@ const lintPlanted = (path: string, source: string) => async () => {
   }
 };
 
+/**
+ * Fable pass 2 (§5, L-18): breaks the mechanism where it lives, in the source, for one test run. The
+ * line must occur exactly once (so a refactor that moves it turns this control red, not silent), and
+ * the file is restored in `finally`; an interrupted run shows in `git diff`.
+ */
+const mutated = (file: string, from: string, to: string, project: string, testFile: string) => async () => {
+  const path = join(ROOT, file);
+  const original = readFileSync(path, 'utf8');
+  if (original.split(from).length !== 2) {
+    return { code: 1, output: `the line to break is not found once in ${file}: ${from}`, failed: false };
+  }
+  writeFileSync(path, original.replace(from, to));
+  try {
+    const result = await runBin('vitest', ['run', '--project', project, testFile], { quiet: true });
+    return { ...result, failed: vitestFailed(result) };
+  } finally {
+    writeFileSync(path, original);
+  }
+};
+
 const controls: Control[] = [
   {
     name: 'RLS switched off on a tenant table → ADV-T06 must fail',
@@ -98,6 +118,46 @@ const controls: Control[] = [
     name: 'a new grant to system_worker → the role test (ADV-T06) must fail',
     expect: /× .*ADV-T06 system_worker only reads/,
     run: vitest('db', 'test/rls.test.ts', 'system-worker-grant-added'),
+  },
+  // Fable pass 2: the checks pass 2 found without a control.
+  {
+    name: 'app_runtime may update a whole quarantined item → the schema linter (ADV-X01) must fail',
+    expect: /× .*ADV-X01 the migrated schema/,
+    run: vitest('db', 'test/schema-lint.test.ts', 'runtime-update-widened'),
+  },
+  {
+    name: 'the response check switched off → the ADV-X05 spread-row test must fail',
+    expect: /× .*ADV-X05 a handler that sends a coordinate its schema does not declare/,
+    run: mutated(
+      'apps/api/src/routes/registry.ts',
+      "if (deps.config.NODE_ENV !== 'production' && result !== reply && !reply.sent) {",
+      'if (false) {',
+      'api',
+      'test/route-registry.test.ts',
+    ),
+  },
+  {
+    name: 'an SOS refused below the minimum app version → the version-gate test (INV-15) must fail',
+    expect:
+      /× .*new work is refused with 426; the config, queued uploads, crash reports and an SOS still go through/,
+    run: mutated(
+      'apps/api/src/app-version.ts',
+      "const accepted = policy.appVersion === 'upload' || policy.sos === true;",
+      "const accepted = policy.appVersion === 'upload';",
+      'api',
+      'test/app-version.test.ts',
+    ),
+  },
+  {
+    name: 'SOS routes back on the shared pool → the SOS capacity test (INV-15, L-27) must fail',
+    expect: /× .*INV-15 an SOS is received while every other connection is taken/,
+    run: mutated(
+      'apps/api/src/routes/registry.ts',
+      'route.policy.sos && appDeps.sos ?',
+      'false && appDeps.sos ?',
+      'api',
+      'test/sos-capacity.test.ts',
+    ),
   },
   {
     name: 'an untagged coordinate in a response schema → the ADV-X05 meta-test must fail',

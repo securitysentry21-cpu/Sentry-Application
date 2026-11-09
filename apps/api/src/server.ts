@@ -14,10 +14,20 @@ import type { ObjectStore } from './storage/objects.ts';
 import { containerCredentials, S3ObjectStore } from './storage/s3.ts';
 
 /** The dependencies the API runs with; tests build the same thing around a test database. */
+/** Connections kept for the SOS routes alone, beside the API's pool of 10 (review L-27). */
+export const SOS_POOL_SIZE = 3;
+
 export function createDeps(
   config: Config,
   pool: Pool,
-  overrides: { clock?: Clock; oidc?: OidcClient | null; objects?: ObjectStore; notify?: Providers } = {},
+  overrides: {
+    clock?: Clock;
+    oidc?: OidcClient | null;
+    objects?: ObjectStore;
+    notify?: Providers;
+    /** The SOS routes' own pool (review L-27). */
+    sosPool?: Pool;
+  } = {},
 ): AppDeps {
   const clock = overrides.clock ?? systemClock;
   const objects =
@@ -50,6 +60,7 @@ export function createDeps(
   return {
     pool,
     db: createKysely(pool),
+    ...(overrides.sosPool ? { sos: { pool: overrides.sosPool, db: createKysely(overrides.sosPool) } } : {}),
     clock,
     config,
     rateLimiter: new RateLimiter(clock),
@@ -69,15 +80,22 @@ export async function start(
   overrides: { clock?: Clock } & BuildOptions = {},
 ): Promise<FastifyInstance> {
   const pool = createPool(config.DATABASE_URL, { applicationName: 'sentryops-api' });
+  const sosPool = createPool(config.DATABASE_URL, {
+    applicationName: 'sentryops-api-sos',
+    max: SOS_POOL_SIZE,
+  });
   try {
     await verifyRuntimeRole(pool, ['app_runtime']);
+    await verifyRuntimeRole(sosPool, ['app_runtime']);
   } catch (error) {
     await pool.end();
+    await sosPool.end();
     throw error;
   }
-  const app = buildApp(createDeps(config, pool, overrides), overrides);
+  const app = buildApp(createDeps(config, pool, { ...overrides, sosPool }), overrides);
   app.addHook('onClose', async () => {
     await pool.end();
+    await sosPool.end();
   });
   await app.listen({ host: config.HOST, port: config.PORT });
   return app;

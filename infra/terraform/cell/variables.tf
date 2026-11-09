@@ -65,12 +65,21 @@ variable "waf_enabled" {
   description = "AWS WAF managed rules in front of the load balancer (only with a domain)."
   type        = bool
   default     = true
+  # Fable pass 2 on review L-15: the production baseline cannot be switched off in its tfvars.
+  validation {
+    condition     = var.environment != "production" || var.waf_enabled
+    error_message = "Production runs the WAF (ARCH §19.8)."
+  }
 }
 
 variable "backup_copy_enabled" {
-  description = "Copy automated database backups to the backup region."
+  description = "Copy automated database backups and incident photos to the backup region."
   type        = bool
   default     = true
+  validation {
+    condition     = var.environment != "production" || var.backup_copy_enabled
+    error_message = "Production copies its backups and photos to the backup region (ARCH §19.8)."
+  }
 }
 
 variable "guardduty_enabled" {

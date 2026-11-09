@@ -128,6 +128,6 @@ Still to be run by people (device tests): ADV-O05 (phase 4).
 | INV-12 | apps/api/test/route-registry.test.ts |
 | INV-13 | packages/db/test/rls.test.ts |
 | INV-14 | apps/api/test/live.test.ts<br>apps/api/test/realtime.test.ts<br>apps/api/test/sos.test.ts |
-| INV-15 | apps/api/test/app-version.test.ts<br>apps/api/test/sos.test.ts<br>apps/mobile/test/device-key.test.ts<br>apps/mobile/test/sos.test.ts |
+| INV-15 | apps/api/test/app-version.test.ts<br>apps/api/test/route-registry.test.ts<br>apps/api/test/sos-capacity.test.ts<br>apps/api/test/sos.test.ts<br>apps/mobile/test/device-key.test.ts<br>apps/mobile/test/sos.test.ts |
 | INV-16 | apps/mobile/test/app-status.test.ts<br>apps/mobile/test/local-shift.test.ts<br>apps/mobile/test/patrol.test.ts<br>apps/mobile/test/presenter.test.ts |
 | INV-17 | apps/api/test/tenancy.test.ts |

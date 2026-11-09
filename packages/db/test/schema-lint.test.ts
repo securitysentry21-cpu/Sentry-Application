@@ -40,6 +40,8 @@ describe('schema linter (ADV-X01)', () => {
       await m.query('grant delete on fixture_events to system_worker');
       // retention_worker clears position columns only; anything else is a violation.
       await m.query('grant update (organization_id) on fixture_events to retention_worker');
+      // Review L-33: a table-wide grant where the registry names the columns.
+      await m.query('grant update on quarantined_items to app_runtime');
     } finally {
       await m.end();
     }
@@ -73,6 +75,7 @@ describe('schema linter (ADV-X01)', () => {
       /fixture_events: app_runtime has UPDATE on an append-only table/,
       /fixture_events: system_worker has DELETE on an append-only table/,
       /fixture_events: retention_worker may update only the position columns it clears, not organization_id/,
+      /quarantined_items: app_runtime may update only replayed_at, not .*\bitem\b/,
       /registry lists ghost, but the table does not exist/,
     ];
     for (const pattern of expected)

@@ -187,6 +187,46 @@ describe('route registry (ARCH §4.6)', () => {
     expect((await answer('production')).statusCode).toBe(200);
   });
 
+  it('INV-15 the WAF skips exactly the guard’s SOS routes: every policy.sos route, and nothing else (review L-28)', async () => {
+    // infra/terraform/cell/edge.tf: the pattern every managed rule group's scope-down skips.
+    const edge = readFileSync(new URL('../../../infra/terraform/cell/edge.tf', import.meta.url), 'utf8');
+    const source = /sos_guard_paths\s*=\s*"([^"]+)"/.exec(edge)?.[1];
+    expect(source, 'edge.tf defines sos_guard_paths').toBeDefined();
+    const exempt = new RegExp(source ?? '(?!)');
+
+    const app = buildApp(deps, { logger: false });
+    try {
+      await app.ready();
+      const id = '0196f3a2-7c41-7d2e-9b1a-3f2e4d5c6b7a';
+      let sosRoutes = 0;
+      for (const route of app.routeCatalog) {
+        for (const sample of [id, id.toUpperCase()]) {
+          const path = route.url.replace(/:[A-Za-z]+/g, sample);
+          if (route.policy?.sos) {
+            expect(exempt.test(path), `${route.method} ${path} (an SOS route) must skip the WAF`).toBe(true);
+          } else {
+            expect(exempt.test(path), `${route.method} ${path} must stay behind the WAF`).toBe(false);
+          }
+        }
+        if (route.policy?.sos) sosRoutes += 1;
+      }
+      expect(sosRoutes).toBeGreaterThanOrEqual(4);
+      // Paths that are no route at all stay inspected too.
+      for (const path of [
+        '/api/v1/sos/',
+        '/api/v1/sosx',
+        `/api/v1/sos/${id}`,
+        `/api/v1/sos/${id}/status/extra`,
+        `/api/v1/sos/${id}/locations/../../../guards`,
+        '/api/v1/sos-drills/current',
+      ]) {
+        expect(exempt.test(path), `${path} must stay behind the WAF`).toBe(false);
+      }
+    } finally {
+      await app.close();
+    }
+  });
+
   it('INV-12 the API refuses to mount a route that has no policy', async () => {
     const app = buildApp(deps, { logger: false });
     const attempt = async () => {

@@ -133,6 +133,31 @@ export async function lintSchema(db: pg.ClientBase, registry: TableRegistry): Pr
       }
     }
 
+    // Review L-33: where the registry names the columns app_runtime may update, exactly those. Read
+    // with has_column_privilege, so a grant to PUBLIC or through another role counts too.
+    if (entry.runtimeUpdates) {
+      const { rows: updatable } = await db.query<{ column: string }>(
+        `select attname::text as column from pg_attribute
+          where attrelid = $1 and attnum > 0 and not attisdropped
+            and has_column_privilege('app_runtime', attrelid, attnum, 'UPDATE')`,
+        [t.oid],
+      );
+      const allowed = new Set(entry.runtimeUpdates);
+      const granted = new Set(updatable.map((r) => r.column));
+      const extra = [...granted].filter((c) => !allowed.has(c)).sort();
+      const missing = [...allowed].filter((c) => !granted.has(c)).sort();
+      if (extra.length > 0) {
+        problems.push(
+          `${label}: app_runtime may update only ${[...allowed].join(', ')}, not ${extra.join(', ')}`,
+        );
+      }
+      if (missing.length > 0) {
+        problems.push(
+          `${label}: the registry lets app_runtime update ${missing.join(', ')}, which it cannot`,
+        );
+      }
+    }
+
     if (entry.kind === 'tenant-append-only') {
       for (const role of RUNTIME_ROLES) {
         for (const privilege of ['UPDATE', 'DELETE', 'TRUNCATE'] as const) {

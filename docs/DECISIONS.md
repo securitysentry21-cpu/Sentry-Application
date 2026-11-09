@@ -104,6 +104,42 @@ Made as a co-founder would make them, while the owner was away. Each is reversib
 - **No SMS aggregator yet.** Guard enrollment codes are shown in the dashboard, as a code and a QR code, for the supervisor to hand to the guard in person. SMS goes behind an `SmsProvider` interface and switches on when EXT-10 is done. Member invitations work the same way: the dashboard shows the invitation link to send by hand until an email provider is chosen.
 - **Device key (ARCH §5.3).** The P-256 key pair is generated on the phone and the private key is kept in the secure store (Keychain or Android Keystore-encrypted storage). It is not yet generated inside the Secure Enclave or Keystore hardware, which needs a native module; revisit with Phase 0B.
 
+## Fable launch audit, pass 2 · fixes and open questions · 2026-11-09
+
+Fable audited commit 666e688 (the pass-1 fixes and Phase 10) and re-checked L-01 to L-26. It reported ten new findings, L-27 to L-36, two Medium and eight Low. Its verdict: real guards at the 50-guard stage once SOS has capacity of its own (L-27) and the Terraform tests hold (L-29). Both are done, as far as they can be without spending or changing INV-15. The fixes, finding by finding: `docs/phases/phase-10/FABLE-PASS-2.md`.
+
+**Fable on the pass-1 questions.** It agrees with every recommended option (Q1 (a), Q3 as built and now narrowed, Q4 (a) with the native key before SOS is switched on, Q5 as recommended), with one condition. Q2 (a), versioning only, is enough **only if the CloudTrail data events spend (L-22) is approved with it**: otherwise a deleted or overwritten photo is recoverable for 35 days, but nothing tells anyone to recover it. It would approve both small L-22 spends before real guards.
+
+**The owner's answers (2026-11-09): Q6 (a), strip; Q7 one API task for now.** Q7's WAF rule is not answered yet; it matters only once production, and so its WAF, exists.
+
+- **Q6 · L-07 · responses in production. Decided: (a).** Outside production, every response is parsed against its schema and an undeclared key fails the request. In production nothing is checked (decided in pass 1, so that a strict check can never turn an accepted SOS into a 500). Fable's point: a handler branch no test reaches can still send a whole row, coordinates included.
+  - (a) **Strip in production** (Fable's recommendation, and mine): parse each response; if it parses, send the parsed object, so undeclared keys are dropped. If it does not, send the handler's result unchanged and log one `response-mismatch` line. It never causes a 500. Costs: a parse of every response, the sync batch's answer being the largest. Before building it, a test must show no response schema transforms a value, so stripping removes keys and changes nothing else.
+  - (b) Keep "no check in production", recorded as a knowing choice.
+- **Q7 · L-27 · the parts of SOS capacity that cost money or touch INV-15. Decided: one API task for now; the WAF rule open.** Built without either: the SOS routes' own 3 connections, and `503 NOT_READY` instead of 500.
+  - **Two API tasks in production** (`api_desired_count = 2`). One task is also a single point of failure while it restarts or crashes. Costs a second API task's running price in production; nothing changes on `test`. Recommended. **Owner: one task for now** (`api_desired_count` stays 1); revisit before production carries real guards.
+  - **A WAF rule on the SOS path.** Fable suggests limits per device and per IP address. Any limit that blocks is a rate limit on SOS acceptance, which INV-15 forbids, and a per-IP limit can trip in a real mass emergency: many guards behind one carrier address, each SOS also sending its positions. Options:
+    - (i) none, as INV-15 stands;
+    - (ii) a rule that only **counts**, by IP address, plus an alarm, so a flood is seen and a blocking rule can be added in minutes if one comes. It refuses nothing. It adds one rule to the WAF's monthly charge (AWS lists $1 per rule per month; check before applying). Recommended;
+    - (iii) a blocking per-IP flood rule (Fable starts at 5,000 per 5 minutes). This changes INV-15, so SEC first.
+
+**Agent-decided, 2026-11-09, for veto.**
+
+- **The WAF skips only the guard's four SOS routes (L-28)**, matched by a pattern after decoding and normalizing. Before, it skipped everything starting `/api/v1/sos`. INV-15 protects SOS acceptance; the dashboard's SOS screens, acknowledge, resolve and drills are not that, and now keep every managed rule. This narrows Q3's exemption and never widens it.
+- **SOS capacity without spending (L-27):**
+  - the API keeps 3 connections for the SOS routes beside its 10 (13 per task);
+  - a request that finds no connection, or a database that refuses connections, answers `503 NOT_READY`. Ordinary requests carry `Retry-After: 5`; an SOS carries none, so the phone's own 2-second SOS backoff decides when it retries.
+- **Only class-22 PostgreSQL messages are replaced in logs (L-31).** Class-23 messages name constraints, tables and columns, never values, and operators need them.
+- **Fonts are files in the repository (L-35):**
+  - Inter's Latin subset, as Google served it;
+  - Orbitron's unmodified upstream file, since its licence reserves the name and Google's subset is a modified version.
+  
+  Both are SIL OFL 1.1, with the licence beside them. Latin Extended characters now fall back to the system font.
+- **The production build's CSP is checked by `pnpm verify` (L-36).** Next's built-in global error page is always prerendered without a nonce; it is accepted by name: its text shows, its retry button does not work.
+- **The canary key (L-34): the warning only, for now.** Before production's canary is made, `create-canary` should take a public key made on the operator's computer, so the private key never enters AWS. Giving the API's role write access to the worker's secrets, Fable's other option, was not taken.
+- **Production cannot turn off its WAF or its backup-region copy** (pass 2 on L-15).
+- **Runbooks apply the plan that was read** (`tf.sh <env> apply-plan <file>`, L-32), and runbook 05 warns that the database-password window refuses SOS connections for a few minutes.
+- **A replay of a disabled guard's quarantined items stays allowed.** The items were captured while the guard was working, and disabling a guard revokes their sessions, not their past data.
+
 ## Fable launch audit, pass 1 · fixes and open questions · 2026-11-09
 
 Fable audited commit 8854af8 (Phases 0–9) and reported 26 findings, L-01 to L-26, four of them High. The owner brought the report back on 2026-11-09; the fixes are listed finding by finding in `docs/phases/phase-10/FABLE-PASS-1.md`, each with the test that proves it. What follows is what was decided along the way.

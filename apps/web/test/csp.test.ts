@@ -2,8 +2,16 @@
 import { NextRequest } from 'next/server';
 import { describe, expect, it } from 'vitest';
 
-import { contentSecurityPolicy, MAP_TILE_ORIGIN, newNonce } from '../lib/csp';
+import {
+  contentSecurityPolicy,
+  MAP_TILE_ORIGIN,
+  NEVER_A_PAGE_PATHS,
+  newNonce,
+  NOTHING_POLICY,
+  NOTHING_POLICY_PATHS,
+} from '../lib/csp';
 import { MAP_STYLE_URL } from '../lib/map-sources';
+import nextConfig from '../next.config';
 import { config, proxy } from '../proxy';
 
 const NONCE = 'AAAAAAAAAAAAAAAAAAAAAA==';
@@ -111,5 +119,25 @@ describe('SEC §10 proxy.ts puts the policy on every page', () => {
     for (const path of ['/api/v1/me', '/_next/static/chunks/main.js', '/_next/image', '/favicon.ico']) {
       expect(matches(path), path).toBe(false);
     }
+  });
+
+  it('gives every path it skips a policy too, or a reason it never serves a page (review L-30)', async () => {
+    // The matcher's exclusions, as written: /((?!a|b|c).*)
+    const [source = ''] = config.matcher;
+    const skipped = /\(\?!([^)]*)\)/.exec(source)?.[1]?.split('|') ?? [];
+    expect(skipped.length).toBeGreaterThan(0);
+    const covered = [...NOTHING_POLICY_PATHS, ...NEVER_A_PAGE_PATHS].map((p) => p.slice(1));
+    expect([...skipped].sort()).toEqual([...covered].sort());
+
+    // next.config.ts sends the policy that allows nothing on each path that can answer with a page.
+    const rules = (await nextConfig.headers?.()) ?? [];
+    for (const path of NOTHING_POLICY_PATHS) {
+      const rule = rules.find((r) => r.source === path);
+      expect(rule?.headers.find((h) => h.key.toLowerCase() === 'content-security-policy')?.value, path).toBe(
+        NOTHING_POLICY,
+      );
+    }
+    expect(directives(NOTHING_POLICY).get('default-src')).toEqual(["'none'"]);
+    expect(directives(NOTHING_POLICY).get('frame-ancestors')).toEqual(["'none'"]);
   });
 });

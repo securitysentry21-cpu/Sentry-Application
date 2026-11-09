@@ -21,6 +21,12 @@ export type TableEntry = {
    * 2026-11-02); it may update nothing else, anywhere (ADV-X01).
    */
   readonly retentionClears?: readonly string[];
+  /**
+   * Fable pass 2, review L-33: when set, exactly the columns app_runtime may update (its migration's
+   * column grant). The linter compares the live privileges with this list, so a later table-wide
+   * `grant update` is caught; without it the rule lived in one migration and a hand-written test.
+   */
+  readonly runtimeUpdates?: readonly string[];
 };
 export type TableRegistry = Readonly<Record<string, TableEntry>>;
 
@@ -83,7 +89,7 @@ export const TABLES: TableRegistry = {
   device_status_events: { kind: 'tenant-append-only' },
   shift_live_state: { kind: 'tenant', retentionClears: ['last_fix_latitude', 'last_fix_longitude'] },
   // Not append-only: an operator's replay sets `replayed_at`, and only that column (migration 0012).
-  quarantined_items: { kind: 'tenant' },
+  quarantined_items: { kind: 'tenant', runtimeUpdates: ['replayed_at'] },
 
   // Phase 5: alerts.
   alerts: { kind: 'tenant' },
@@ -103,7 +109,23 @@ export const TABLES: TableRegistry = {
 
   // Phase 8: incidents, SOS, notifications.
   incident_counters: { kind: 'tenant' },
-  incidents: { kind: 'tenant' },
+  // INV-05: the guard's submission is never rewritten; status, severity, type and the resolution
+  // change (migration 0010).
+  incidents: {
+    kind: 'tenant',
+    runtimeUpdates: [
+      'type',
+      'severity',
+      'status',
+      'acknowledged_by',
+      'acknowledged_at',
+      'resolved_by',
+      'resolved_at',
+      'resolution_note',
+      'version',
+      'updated_at',
+    ],
+  },
   incident_events: { kind: 'tenant-append-only' },
   incident_attachments: { kind: 'tenant' },
   sos_drills: { kind: 'tenant' },

@@ -61,7 +61,8 @@ Steps:
 1. Change the secret [never tried]:
 
 ```bash
-infra/scripts/tf.sh <env> apply -auto-approve -replace=random_password.qr_token_secret
+infra/scripts/tf.sh <env> plan -out=rotate.tfplan -replace=random_password.qr_token_secret
+infra/scripts/tf.sh <env> apply-plan rotate.tfplan
 ```
 
 2. Redeploy `api` and `worker` (runbook 01, Fix 1, for each; G01).
@@ -73,7 +74,8 @@ infra/scripts/tf.sh <env> apply -auto-approve -replace=random_password.qr_token_
 1. Apply. The API task definition changes (it carries the public key), so `api` redeploys by itself. Redeploy `worker` too (G01).
 
 ```bash
-infra/scripts/tf.sh <env> apply -auto-approve -replace=tls_private_key.vapid
+infra/scripts/tf.sh <env> plan -out=rotate.tfplan -replace=tls_private_key.vapid
+infra/scripts/tf.sh <env> apply-plan rotate.tfplan
 ```
 
 2. Every duty officer must open Settings › Notifications and enable notifications again; the page replaces a subscription made with another key (`apps/web/lib/push.ts`). Until then their pushes fail (expected `HTTP_401` or `HTTP_403`, runbook 02). The dashboard alarm is unaffected.
@@ -81,12 +83,12 @@ infra/scripts/tf.sh <env> apply -auto-approve -replace=tls_private_key.vapid
 ## Firebase service account
 
 1. In the Firebase console create a new key for the service account. Put its JSON into `local.auto.tfvars` as `fcm_service_account = <<EOT ... EOT`.
-2. `infra/scripts/tf.sh <env> apply -auto-approve`, then redeploy `worker`.
+2. `infra/scripts/tf.sh <env> plan -out=rotate.tfplan`, read it (only the worker's secret should change), `infra/scripts/tf.sh <env> apply-plan rotate.tfplan`, then redeploy `worker`.
 3. Check the worker log shows no `FCM_AUTH` failures, then delete the old key in the Firebase console. Not applicable yet: the Firebase project does not exist (EXT-09).
 
 ## Cognito client secret [untested]
 
-1. `infra/scripts/tf.sh <env> apply -auto-approve -replace=aws_cognito_user_pool_client.dashboard` creates a new client with a new ID and secret. The task definitions change with the new ID, so `api` and `worker` redeploy. Redeploy them once more afterwards (G01), in case a task started before the new secret was written.
+1. `infra/scripts/tf.sh <env> plan -out=rotate.tfplan -replace=aws_cognito_user_pool_client.dashboard`, read it, then `infra/scripts/tf.sh <env> apply-plan rotate.tfplan`. It creates a new client with a new ID and secret. The task definitions change with the new ID, so `api` and `worker` redeploy. Redeploy them once more afterwards (G01), in case a task started before the new secret was written.
 2. Test a sign-in. Existing dashboard sessions are our own cookies and stay valid.
 3. **Never replace the user pool.** People's accounts would get new identities and the sign-in code does not re-link an account that already has one (`routes/auth.ts`). [GAP: user-pool loss is unrecoverable without a code change (G11).]
 
@@ -94,10 +96,13 @@ infra/scripts/tf.sh <env> apply -auto-approve -replace=tls_private_key.vapid
 
 Order matters: a service that starts before the database knows the new password cannot connect.
 
-1. New password into the secrets (services keep running on their open connections):
+> **Warning (Fable pass 2, L-32).** From the end of step 2 until step 3's new tasks are up, every new database connection from the running `api` and `worker` fails, **SOS included**: an SOS then answers 503 `NOT_READY` and the phone retries (its button shows "not sent"). Expect a few minutes. Do it at the quietest hour, tell the control rooms first (runbook README, "Tell"), and have step 3's two commands typed in a second terminal before starting step 2. [GAP: no rotation without this window; it needs a second database user to switch to.]
+
+1. New password into the secrets (services keep running on their open connections). Read the plan: only secret versions should change.
 
 ```bash
-infra/scripts/tf.sh <env> apply -auto-approve -replace='random_password.db["app_runtime"]'
+infra/scripts/tf.sh <env> plan -out=rotate.tfplan -replace='random_password.db["app_runtime"]'
+infra/scripts/tf.sh <env> apply-plan rotate.tfplan
 ```
 
 2. Make the database accept it: re-run the migration task for the current commit (it re-sets all four passwords; `deploy-db.ts`). Use the commit in `infra/terraform/env/<env>.release.tfvars`:
@@ -106,7 +111,14 @@ infra/scripts/tf.sh <env> apply -auto-approve -replace='random_password.db["app_
 infra/scripts/release.sh <env> <current commit>
 ```
 
-3. At once redeploy `api` and `worker` (G01). The window between steps 2 and 3 is minutes: new connections from old tasks fail.
+3. At once, the moment step 2 ends, redeploy `api` and `worker` (G01), then wait for both:
+
+```bash
+aws ecs update-service --region <region> --cluster sentryops-<env> --service api --force-new-deployment
+aws ecs update-service --region <region> --cluster sentryops-<env> --service worker --force-new-deployment
+aws ecs wait services-stable --region <region> --cluster sentryops-<env> --services api worker
+```
+
 4. Repeat for `system_worker` and `retention_worker` (the worker). `migrator` is used only by step 2.
 
 ## End sessions

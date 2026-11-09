@@ -8,13 +8,13 @@ Facts about outside companies change (store policy changes every year, EXT-45). 
 
 ## Waiting on you right now (noted 2026-11-09)
 
-0. **Run Fable pass 2** (2026-11-09): give Fable `docs/FABLE_LAUNCH_AUDIT.md` (its "Pass 2" section), the zip `sentry-<commit>.zip` I make on your Desktop once CI has passed, and Fable's own pass-1 report. Bring the findings back to me.
+0. **One part of Fable's pass 2 still open** (2026-11-09): you chose to strip undeclared fields in production (Q6) and one API task for now (Q7). Still to answer, before production exists: a WAF rule that only counts SOS floods (Q7, `docs/DECISIONS.md`, "Fable launch audit, pass 2"). Pass 2 found no Critical or High finding; its ten findings (L-27 to L-36) are fixed and tested as far as they can be without your answers (`docs/phases/phase-10/FABLE-PASS-2.md`), uncommitted on branch `fable-pass-1` until you say commit. Fable agrees with every recommended option in Q1–Q5, if the CloudTrail data events spend comes with Q2 (a).
 1. **Answer the five questions from Fable's pass 1** (2026-11-09): `docs/DECISIONS.md`, "Fable launch audit, pass 1": a disabled guard's SOS (Q1), Object Lock for photos (Q2), the WAF and SOS (Q3, built per INV-15, for your veto), the device key (Q4), who may run operator commands in production (Q5), and two small spending items. Every other finding is fixed and tested (`docs/phases/phase-10/FABLE-PASS-1.md`), committed on branch `fable-pass-1` in a draft pull request, not merged and not applied: the next Terraform apply needs you to read its plan first.
 2. **Confirm the AWS alarm email** (item 1): until you click "Confirm subscription", the alarms email nobody.
 3. **Answer the lawyer's questions** (items B and C, and item 3 for finding the lawyer): `docs/legal/README.md`, `docs/legal/GUARD_DISCLOSURE_V2_DRAFT.md`, `docs/store/`.
 4. **Create the Firebase test project** (item 5) and **the Expo account** (item 6): guard push cannot be tried on a phone without them.
 
-Not waiting on you, but not yet in `main`: the runbook trial results and the Fable pass-1 fixes, two commits on branch `fable-pass-1`, in a draft pull request. Say "merge" once you have read it.
+Not waiting on you, but not yet in `main`: the runbook trial results and the Fable pass-1 fixes, two commits on branch `fable-pass-1`, in a draft pull request (#19); the pass-2 fixes are on the same branch, not yet committed. Say "commit" to add them to the pull request, and "merge" once you have read it.
 
 ## The shortest path to the first real guard
 
@@ -38,7 +38,8 @@ SOS is off for the pilot guards, so the SMS provider does not block the pilot. I
 - [ ] **C. The guard disclosure** says less than the product does. `docs/legal/GUARD_DISCLOSURE_CHECK.md` lists where, and `docs/legal/GUARD_DISCLOSURE_V2_DRAFT.md` is a corrected text for the lawyer (English, with Urdu suggestions marked for your native speaker). The app still shows the old text until the lawyer approves. When it does, the new build must reach every phone **before** the server announces the new version, or guards cannot accept it. The draft is about 550 words against 150 today; section 2.3 says what to cut first.
 - [x] **D. Firebase's two permissions** (`com.google.android.c2dm.permission.RECEIVE` and `WAKE_LOCK`) — you kept my decision on 2026-11-08. Still open as a check, not a decision: Play's wake-lock figure on the device tests.
 - [x] **E. Try the runbooks on the test environment** — done 2026-11-08: the look-in commands, worker and API restarts, the operator commands (with their error cases), a revoke-and-undo, an evidence copy and snapshot, and the key-rotation plans. Each runbook's Status section says exactly what was and was not tried; none was tried against a real failure, a signed-in dashboard or a phone. `docs/RUNBOOKS/README.md` now lists 26 gaps. The environment is paused again and runs bb6a9ad.
-- [x] **F. Run Fable pass 1** — done; you brought the findings on 2026-11-09 and I fixed all but the five that need your answer (item 1 at the top). Pass 2 comes after Phase 10 and re-checks these fixes.
+- [x] **F. Run Fable pass 1** — done; you brought the findings on 2026-11-09 and I fixed all but the five that need your answer (item 1 at the top).
+- [x] **G. Run Fable pass 2** — done the same day: it re-checked the pass-1 fixes and found ten new issues, none Critical or High; fixed except where your answer is needed (item 0 at the top).
 
 Done and no longer waiting: the new alarms and the app-version variables are **applied to the test environment** (2026-11-08, 14 added, 2 replaced, about $0.20 a month; the environment is still paused). Until you confirm the alarm email (item 1 below) they email nobody.
 
@@ -155,7 +156,7 @@ Every box must be ticked. SOS stays off for pilot guards until its own three box
 | Legal pack and drafts                                                      | not started                                             | item 3                             |
 | Store material: Data safety, declarations, review notes, demo organization | not started                                             | items 9, 12                        |
 | Production                                                                 | waits for items 9–11                                    | items 9–11                         |
-| Fixes from Fable's findings                                                | pass 1 fixed and tested, uncommitted; Q1–Q5 open        | item 1 at the top                  |
+| Fixes from Fable's findings                                                | passes 1 and 2 fixed and tested; Q1–Q7 open             | items 0 and 1 at the top           |
 
 ## 6. Dates
 

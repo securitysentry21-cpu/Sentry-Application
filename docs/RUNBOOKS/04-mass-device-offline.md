@@ -90,7 +90,7 @@ aws ecs wait services-stable --region <region> --cluster sentryops-<env> --servi
 infra/scripts/release.sh <env> <last good commit>
 ```
 
-3. **More capacity.** One API task runs by default (`api_desired_count = 1`, `variables.tf`). More tasks cost money: ask the owner, then set `api_desired_count` in the tfvars and run `infra/scripts/tf.sh <env> apply -auto-approve`.
+3. **More capacity.** One API task runs by default (`api_desired_count = 1`, `variables.tf`). More tasks cost money: ask the owner, then set `api_desired_count` in the tfvars, run `infra/scripts/tf.sh <env> plan -out=capacity.tfplan`, read it (only the `api` service should change), and `infra/scripts/tf.sh <env> apply-plan capacity.tfplan`.
 4. After recovery, watch the API log for `429` and `5xx` for 15 minutes. A reconnection storm drains by itself because of the jittered delays.
 
 ## Confirm it is fixed

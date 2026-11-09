@@ -1,13 +1,24 @@
 import type { Metadata, Viewport } from 'next';
-import { Inter, Orbitron } from 'next/font/google';
+import localFont from 'next/font/local';
 import { connection } from 'next/server';
 import type { ReactNode } from 'react';
 
 import './globals.css';
 
-// design/README.md: Orbitron for short display labels, Inter for everything else.
-const display = Orbitron({ subsets: ['latin'], weight: ['800'], variable: '--font-display' });
-const text = Inter({ subsets: ['latin'], variable: '--font-text' });
+// design/README.md: Orbitron for short display labels, Inter for everything else. Both are files in
+// app/fonts (SIL OFL 1.1, licences beside them), so building the dashboard fetches nothing from a
+// third party (Fable pass 2, review L-35). Inter is Google Fonts' Latin subset, as next/font/google
+// served it; Orbitron is the unmodified upstream file, since its licence reserves the name.
+const display = localFont({
+  src: './fonts/Orbitron-wght.ttf',
+  weight: '400 900',
+  variable: '--font-display',
+});
+const text = localFont({
+  src: './fonts/inter-latin-variable.woff2',
+  weight: '100 900',
+  variable: '--font-text',
+});
 
 export const metadata: Metadata = {
   title: 'SENTRY Operations',

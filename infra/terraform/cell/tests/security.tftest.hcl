@@ -97,28 +97,101 @@ run "photo_bucket_keeps_versions_and_copies_them" {
     ])
     error_message = "Older versions must expire within the backup window (SEC §16)."
   }
+  # Review L-29: a rule that does it must exist, in the bucket and in its copy. Over an empty list the
+  # check above is true, so it alone passed with the expiry deleted. (The filter's `prefix` is
+  # computed by the provider and unknown in a mocked plan, so a prefix added to this rule is not
+  # caught here; a tag or an `and` filter is.)
+  assert {
+    condition = alltrue([
+      for lifecycle in [
+        aws_s3_bucket_lifecycle_configuration.attachments,
+        aws_s3_bucket_lifecycle_configuration.attachments_copy[0],
+        ] : length([
+          for r in lifecycle.rule : r.id if(
+            r.status == "Enabled" &&
+            length(r.filter) == 1 &&
+            length(r.filter[0].and) == 0 &&
+            length(r.filter[0].tag) == 0 &&
+            length(r.noncurrent_version_expiration) == 1 &&
+            r.noncurrent_version_expiration[0].noncurrent_days == var.db_backup_retention_days &&
+            length(r.expiration) == 1 &&
+            r.expiration[0].expired_object_delete_marker == true
+          )
+      ]) == 1
+    ])
+    error_message = "The bucket and its copy each need one rule, for every key, that expires older versions with the backups and cleans delete markers (SEC §16, review L-29)."
+  }
+  assert {
+    condition     = aws_s3_bucket_versioning.attachments_copy[0].versioning_configuration[0].status == "Enabled"
+    error_message = "The copy is versioned, so a deletion that reaches it is recoverable too (review L-03)."
+  }
 }
 
 run "no_managed_waf_rule_sees_an_sos" {
   command = plan
 
-  # Review L-02, INV-15: the only refusal of an SOS is a revoked app version.
+  # Review L-02, L-28, L-29, INV-15: the only refusal of an SOS is a revoked app version. For each
+  # rule, what its scope-down skips, read from the plan's structure (not from substrings of it): the
+  # kind of match, its pattern, the part of the request it reads and its transformations. A new rule,
+  # a lost `not`, a different field, constraint, pattern or transformation each changes the result.
   assert {
-    condition = alltrue([
-      for rule in aws_wafv2_web_acl.main[0].rule : alltrue([
-        for group in rule.statement[0].managed_rule_group_statement : (
-          length(group.scope_down_statement) == 1 &&
-          length(group.scope_down_statement[0].not_statement) == 1 &&
-          strcontains(jsonencode(group.scope_down_statement[0].not_statement), "\"/api/v1/sos\"") &&
-          strcontains(jsonencode(group.scope_down_statement[0].not_statement), "NORMALIZE_PATH")
-        )
-      ])
-    ])
-    error_message = "Every managed WAF rule group must skip /api/v1/sos* (INV-15, review L-02)."
-  }
-  assert {
-    condition     = length(aws_wafv2_web_acl.main) == 1 && length(aws_wafv2_web_acl.main[0].rule) == 3
-    error_message = "Production runs the WAF with its three managed groups; a new group needs the SOS exemption too."
+    condition = jsonencode({
+      for rule in aws_wafv2_web_acl.main[0].rule : rule.name => [
+        # The statements under the `not`, and those under an `or` there (a nested statement has its
+        # own type, so the two lists are built apart, with the same description of each statement).
+        for group in rule.statement[0].managed_rule_group_statement : sort(concat(
+          [
+            for s in group.scope_down_statement[0].not_statement[0].statement : (
+              length(s.regex_match_statement) == 1 ? join(" ", [
+                "regex",
+                s.regex_match_statement[0].regex_string,
+                join("+", [for f, v in s.regex_match_statement[0].field_to_match[0] : f if length(v) > 0]),
+                join(",", sort([for t in s.regex_match_statement[0].text_transformation : "${t.priority}:${t.type}"])),
+                ]) : length(s.byte_match_statement) == 1 ? join(" ", [
+                "bytes",
+                s.byte_match_statement[0].search_string,
+                s.byte_match_statement[0].positional_constraint,
+                join("+", [for f, v in s.byte_match_statement[0].field_to_match[0] : f if length(v) > 0]),
+                join(",", sort([for t in s.byte_match_statement[0].text_transformation : "${t.priority}:${t.type}"])),
+              ]) : "other"
+            ) if length(s.or_statement) == 0
+          ],
+          flatten([
+            for top in group.scope_down_statement[0].not_statement[0].statement : [
+              for any in top.or_statement : [
+                for s in any.statement : (
+                  length(s.regex_match_statement) == 1 ? join(" ", [
+                    "regex",
+                    s.regex_match_statement[0].regex_string,
+                    join("+", [for f, v in s.regex_match_statement[0].field_to_match[0] : f if length(v) > 0]),
+                    join(",", sort([for t in s.regex_match_statement[0].text_transformation : "${t.priority}:${t.type}"])),
+                    ]) : length(s.byte_match_statement) == 1 ? join(" ", [
+                    "bytes",
+                    s.byte_match_statement[0].search_string,
+                    s.byte_match_statement[0].positional_constraint,
+                    join("+", [for f, v in s.byte_match_statement[0].field_to_match[0] : f if length(v) > 0]),
+                    join(",", sort([for t in s.byte_match_statement[0].text_transformation : "${t.priority}:${t.type}"])),
+                  ]) : "other"
+                )
+              ]
+            ]
+          ]),
+        ))
+      ]
+      }) == jsonencode({
+      "aws-ip-reputation" = [[
+        "regex ^/api/v1/sos(/[0-9a-fA-F-]{36}/(status|locations|cancel-request))?$ uri_path 0:URL_DECODE,1:NORMALIZE_PATH",
+      ]]
+      "aws-common" = [[
+        "bytes /api/v1/sync/ STARTS_WITH uri_path 0:URL_DECODE,1:NORMALIZE_PATH",
+        "regex ^/api/v1/sos(/[0-9a-fA-F-]{36}/(status|locations|cancel-request))?$ uri_path 0:URL_DECODE,1:NORMALIZE_PATH",
+      ]]
+      "aws-known-bad-inputs" = [[
+        "bytes /api/v1/sync/ STARTS_WITH uri_path 0:URL_DECODE,1:NORMALIZE_PATH",
+        "regex ^/api/v1/sos(/[0-9a-fA-F-]{36}/(status|locations|cancel-request))?$ uri_path 0:URL_DECODE,1:NORMALIZE_PATH",
+      ]]
+    })
+    error_message = "Each managed WAF rule group must skip exactly the guard's SOS routes (and the body rules /api/v1/sync/), by URI path, decoded and normalized (INV-15, review L-02, L-28)."
   }
 }
 
@@ -199,6 +272,23 @@ run "production_needs_the_push_credentials" {
     fcm_service_account = ""
   }
   expect_failures = [var.fcm_service_account]
+}
+
+# Pass 2 on L-15: production cannot turn off its WAF or its backup-region copy.
+run "production_keeps_its_waf" {
+  command = plan
+  variables {
+    waf_enabled = false
+  }
+  expect_failures = [var.waf_enabled]
+}
+
+run "production_keeps_its_backup_copy" {
+  command = plan
+  variables {
+    backup_copy_enabled = false
+  }
+  expect_failures = [var.backup_copy_enabled]
 }
 
 # The test environment (env/test.tfvars) still plans with none of them.

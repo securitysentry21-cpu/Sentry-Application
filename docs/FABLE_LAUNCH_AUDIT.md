@@ -7,7 +7,7 @@
 | 1 | Phases 0–9 (everything built so far) | `8854af8` (Phase 9) |
 | 2 | Phase 10's changes, and a re-check of the fixes from pass 1 | the head of branch `fable-pass-1`, after its CI passed; the zip's file name carries the commit (`sentry-<commit>.zip`) |
 
-Pass 1 ran on 2026-11-03 and reported L-01 to L-26. Everything below "Pass 2" applies to both passes unless pass 2 says otherwise.
+Pass 1 ran on 2026-11-03 and reported L-01 to L-26. Pass 2 ran on 2026-11-09 on commit 666e688 and reported L-27 to L-36 (the answer: `docs/phases/phase-10/FABLE-PASS-2.md`). A further pass numbers new findings from L-37. Everything below "Pass 2" applies to both passes unless pass 2 says otherwise.
 
 ## Pass 2
 

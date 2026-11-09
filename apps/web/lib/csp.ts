@@ -52,6 +52,18 @@ export function contentSecurityPolicy({ nonce, development, photoOrigin }: CspOp
   return directives.map((d) => d.join(' ')).join('; ');
 }
 
+/**
+ * Fable pass 2, review L-30: proxy.ts skips some paths (its matcher). Those that can still answer with
+ * an HTML page (Next's 404 for a missing /favicon.ico, the image optimizer's errors) get this policy
+ * from next.config.ts: nothing may load or run. The other skipped paths never serve a page:
+ * `/_next/static/` holds hashed scripts and styles (a missing one is a text/plain 404), and `/api/`
+ * goes to the API, which sets its own `default-src 'none'` (proxied as-is only in development).
+ */
+export const NOTHING_POLICY =
+  "default-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'";
+export const NOTHING_POLICY_PATHS = ['/favicon.ico', '/_next/image'] as const;
+export const NEVER_A_PAGE_PATHS = ['/_next/static/', '/api/'] as const;
+
 /** 128 random bits, base64: unguessable, and new for every response. */
 export function newNonce(): string {
   const bytes = crypto.getRandomValues(new Uint8Array(16));

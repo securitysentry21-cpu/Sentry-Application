@@ -8,7 +8,7 @@ import { expect, it } from 'vitest';
 
 import { buildApp } from '../src/app.ts';
 import { createDeps } from '../src/server.ts';
-import { loggerOptions, REDACT_PATHS } from '../src/logger.ts';
+import { failureLine, loggerOptions, REDACT_PATHS } from '../src/logger.ts';
 import { NOW, testConfig, UNREACHABLE_DATABASE } from './support.ts';
 
 function collector(): { sink: Writable; lines: string[] } {
@@ -123,6 +123,35 @@ it('SEC §15 a database error is logged without the row it carries (review L-04)
     });
     expect(entry.err?.message).toContain('violates check constraint');
   }
+});
+
+// Review L-31: a data exception (SQLSTATE class 22) quotes the input in its message itself.
+function dataExceptionError(): DatabaseError {
+  const error = new DatabaseError('invalid input syntax for type integer: "+923001234567"', 0, 'error');
+  error.code = '22P02';
+  error.severity = 'ERROR';
+  return error;
+}
+
+it('SEC §15 a data exception is logged by its condition, never the value it quotes (review L-31)', () => {
+  const { sink, lines } = collector();
+  pino(loggerOptions('info'), sink).error({ err: dataExceptionError() }, 'unhandled error');
+  // The worker's loops write their own failure lines (the alarm filters match `msg`).
+  const workerLine = failureLine('export runner failed', dataExceptionError());
+
+  for (const line of [lines.find((l) => l.includes('unhandled error')) ?? '', workerLine]) {
+    expect(line, 'leaked the value').not.toContain('923001234567');
+    const entry = JSON.parse(line) as { err?: Record<string, unknown>; error?: Record<string, unknown> };
+    const err = entry.err ?? entry.error;
+    expect(err).toMatchObject({
+      type: 'DatabaseError',
+      errorCode: '22P02',
+      message: 'invalid_text_representation',
+    });
+    // The stack keeps its frames, without the message's first line.
+    expect(String(err?.stack)).toMatch(/^DatabaseError: invalid_text_representation\n\s+at /);
+  }
+  expect(JSON.parse(workerLine)).toMatchObject({ msg: 'export runner failed' });
 });
 
 it('SEC §15 every log line written while serving a request carries its request_id', async () => {

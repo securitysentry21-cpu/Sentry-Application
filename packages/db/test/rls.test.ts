@@ -350,8 +350,11 @@ describe('row-level security (ARCH §4.3)', () => {
       return result.rows.filter((p) => TENANT_TABLES.includes(p.table));
     });
     expect(policies.length).toBeGreaterThan(10);
+    // Fable pass 2 (§5 #4): the organization check must be the whole expression or a top-level AND
+    // term, as PostgreSQL prints it; mentioning it is not enough (`… or true` mentions it too).
+    const ORG = 'organization_id = app.current_org_id()';
     const scoped = (expression: string | null) =>
-      expression === null || expression.includes('current_org_id()');
+      expression === null || expression === `(${ORG})` || expression.startsWith(`((${ORG}) AND `);
     const unscoped = policies.filter(
       (p) => !scoped(p.qual) || !scoped(p.check) || (p.qual ?? p.check) === null,
     );

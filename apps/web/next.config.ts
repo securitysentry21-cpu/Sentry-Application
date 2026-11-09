@@ -1,8 +1,11 @@
 import type { NextConfig } from 'next';
 
+import { NOTHING_POLICY, NOTHING_POLICY_PATHS } from './lib/csp';
+
 // SEC §10 baseline headers on every response. The Content-Security-Policy needs a nonce per
 // response, so proxy.ts sets it (lib/csp.ts, review L-01); X-Frame-Options covers the files the
-// proxy skips.
+// proxy skips, and the skipped paths that can answer with a page get a policy that allows nothing
+// (review L-30).
 const securityHeaders = [
   { key: 'X-Frame-Options', value: 'DENY' },
   { key: 'X-Content-Type-Options', value: 'nosniff' },
@@ -23,7 +26,13 @@ const config: NextConfig = {
   agentRules: false,
   transpilePackages: ['@sentryops/contracts', '@sentryops/domain'],
   headers() {
-    return Promise.resolve([{ source: '/:path*', headers: securityHeaders }]);
+    return Promise.resolve([
+      { source: '/:path*', headers: securityHeaders },
+      ...NOTHING_POLICY_PATHS.map((source) => ({
+        source,
+        headers: [{ key: 'Content-Security-Policy', value: NOTHING_POLICY }],
+      })),
+    ]);
   },
   rewrites() {
     return Promise.resolve(

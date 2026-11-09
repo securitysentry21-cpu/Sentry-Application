@@ -76,8 +76,16 @@ export function enforceRoutePolicies(app: FastifyInstance, catalog: MountedRoute
   });
 }
 
-export function mountRoutes(app: FastifyInstance, routes: readonly RouteDefinition[], deps: AppDeps): void {
+export function mountRoutes(
+  app: FastifyInstance,
+  routes: readonly RouteDefinition[],
+  appDeps: AppDeps,
+): void {
   for (const route of routes) {
+    // Review L-27: an SOS route works on the SOS pool from its first query (session, device,
+    // signature) to its commit, so a sync storm holding every other connection cannot delay it.
+    const deps =
+      route.policy.sos && appDeps.sos ? { ...appDeps, pool: appDeps.sos.pool, db: appDeps.sos.db } : appDeps;
     app.route({
       method: route.method,
       url: route.url,

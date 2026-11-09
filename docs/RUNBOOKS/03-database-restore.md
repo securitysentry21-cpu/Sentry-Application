@@ -97,7 +97,7 @@ Restore a copy at a time just before the damage as in Case A steps 2 to 3, but d
 
 ## Case C: the region is lost [not scripted, never tried]
 
-Production will copy RDS automated backups to eu-west-1 (`database.tf`, `backup_copy_enabled`, with its own key). A new cell would be built from the same Terraform in that region (`region` variable). Expect more than 4 hours. Not covered anywhere: incident photos and exports are **not** replicated or versioned (`attachments.tf`), the Cognito user pool is regional, and a person signing in through a new pool is not re-linked to their existing account (`apps/api/src/routes/auth.ts`). [GAP: no second-region plan beyond the backup copy (G10, G11).]
+Production will copy RDS automated backups to eu-west-1 (`database.tf`, `backup_copy_enabled`, with its own key). A new cell would be built from the same Terraform in that region (`region` variable). Expect more than 4 hours. Incident photos are versioned (older versions last as long as database backups) and, in production, copied to the backup region with their deletions (`attachments.tf`, Fable L-03); exports are not copied. Not covered anywhere: the Cognito user pool is regional, and a person signing in through a new pool is not re-linked to their existing account (`apps/api/src/routes/auth.ts`). [GAP: no second-region plan beyond the backup copy (G10, G11).]
 
 ## Confirm it is fixed
 

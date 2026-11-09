@@ -75,15 +75,25 @@ export async function startTestApp(
     logger?: BuildOptions['logger'];
     /** Default 4. The load harness uses the API's own default of 10. */
     poolMax?: number;
+    /** How long a request waits for a free connection (default pg's 5 s, as in the API). */
+    poolTimeoutMs?: number;
+    /** When set, the SOS routes get their own pool of this size, as the API has (review L-27). */
+    sosPoolMax?: number;
   } = {},
 ): Promise<TestApp> {
   const db = await createTestDatabase(inject('adminUrl'));
-  const pool: Pool = createPool(db.urls.app_runtime, { max: options.poolMax ?? 4 });
+  const timeout = options.poolTimeoutMs !== undefined ? { connectionTimeoutMs: options.poolTimeoutMs } : {};
+  const pool: Pool = createPool(db.urls.app_runtime, { max: options.poolMax ?? 4, ...timeout });
+  const sosPool =
+    options.sosPoolMax !== undefined
+      ? createPool(db.urls.app_runtime, { max: options.sosPoolMax, ...timeout })
+      : undefined;
   const clock = new FakeClock(NOW);
   const deps = createDeps(testConfig(db.urls.app_runtime, options.config), pool, {
     clock,
     oidc: null,
     ...(options.notify ? { notify: options.notify } : {}),
+    ...(sosPool ? { sosPool } : {}),
   });
   const app = buildApp(deps, {
     logger: options.logger ?? false,
@@ -98,6 +108,7 @@ export async function startTestApp(
     close: async () => {
       await app.close();
       await pool.end();
+      await sosPool?.end();
       await db.drop();
     },
   };

@@ -11,9 +11,10 @@ cluster=$(tf output -raw cluster)
 subnets=$(tf output -json task_subnets | tr -d '[]" \r\n')
 group=$(tf output -json task_security_groups | sed -n 's/.*"api": *"\([^"]*\)".*/\1/p')
 
-# The output can hold an invitation link, and logs never keep tokens (SEC §15): the task's log
-# stream is deleted however this script ends (review L-13), after a Ctrl-C, a timeout or a failed
-# AWS call too. A task still running is stopped first, so it cannot write the link afterwards.
+# The output can hold an invitation link or, from create-canary, the canary phone's private key (it
+# can sign an SOS), and logs never keep either (SEC §15): the task's log stream is deleted however
+# this script ends (review L-13), after a Ctrl-C, a timeout or a failed AWS call too. A task still
+# running is stopped first, so it cannot write them afterwards.
 task=""
 cleanup() {
   local status=$?
@@ -29,7 +30,9 @@ cleanup() {
     "$AWS" logs delete-log-stream --region "$region" --log-group-name "/$prefix/api" \
       --log-stream-name "api/api/${task##*/}" 2>/dev/null ||
       echo "could not delete the log stream api/api/${task##*/} in /$prefix/api (it may not exist, or" \
-        "the AWS session expired): check it and delete it by hand, it can hold an invitation link" >&2
+        "the AWS session expired): check it and delete it by hand. It can hold an invitation link or" \
+        "the canary's private key (CANARY_DEVICE_KEY): after create-canary, treat that key as exposed" \
+        "and make a new canary (review L-34)" >&2
   fi
   exit "$status"
 }
