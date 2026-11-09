@@ -150,6 +150,14 @@ resource "aws_route53_record" "app" {
 
 # Managed rules complement the application's own rate limits. No per-IP rate rule: many guards share
 # one mobile-carrier address, and the API limits guards by device instead (SEC §9).
+#
+# Review L-02, INV-15: an SOS is never refused (only a revoked app version may refuse one), so no
+# managed rule sees /api/v1/sos*: not the IP reputation list (one flagged carrier address would block
+# every guard behind it), not the body signatures (a guard's words could match one). The API still
+# validates every field and the device signature. Sync batches carry guards' incident notes, and a
+# blocked batch would be retried and refused for ever, so the rules that read bodies skip
+# /api/v1/sync/ too. Paths are compared URL-decoded and normalized, so /api/v1/sos/../guards is
+# inspected as /api/v1/guards.
 resource "aws_wafv2_web_acl" "main" {
   count = local.has_domain && var.waf_enabled ? 1 : 0
   name  = local.name
@@ -169,6 +177,27 @@ resource "aws_wafv2_web_acl" "main" {
       managed_rule_group_statement {
         vendor_name = "AWS"
         name        = "AWSManagedRulesAmazonIpReputationList"
+        scope_down_statement {
+          not_statement {
+            statement {
+              byte_match_statement {
+                search_string         = "/api/v1/sos"
+                positional_constraint = "STARTS_WITH"
+                field_to_match {
+                  uri_path {}
+                }
+                text_transformation {
+                  priority = 0
+                  type     = "URL_DECODE"
+                }
+                text_transformation {
+                  priority = 1
+                  type     = "NORMALIZE_PATH"
+                }
+              }
+            }
+          }
+        }
       }
     }
     visibility_config {
@@ -195,6 +224,48 @@ resource "aws_wafv2_web_acl" "main" {
             count {}
           }
         }
+        scope_down_statement {
+          not_statement {
+            statement {
+              or_statement {
+                statement {
+                  byte_match_statement {
+                    search_string         = "/api/v1/sos"
+                    positional_constraint = "STARTS_WITH"
+                    field_to_match {
+                      uri_path {}
+                    }
+                    text_transformation {
+                      priority = 0
+                      type     = "URL_DECODE"
+                    }
+                    text_transformation {
+                      priority = 1
+                      type     = "NORMALIZE_PATH"
+                    }
+                  }
+                }
+                statement {
+                  byte_match_statement {
+                    search_string         = "/api/v1/sync/"
+                    positional_constraint = "STARTS_WITH"
+                    field_to_match {
+                      uri_path {}
+                    }
+                    text_transformation {
+                      priority = 0
+                      type     = "URL_DECODE"
+                    }
+                    text_transformation {
+                      priority = 1
+                      type     = "NORMALIZE_PATH"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
       }
     }
     visibility_config {
@@ -214,6 +285,48 @@ resource "aws_wafv2_web_acl" "main" {
       managed_rule_group_statement {
         vendor_name = "AWS"
         name        = "AWSManagedRulesKnownBadInputsRuleSet"
+        scope_down_statement {
+          not_statement {
+            statement {
+              or_statement {
+                statement {
+                  byte_match_statement {
+                    search_string         = "/api/v1/sos"
+                    positional_constraint = "STARTS_WITH"
+                    field_to_match {
+                      uri_path {}
+                    }
+                    text_transformation {
+                      priority = 0
+                      type     = "URL_DECODE"
+                    }
+                    text_transformation {
+                      priority = 1
+                      type     = "NORMALIZE_PATH"
+                    }
+                  }
+                }
+                statement {
+                  byte_match_statement {
+                    search_string         = "/api/v1/sync/"
+                    positional_constraint = "STARTS_WITH"
+                    field_to_match {
+                      uri_path {}
+                    }
+                    text_transformation {
+                      priority = 0
+                      type     = "URL_DECODE"
+                    }
+                    text_transformation {
+                      priority = 1
+                      type     = "NORMALIZE_PATH"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
       }
     }
     visibility_config {

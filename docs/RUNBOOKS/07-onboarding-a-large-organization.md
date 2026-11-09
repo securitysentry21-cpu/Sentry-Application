@@ -25,6 +25,8 @@ The sizes in `variables.tf` are for Pilot 0 (about 50 guards): `db.t4g.micro`, o
 | Up to about 50 | Current sizes.                                                                                                                                                                                 |
 | More           | Ask the owner. Raise `db_instance_class` and `api_desired_count` in the environment's tfvars and apply. No load test has proven any size (G22), so grow in steps and watch runbook 04's signs. |
 
+**Rate limits multiply with API tasks** (review L-24, D-11). Each API task counts requests in its own memory, in fixed windows, so with N tasks a person or phone gets up to N times each limit (sign-in, enrollment codes per phone and per address, the default limit). Only an enrollment code's own attempt count is kept in the database (`invitations.attempts`), and it holds at any N. Above 2 tasks, move the counters to PostgreSQL before relying on the limits (`apps/api/src/rate-limit.ts`). SOS is never limited at any N.
+
 ## Fix: the steps
 
 1. **Create the organization.** Name, owner's e-mail, time zone (default `Asia/Karachi`). No e-mail is sent.

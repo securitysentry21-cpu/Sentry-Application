@@ -5,7 +5,42 @@
 | Pass | Covers | Commit |
 |---|---|---|
 | 1 | Phases 0–9 (everything built so far) | `8854af8` (Phase 9) |
-| 2 | Phase 10's changes, and a re-check of the fixes from pass 1 | named at the end of Phase 10 |
+| 2 | Phase 10's changes, and a re-check of the fixes from pass 1 | the head of branch `fable-pass-1`, after its CI passed; the zip's file name carries the commit (`sentry-<commit>.zip`) |
+
+Pass 1 ran on 2026-11-03 and reported L-01 to L-26. Everything below "Pass 2" applies to both passes unless pass 2 says otherwise.
+
+## Pass 2
+
+You are given this file, the repository at the commit above, and your own pass-1 report. Two jobs, in this order.
+
+**1. Re-check every pass-1 finding, L-01 to L-26.** `docs/phases/phase-10/FABLE-PASS-1.md` says what was done for each and which test proves it; `docs/DECISIONS.md`, section "Fable launch audit, pass 1", lists what was decided and what waits on the owner. For each finding, say fixed, partly, not fixed or made worse, with evidence, and try to break the fix rather than read it. In particular:
+
+- the dashboard's Content-Security-Policy (`apps/web/proxy.ts`, `lib/csp.ts`): does it hold in a production build (`next build`, `next start`), and is any page served without the nonce?
+- the WAF exemption for `/api/v1/sos*` (`infra/terraform/cell/edge.tf`): can a request that is not an SOS be shaped to skip the managed rules?
+- the response check (`apps/api/src/routes/response-check.ts`), which runs outside production only: is that the right trade, and what can still leak in production?
+- the Terraform tests (`infra/terraform/cell/tests/security.tftest.hcl`, run by `bash infra/scripts/tf-test.sh`, Terraform 1.11 or later): do their assertions check what they claim, given the mocks?
+- versioning and retention on the photo bucket: is anything kept longer than SEC §16 allows, or deletable sooner than intended?
+- `TRUST_PROXY` behind CloudFront's VPC origin and the load balancer;
+- the new negative controls (`pnpm negative-controls`, 13): does each break the mechanism it names?
+
+**2. Audit what Phase 10 added since pass 1** (`git log 8854af8..HEAD`). Phase 10's plan is `docs/phases/phase-10/PLAN.md`, and its decisions are in `docs/DECISIONS.md` (Phase 10). Look at:
+
+- the guard app's push-token registration (`expo-notifications`);
+- crash reports from the app (`apps/api/src/routes/diagnostics.ts`, `apps/mobile/src/core/diagnostics/`);
+- the server's app-version gate: 426, revoked versions, and SOS's one exception (`apps/api/src/app-version.ts`);
+- the operator commands into one organization (`delivery-health`, `quarantine-list`, `quarantine-replay`), `PLATFORM_ACCESS` and migration 0012;
+- the operator alarms and the worker heartbeat (`infra/terraform/cell/operations.tf`, `apps/api/src/workers/health.ts`);
+- the faster sync batch (`BatchLive` in `apps/api/src/services/sync.ts`): is its behaviour still the old one in every case, idempotency and quarantine included?
+- the release-manifest check (ADV-X08) and the permissions Firebase brings (DECISIONS: `RECEIVE` and `WAKE_LOCK` allowed, badge permissions blocked);
+- the browser tests (`apps/web/e2e`, `pnpm e2e`) and the load harness (`pnpm load`);
+- the runbooks (`docs/RUNBOOKS/`), only for steps that would do harm if followed;
+- CI (`.github/workflows/ci.yml`).
+
+**Known and open: don't report these as new.** They wait on the owner: a disabled guard's SOS (L-11), Object Lock (L-03), the device key (L-16), who may run operator commands in production (L-13), a KMS key for the state buckets and CloudTrail data events (L-22). Also known: the image still installs development dependencies, there is no pre-commit secret scan, and the runbooks list their own gaps. Do say so if you think a recommended option is wrong, or if one of them is worse than the decision log says.
+
+**Not built yet in pass 2:** an SMS provider; production and staging environments, and so the WAF and the backup-region copy run nowhere; iOS releases; device tests on real phones. Don't report them as missing, but do flag a design that would make them unsafe.
+
+**Output for pass 2:** the format below, plus a "pass-1 re-check" table (L-01 to L-26 · verdict · evidence) before the findings. Number new findings from L-27.
 
 ---
 
@@ -21,7 +56,7 @@ Find what would hurt a security company or its guards in production: one organiz
 - **How it was built:** Claude Code built it in phases (ARCH §22), one at a time, from the three documents. Each phase has a `PLAN.md` and a `REPORT.md` in `docs/phases/`. Decisions are in `docs/DECISIONS.md`. Precedence: SEC > DECISIONS > PROD > ARCH.
 - **What the builder claims:** `CLAUDE.md`, section "How the invariants are enforced", maps each rule to the file and the test that enforce it. Treat every row as a claim to test, not a fact.
 - **Maps of the code:** `docs/generated/` has the route inventory, the database diagram and the test-ID traceability, all generated from the code.
-- **Not built yet** (Phase 10 or waiting on the owner; don't report them as missing, but do flag a design that would make them hard to build or unsafe):
+- **Not built yet, in pass 1** (Phase 10 or waiting on the owner; don't report them as missing, but do flag a design that would make them hard to build or unsafe; pass 2 has its own list above):
   - an SMS provider (texts fail visibly with `SMS_NOT_CONFIGURED`);
   - the guard app registering its push token;
   - crash reports from the app;
@@ -40,6 +75,7 @@ Find what would hurt a security company or its guards in production: one organiz
 - **Tests:** `pnpm test`. A local PostgreSQL 17 starts by itself, with no Docker needed.
 - **A local stack with demo data:** `pnpm db:up`, `pnpm api:dev`, `pnpm web:dev`, then `pnpm demo`. The API needs `apps/api/.env`; copy `.env.example`.
 - **Proof that each security check can fail:** `pnpm negative-controls`.
+- **Pass 2 adds:** the browser tests, `pnpm e2e` (once: `pnpm --filter @sentryops/web exec playwright install chromium`), and the Terraform checks, `bash infra/scripts/tf-test.sh` (Terraform 1.11 or later; mocked providers, no AWS account).
 
 ## What to hunt, in priority order
 

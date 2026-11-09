@@ -13,3 +13,12 @@ updates:
     directory: /
     schedule:
       interval: weekly
+  # Review L-19: the server image's base (infra/docker/Dockerfile) and the cell's providers.
+  - package-ecosystem: docker
+    directory: /infra/docker
+    schedule:
+      interval: weekly
+  - package-ecosystem: terraform
+    directory: /infra/terraform/cell
+    schedule:
+      interval: weekly

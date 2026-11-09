@@ -32,7 +32,18 @@ locals {
     SosUnacknowledged            = "{ $.msg = \"sos unacknowledged\" }"
     CanaryFailures               = "{ $.msg = \"canary failed\" || $.msg = \"canary misconfigured\" }"
     CanaryOk                     = "{ $.msg = \"canary ok\" }"
+    # Review L-12: every other loop's failure line (apps/api/src/worker.ts › failed()). The outbox
+    # dispatcher is how an SOS reaches the dashboards; the detectors run the "sos unacknowledged"
+    # check. A loop that fails each round still reports on time, so job lag never shows it.
+    WorkerLoopFailures = "{ ${join(" || ", [for m in local.worker_loop_failures : "$.msg = \"${m}\""])} }"
   }
+  worker_loop_failures = [
+    "outbox dispatcher failed",
+    "shift detectors failed",
+    "attachment processor failed",
+    "export runner failed",
+    "retention run failed",
+  ]
 
   alarms = {
     sos-pipeline-error = {
@@ -52,6 +63,12 @@ locals {
       description = "An SOS has been open and unacknowledged for longer than the organization's limit."
       period      = 60
       threshold   = 1
+    }
+    worker-loop-failed = {
+      metric      = "WorkerLoopFailures"
+      description = "A worker loop (outbox dispatcher, detectors, photos, exports or retention) failed 3 times in 5 minutes: dashboards may not be getting SOS updates. Check the worker log (runbook: SOS notifications failing)."
+      period      = 300
+      threshold   = 3
     }
     canary-failed = {
       metric      = "CanaryFailures"

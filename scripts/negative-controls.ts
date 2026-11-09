@@ -25,6 +25,17 @@ const vitest = (project: string, file: string, control: string) => async () => {
 
 const PLANTED = join(ROOT, 'packages', 'domain', 'src', '__negative_control__.ts');
 
+/** Plants a file, lints it, removes it. */
+const lintPlanted = (path: string, source: string) => async () => {
+  writeFileSync(path, source);
+  try {
+    const result = await runBin('eslint', [path, '--max-warnings=0'], { quiet: true });
+    return { ...result, failed: result.code !== 0 };
+  } finally {
+    rmSync(path, { force: true });
+  }
+};
+
 const controls: Control[] = [
   {
     name: 'RLS switched off on a tenant table → ADV-T06 must fail',
@@ -71,6 +82,61 @@ const controls: Control[] = [
           ],
           { quiet: true },
         );
+        return { ...result, failed: result.code !== 0 };
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    },
+  },
+  // Review L-18: the checks that had no control.
+  {
+    name: 'retention_worker policy without the organization → the role test (ADV-T06) must fail',
+    expect: /× .*ADV-T06 every policy retention_worker is under/,
+    run: vitest('db', 'test/rls.test.ts', 'retention-policy-unscoped'),
+  },
+  {
+    name: 'a new grant to system_worker → the role test (ADV-T06) must fail',
+    expect: /× .*ADV-T06 system_worker only reads/,
+    run: vitest('db', 'test/rls.test.ts', 'system-worker-grant-added'),
+  },
+  {
+    name: 'an untagged coordinate in a response schema → the ADV-X05 meta-test must fail',
+    expect: /× .*ADV-X05 every route returning guard coordinates/,
+    run: vitest('api', 'test/route-registry.test.ts', 'untagged-coordinate'),
+  },
+  {
+    name: 'phone numbers dropped from log redaction → the logger test (SEC §15) must fail',
+    expect: /× .*SEC §15 the logger redacts/,
+    run: vitest('api', 'test/logger.test.ts', 'redaction-dropped'),
+  },
+  {
+    name: 'dangerouslySetInnerHTML planted in the dashboard → lint (ADV-W01) must fail',
+    expect: /User-supplied text must render as text/,
+    run: lintPlanted(
+      join(ROOT, 'apps', 'web', 'components', '__negative_control__.tsx'),
+      'export const Planted = ({ text }: { text: string }) => <div dangerouslySetInnerHTML={{ __html: text }} />;\n',
+    ),
+  },
+  {
+    name: 'raw SQL planted in a route → lint (ARCH §4.2) must fail',
+    expect: /Raw SQL lives in packages\/db or a repository/,
+    run: lintPlanted(
+      join(ROOT, 'apps', 'api', 'src', 'routes', '__negative_control__.ts'),
+      "import { sql } from 'kysely';\n\nexport const planted = sql`select 1`;\n",
+    ),
+  },
+  {
+    name: 'the audit endpoint answers with an error → the dependency audit (SEC §14) must fail',
+    expect: /could not read the audit report \(ERR_PNPM_AUDIT_ENDPOINT_NOT_EXISTS\)/,
+    run: async () => {
+      const dir = mkdtempSync(join(tmpdir(), 'negative-control-'));
+      const report = join(dir, 'audit.json');
+      // What pnpm prints, exit code 0, when the registry has no audit endpoint (review L-10).
+      writeFileSync(report, '{"error":{"code":"ERR_PNPM_AUDIT_ENDPOINT_NOT_EXISTS"}}\n');
+      try {
+        const result = await runNode([join(ROOT, 'scripts', 'audit-deps.ts'), '--report', report], {
+          quiet: true,
+        });
         return { ...result, failed: result.code !== 0 };
       } finally {
         rmSync(dir, { recursive: true, force: true });

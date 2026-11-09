@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+
 import { describe, expect, it } from 'vitest';
 
 import appConfig, {
@@ -127,5 +129,22 @@ describe('native permissions and declarations', () => {
     expect(typeof config.mods?.android?.manifest).toBe('function');
     expect(typeof config.mods?.ios?.infoPlist).toBe('function');
     expect(typeof appConfig).toBe('function');
+  });
+});
+
+describe('no over-the-air updates (SEC §20 #29, review L-26)', () => {
+  it('the app has no update library and no update configuration, so only a new build can change it', () => {
+    // An over-the-air update can change JavaScript, and tracking is JavaScript; a fingerprint
+    // runtime version only stops native changes. Adding OTA updates is an owner decision first.
+    const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')) as {
+      dependencies?: Record<string, string>;
+      devDependencies?: Record<string, string>;
+    };
+    expect(Object.keys({ ...pkg.dependencies, ...pkg.devDependencies })).not.toContain('expo-updates');
+    for (const variant of [{}, STAGING]) {
+      const config = buildConfig(variant);
+      expect(config.updates?.enabled ?? false).toBe(false);
+      expect(config.updates?.url).toBeUndefined();
+    }
   });
 });

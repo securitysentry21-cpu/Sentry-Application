@@ -83,6 +83,15 @@ async function applyNegativeControl(migrator: pg.Client): Promise<void> {
     case 'retention-update-widened':
       await migrator.query('grant update (organization_id) on fixture_events to retention_worker');
       break;
+    // Review L-09: a retention policy that forgets the organization, and a stray worker grant.
+    case 'retention-policy-unscoped':
+      await migrator.query(
+        'create policy planted_retention on shifts for delete to retention_worker using (true)',
+      );
+      break;
+    case 'system-worker-grant-added':
+      await migrator.query('grant select (organization_id) on shift_events to system_worker');
+      break;
     default:
       break;
   }

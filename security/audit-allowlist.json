@@ -1,9 +1,10 @@
 {
-  "//": "Reviewed exceptions to the dependency audit (SEC §14). Each entry needs the advisory ID, the package, why it does not apply here, the review date, and an expiry date at most 90 days after the review, after which it must be reviewed again.",
+  "//": "Reviewed exceptions to the dependency audit (SEC §14). Each entry needs the advisory ID, the exact package version (name@version), the dependency paths it is reached through (fragments; every path of the finding must contain one), why it does not apply here, the review date, and an expiry date at most 90 days after the review, after which it must be reviewed again. The same advisory in another version or through another path still fails the audit (scripts/lib/audit.ts).",
   "advisories": [
     {
       "id": "GHSA-mrhx-c7xc-m3w5",
       "package": "zod@3.25.76",
+      "paths": [">@expo/cli>zod"],
       "reason": "Memory exhaustion when validating oversized constrained collections. Our own code uses zod 4.6.7, which is fixed; this copy is the Expo CLI's private zod 3 (node_modules/@expo/cli/node_modules), used only by the dev server on developer and CI machines to validate dev-tools plugin descriptions from installed packages, never data from users. It is not in the API, the dashboard, or the shipped guard-app bundle (the app resolves zod to 4.6.7). No zod 3.x release has the fix (3.25.76 is the last); remove this entry when the Expo CLI moves to zod >= 4.6.6.",
       "reviewed": "2026-11-01",
       "expires": "2027-01-30"

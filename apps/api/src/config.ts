@@ -20,6 +20,28 @@ const flag = z
   .enum(['true', 'false'])
   .default('false')
   .transform((v) => v === 'true');
+const proxyAddress = z.union([z.ipv4(), z.ipv6(), z.cidrv4(), z.cidrv6()]);
+/**
+ * Review L-06: the proxies whose X-Forwarded-For the API believes, as addresses or CIDR ranges, or
+ * "false". Never "true": that believes every hop, and the left-most one is whatever the client
+ * wrote, so per-IP limits and the IP in sessions and audit rows (SEC §17.2) would be the client's
+ * choice. With the list, the API takes the right-most address that is not a trusted proxy.
+ */
+const trustedProxies = z
+  .string()
+  .default('false')
+  .transform((v, ctx): false | string => {
+    if (v.trim() === '' || v.trim() === 'false') return false;
+    const items = v.split(',').map((s) => s.trim());
+    if (!items.every((item) => proxyAddress.safeParse(item).success)) {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'must be "false" or a list of proxy addresses or CIDR ranges',
+      });
+      return z.NEVER;
+    }
+    return items.join(',');
+  });
 
 export const configSchema = z
   .object({
@@ -35,8 +57,8 @@ export const configSchema = z
     PUBLIC_ORIGIN: z.url().default('http://127.0.0.1:3000'),
     /** Development sign-in without an identity provider. Refused in production (below). */
     DEV_AUTH: flag,
-    /** True only behind the load balancer, which sets X-Forwarded-For. */
-    TRUST_PROXY: flag,
+    /** The load balancer's addresses (the cell's VPC range): it sets X-Forwarded-For. */
+    TRUST_PROXY: trustedProxies,
     /** OpenID Connect provider for dashboard users (D-01: Amazon Cognito in production). */
     OIDC_ISSUER: z.url().optional(),
     OIDC_CLIENT_ID: z.string().min(1).optional(),

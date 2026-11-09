@@ -1,6 +1,8 @@
 // ADV-A09: every mounted route must appear here, either naming the cross-tenant test that proves
 // another organization's data cannot be reached through it, or stating why it holds no tenant
-// data. Adding a route without an entry fails the meta-test.
+// data. Adding a route without an entry fails the meta-test. A test reference names its file and
+// either an INV/ADV ID that file cites or a test title in double quotes, word for word; the
+// meta-test checks both (review L-08).
 
 type Coverage =
   | { readonly covered: 'test'; readonly test: string }
@@ -29,7 +31,7 @@ export const CROSS_TENANT_FIXTURES: Readonly<Record<string, Coverage>> = {
   'GET /api/v1/auth/session': { covered: 'no-tenant-data', reason: 'reports whether a session exists' },
   'GET /api/v1/me': {
     covered: 'test',
-    test: "invitations.test.ts and tenancy.test.ts: only the caller's own memberships are listed",
+    test: 'tenancy.test.ts › "a user in two organizations must choose one; each choice sees only its own data"',
   },
 
   'GET /api/v1/members': T01,
@@ -39,7 +41,7 @@ export const CROSS_TENANT_FIXTURES: Readonly<Record<string, Coverage>> = {
   'POST /api/v1/invitations/:id/revoke': T01,
   'POST /api/v1/invitations/accept': {
     covered: 'test',
-    test: 'invitations.test.ts: the token decides the organization; another person cannot use it',
+    test: 'invitations.test.ts › "someone else holding the link cannot use it"',
   },
   'GET /api/v1/settings': T09,
   'PATCH /api/v1/settings': T09,
@@ -61,7 +63,7 @@ export const CROSS_TENANT_FIXTURES: Readonly<Record<string, Coverage>> = {
   },
   'POST /api/v1/sessions/refresh': {
     covered: 'test',
-    test: 'enrollment.test.ts › the refresh token decides the session; reuse revokes the family',
+    test: 'enrollment.test.ts › "refresh tokens rotate; a reused one revokes the whole family"',
   },
   'GET /api/v1/mobile/config': {
     covered: 'test',
@@ -69,7 +71,7 @@ export const CROSS_TENANT_FIXTURES: Readonly<Record<string, Coverage>> = {
   },
   'POST /api/v1/tracking-consents': {
     covered: 'test',
-    test: 'enrollment.test.ts › consent is tied to the session',
+    test: 'enrollment.test.ts › "the tracking consent is recorded, append-only and audited"',
   },
   'GET /api/v1/sites': T01,
   'POST /api/v1/sites': T09,
@@ -151,7 +153,7 @@ export const CROSS_TENANT_FIXTURES: Readonly<Record<string, Coverage>> = {
   // Phase 5
   'GET /api/v1/alerts': {
     covered: 'test',
-    test: "alerts.test.ts: the list never holds another organization's alerts",
+    test: `alerts.test.ts › "the list never holds another organization's alerts"`,
   },
   'GET /api/v1/alerts/:id': T01,
   'POST /api/v1/alerts/:id/acknowledge': T01,
@@ -159,7 +161,7 @@ export const CROSS_TENANT_FIXTURES: Readonly<Record<string, Coverage>> = {
   'POST /api/v1/alerts/:id/dismiss': T01,
   'GET /api/v1/reports/attendance': {
     covered: 'test',
-    test: "reports.test.ts: another organization's shifts never appear; its site is not found",
+    test: `reports.test.ts › "never includes another organization's shifts, and another organization's site is not found"`,
   },
 
   // Phase 9
@@ -191,7 +193,7 @@ export const CROSS_TENANT_FIXTURES: Readonly<Record<string, Coverage>> = {
   'PUT /api/v1/members/:id/alert-phone': T01,
   'GET /api/v1/incidents': {
     covered: 'test',
-    test: "incidents.test.ts: the list never holds another organization's incidents",
+    test: `incidents.test.ts › "the list never holds another organization's incidents; the home page counts open ones"`,
   },
   'POST /api/v1/incidents': T09,
   'GET /api/v1/incidents/:id': T01,
@@ -224,7 +226,7 @@ export const CROSS_TENANT_FIXTURES: Readonly<Record<string, Coverage>> = {
   },
   'POST /api/v1/sos': {
     covered: 'test',
-    test: "sos.test.ts: the SOS lands in the phone's own organization, from its session or its device key",
+    test: "sos.test.ts › ADV-S11 (the session or the phone's own key decides; another phone's key is refused, and the body names no organization)",
   },
   'GET /api/v1/sos/:id/status': {
     covered: 'test',
@@ -252,7 +254,7 @@ export const CROSS_TENANT_FIXTURES: Readonly<Record<string, Coverage>> = {
   'POST /api/v1/push-subscriptions': T09,
   'GET /api/v1/push-subscriptions': {
     covered: 'test',
-    test: "notifications.test.ts: only the member's own browsers in this organization",
+    test: 'notifications.test.ts › "subscriptions: only push-service endpoints; a member lists and removes only their own"',
   },
   'DELETE /api/v1/push-subscriptions/:id': T01,
   'POST /api/v1/notifications/test': T09,
@@ -260,12 +262,12 @@ export const CROSS_TENANT_FIXTURES: Readonly<Record<string, Coverage>> = {
   'POST /api/v1/alerts/:id/delivered': T01,
   'POST /api/v1/me/push-token': {
     covered: 'test',
-    test: "notifications.test.ts: the token goes on the caller's own phone",
+    test: "notifications.test.ts › ADV-A10 (a push token goes on the caller's own phone, never another guard's or organization's)",
   },
 
   // Phase 10
   'POST /api/v1/diagnostics/app-errors': {
     covered: 'test',
-    test: 'diagnostics.test.ts: organization and device come from the session; nothing is stored',
+    test: 'diagnostics.test.ts › "the request cannot name an organization or device: the session decides, and extra fields are refused"',
   },
 };

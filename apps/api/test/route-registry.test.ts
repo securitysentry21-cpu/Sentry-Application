@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+
 import { createPool } from '@sentryops/db';
 import { FakeClock } from '@sentryops/domain';
 import { afterAll, describe, expect, it } from 'vitest';
@@ -41,10 +43,47 @@ describe('route registry (ARCH §4.6)', () => {
     }
   });
 
+  it('ADV-A09 each cross-tenant fixture names test files that exist and an ID or a test title they hold (review L-08)', () => {
+    const problems: string[] = [];
+    for (const [route, coverage] of Object.entries(CROSS_TENANT_FIXTURES)) {
+      if (coverage.covered !== 'test') {
+        if (coverage.reason.trim().length < 15) problems.push(`${route}: say why it holds no tenant data`);
+        continue;
+      }
+      const files = [...new Set(coverage.test.match(/[\w-]+\.test\.ts/g) ?? [])];
+      const ids = [...new Set(coverage.test.match(/\b(?:ADV|INV)-[A-Z]*\d+\b/g) ?? [])];
+      const titles = [...coverage.test.matchAll(/"([^"]+)"/g)].map((m) => m[1] ?? '');
+      if (files.length === 0) problems.push(`${route}: names no test file`);
+      if (ids.length === 0 && titles.length === 0)
+        problems.push(`${route}: cites no INV/ADV ID and quotes no test title`);
+      const sources = files.map((file) => {
+        try {
+          return readFileSync(new URL(file, import.meta.url), 'utf8');
+        } catch {
+          problems.push(`${route}: ${file} does not exist`);
+          return '';
+        }
+      });
+      for (const id of ids) {
+        if (!sources.some((source) => new RegExp(`\\b${id}\\b`).test(source))) {
+          problems.push(`${route}: ${id} is not cited in ${files.join(' or ')}`);
+        }
+      }
+      for (const title of titles) {
+        if (!sources.some((source) => source.includes(title))) {
+          problems.push(`${route}: no test in ${files.join(' or ')} is titled "${title}"`);
+        }
+      }
+    }
+    expect(problems).toEqual([]);
+  });
+
   it('ADV-X05 every route returning guard coordinates is live-only or audited; no coordinate is untagged', () => {
+    // A latitude and a longitude in one object: `lat`/`lng`, or with a prefix (`startLatitude`,
+    // `endLng`), which the first version of this test could not see (review L-07).
     const COORDINATE_KEYS = [
-      ['lat', 'latitude'],
-      ['lng', 'lon', 'longitude'],
+      /^(lat|latitude)$|[a-z0-9](Lat|Latitude)$/,
+      /^(lng|lon|longitude)$|[a-z0-9](Lng|Lon|Longitude)$/,
     ];
     type Node = { [key: string]: unknown };
     const found = {
@@ -56,7 +95,10 @@ describe('route registry (ARCH §4.6)', () => {
       if (!node || typeof node !== 'object') return;
       const n = node as Node;
       const props = n.properties && typeof n.properties === 'object' ? Object.keys(n.properties) : [];
-      const hasCoordinates = COORDINATE_KEYS.every((names) => names.some((k) => props.includes(k)));
+      // GeoJSON carries positions as [lng, lat] arrays under `coordinates`.
+      const hasCoordinates =
+        COORDINATE_KEYS.every((pattern) => props.some((k) => pattern.test(k))) ||
+        props.includes('coordinates');
       if (hasCoordinates) {
         if (n.guardLocation === true) tags.guard = true;
         else if (n.incidentLocation === true) tags.incident = true;
@@ -67,7 +109,22 @@ describe('route registry (ARCH §4.6)', () => {
     // Where a guard filed an incident is shown to whoever may see the incident (owner decision
     // 2026-11-02), and nowhere else: every incident permission belongs to a role that sees incidents.
     const isIncidentPermission = (permission: string) => permission.startsWith('incidents.');
-    for (const route of ROUTES) {
+    const routes =
+      process.env.NEGATIVE_CONTROL === 'untagged-coordinate'
+        ? [
+            ...ROUTES,
+            // A new response with a position nobody tagged (review L-18).
+            defineRoute({
+              method: 'GET',
+              url: '/api/v1/planted/untagged',
+              summary: 'negative control',
+              policy: { access: { kind: 'public' }, ownership: 'none', rateLimit: 'none', audit: null },
+              responses: { 200: z.object({ startLatitude: z.number(), startLongitude: z.number() }) },
+              handler: () => Promise.resolve({ startLatitude: 0, startLongitude: 0 }),
+            }),
+          ]
+        : ROUTES;
+    for (const route of routes) {
       const key = `${route.method} ${route.url}`;
       const tags = { guard: false, incident: false };
       for (const schema of Object.values(route.responses)) {
@@ -98,6 +155,36 @@ describe('route registry (ARCH §4.6)', () => {
     expect(found.guardLocation).toContain('GET /api/v1/dashboard/snapshot');
     expect(found.guardLocation).toContain('GET /api/v1/sos/:id');
     expect(found.incidentLocation).toContain('GET /api/v1/incidents/:id');
+  });
+
+  it('ADV-X05 a handler that sends a coordinate its schema does not declare fails outside production (review L-07)', async () => {
+    // The hurried change: a handler spreads a database row into its answer.
+    const row = { id: 'guard-1', name: 'A guard', latitude: 24.8607, longitude: 67.0011 };
+    const spreadRow = defineRoute({
+      method: 'GET',
+      url: '/api/v1/test-only/spread-row',
+      summary: 'test only',
+      policy: { access: { kind: 'public' }, ownership: 'none', rateLimit: 'none', audit: null },
+      responses: { 200: z.object({ id: z.string(), name: z.string() }) },
+      handler: () => Promise.resolve({ ...row }),
+    });
+    const answer = async (nodeEnv: 'test' | 'production') => {
+      const config = { ...testConfig(UNREACHABLE_DATABASE), NODE_ENV: nodeEnv };
+      const app = buildApp(createDeps(config, pool, { clock: new FakeClock(NOW), oidc: null }), {
+        logger: false,
+        extraRoutes: [spreadRow],
+      });
+      try {
+        return await app.inject({ method: 'GET', url: '/api/v1/test-only/spread-row' });
+      } finally {
+        await app.close();
+      }
+    };
+    const checked = await answer('test');
+    expect(checked.statusCode).toBe(500);
+    expect(checked.body).not.toContain('24.8607');
+    // Production sends what the handler returns: the check is for CI and development (response-check.ts).
+    expect((await answer('production')).statusCode).toBe(200);
   });
 
   it('INV-12 the API refuses to mount a route that has no policy', async () => {

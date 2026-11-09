@@ -23,6 +23,12 @@ overrides:
   # The Expo CLI still asks for node-forge 1.4.0, which has High advisories (GHSA-86w9-cpqp-85rv
   # and five more); 1.4.2 fixes them. Remove this once @expo/cli depends on >= 1.4.1 itself.
   node-forge: 1.4.2
+  # Review L-20: fastify's schema compilers resolve fast-uri 3.1.8 and 4.2.1, which have moderate and
+  # low advisories (GHSA-w74x-v6f9-j3xg, GHSA-wjr9-j795-jxcr, GHSA-xhq7-xmqj-769h, GHSA-333x-w4r6-6crp)
+  # on the internet-facing API; 3.1.9 and 4.2.3 fix them, inside the ranges fastify asks for. Remove
+  # these once a fresh install resolves those versions by itself.
+  'fast-uri@^3.0.0': 3.1.9
+  'fast-uri@^4.0.0': 4.2.3
 
 # Never wait for an interactive 'purge node_modules?' prompt (installs run unattended).
 confirmModulesPurge: false

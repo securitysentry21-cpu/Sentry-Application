@@ -13,6 +13,7 @@ import {
 } from 'node:crypto';
 
 import { createKysely, createPool, type Pool } from '@sentryops/db';
+import pg from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { createProviders } from '../src/notify/providers.ts';
@@ -419,6 +420,60 @@ describe('through the API', () => {
       ),
     );
     expect(rows).toEqual([{ status: 'SUPPRESSED', error_code: 'MONTHLY_CAP' }]);
+  });
+
+  it("ADV-A10 a push token goes on the caller's own phone, never another guard's or organization's", async () => {
+    // Review L-08: the fixture list said so; this proves it. Two guards, two organizations.
+    const other = await seedOrganization(t.db, 'Other Notify Co', [
+      { email: 'admin@other-notify.test', role: 'ADMIN' },
+    ]);
+    const otherAdmin = await signIn(t.app, 'admin@other-notify.test');
+    const mineId = await createGuard(t.app, admin, org.id, {
+      employeeNumber: 'PT-1',
+      displayName: 'Token one',
+      phone: '+923000099011',
+    });
+    const theirsId = await createGuard(t.app, otherAdmin, other.id, {
+      employeeNumber: 'PT-2',
+      displayName: 'Token two',
+      phone: '+923000099012',
+    });
+    const mine = await enrollPhone(t.app, admin, org.id, mineId, '+923000099011');
+    const theirs = await enrollPhone(t.app, otherAdmin, other.id, theirsId, '+923000099012');
+
+    const registered = await asPhone(t.app, mine, {
+      method: 'POST',
+      url: '/api/v1/me/push-token',
+      body: { provider: 'FCM', token: 'm'.repeat(40) },
+    });
+    expect(registered.statusCode).toBe(204);
+    // A body that names another phone or organization is refused, not applied.
+    for (const extra of [
+      { deviceId: theirs.deviceId },
+      { organizationId: other.id },
+      { guardId: theirsId },
+    ]) {
+      const res = await asPhone(t.app, mine, {
+        method: 'POST',
+        url: '/api/v1/me/push-token',
+        body: { provider: 'FCM', token: 'x'.repeat(40), ...extra },
+      });
+      expect(res.statusCode, JSON.stringify(extra)).toBe(400);
+    }
+
+    const admin_ = new pg.Client({ connectionString: t.db.urls.admin });
+    await admin_.connect();
+    try {
+      const rows = await admin_.query<{ id: string; push_token: string | null }>(
+        'select id, push_token from guard_devices where id = any($1)',
+        [[mine.deviceId, theirs.deviceId]],
+      );
+      const token = (id: string) => rows.rows.find((r) => r.id === id)?.push_token ?? null;
+      expect(token(mine.deviceId)).toBe('m'.repeat(40));
+      expect(token(theirs.deviceId)).toBeNull();
+    } finally {
+      await admin_.end();
+    }
   });
 
   it('a guard hears about a new shift and a cancelled one on the phone, in their language', async () => {

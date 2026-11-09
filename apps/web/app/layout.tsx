@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next';
 import { Inter, Orbitron } from 'next/font/google';
+import { connection } from 'next/server';
 import type { ReactNode } from 'react';
 
 import './globals.css';
@@ -19,7 +20,10 @@ export const metadata: Metadata = {
 
 export const viewport: Viewport = { themeColor: '#12161b', colorScheme: 'dark' };
 
-export default function RootLayout({ children }: { children: ReactNode }) {
+export default async function RootLayout({ children }: { children: ReactNode }) {
+  // Every page renders per request, so its scripts carry that response's CSP nonce (proxy.ts). A
+  // page prerendered at build time has no nonce, and the policy would block its scripts.
+  await connection();
   return (
     <html lang="en" className={`${display.variable} ${text.variable}`}>
       <body>{children}</body>

@@ -35,11 +35,35 @@ resource "aws_db_parameter_group" "main" {
     value        = "1"
     apply_method = "pending-reboot"
   }
-  # Slow statements are logged by duration only; parameters may hold personal data and stay out.
+  # Slow statements are logged (over a second), without their values: bind parameters hold
+  # coordinates and phone numbers (SEC §15, review L-05). PostgreSQL's default logs them in full.
   parameter {
     name  = "log_min_duration_statement"
     value = "1000"
   }
+  parameter {
+    name  = "log_parameter_max_length"
+    value = "0"
+  }
+  parameter {
+    name  = "log_parameter_max_length_on_error"
+    value = "0"
+  }
+  # An error's DETAIL is the failing row ("Failing row contains (…, 24.86, 67.00, +92…)"): terse
+  # keeps the message and SQLSTATE and drops DETAIL, HINT, QUERY and CONTEXT (review L-05).
+  parameter {
+    name  = "log_error_verbosity"
+    value = "terse"
+  }
+}
+
+# Where RDS sends the PostgreSQL log (enabled_cloudwatch_logs_exports). RDS would create it itself,
+# kept for ever; created here first, it keeps 30 days like the services' logs (review L-05). An
+# environment whose RDS already created it imports it once:
+#   infra/scripts/tf.sh test import aws_cloudwatch_log_group.postgresql /aws/rds/instance/<name>/postgresql
+resource "aws_cloudwatch_log_group" "postgresql" {
+  name              = "/aws/rds/instance/${local.name}/postgresql"
+  retention_in_days = 30
 }
 
 resource "aws_db_instance" "main" {
@@ -77,6 +101,7 @@ resource "aws_db_instance" "main" {
   skip_final_snapshot             = var.environment != "production"
   final_snapshot_identifier       = "${local.name}-final"
   enabled_cloudwatch_logs_exports = ["postgresql"]
+  depends_on                      = [aws_cloudwatch_log_group.postgresql]
 }
 
 # Stopped while the environment is paused (var.paused); started again when it isn't.

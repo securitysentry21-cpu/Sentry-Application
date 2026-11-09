@@ -8,15 +8,27 @@ resource "aws_ecr_repository" "app" {
   }
 }
 
+# Review L-14: CI pushes an image for every green commit on main, so "keep the last 30" alone would
+# one day expire the image an environment runs, and the next task start would fail. release.sh tags
+# each image it releases release-<sha>; the first rule keeps the newest 50 of those, and an image a
+# higher-priority rule matches is never expired by a lower one (ECR's lifecycle evaluation rules).
 resource "aws_ecr_lifecycle_policy" "app" {
   repository = aws_ecr_repository.app.name
   policy = jsonencode({
-    rules = [{
-      rulePriority = 1
-      description  = "Keep the last 30 images"
-      selection    = { tagStatus = "any", countType = "imageCountMoreThan", countNumber = 30 }
-      action       = { type = "expire" }
-    }]
+    rules = [
+      {
+        rulePriority = 1
+        description  = "Keep the newest 50 released images (release.sh tags them release-<sha>)"
+        selection    = { tagStatus = "tagged", tagPatternList = ["release-*"], countType = "imageCountMoreThan", countNumber = 50 }
+        action       = { type = "expire" }
+      },
+      {
+        rulePriority = 2
+        description  = "Keep the last 30 of the others"
+        selection    = { tagStatus = "any", countType = "imageCountMoreThan", countNumber = 30 }
+        action       = { type = "expire" }
+      },
+    ]
   })
 }
 
@@ -41,7 +53,9 @@ locals {
     { name = "NODE_ENV", value = "production" },
     { name = "CELL_REGION", value = var.region },
     { name = "PUBLIC_ORIGIN", value = local.public_origin },
-    { name = "TRUST_PROXY", value = "true" },
+    # Only the load balancer (and CloudFront's VPC origin) is believed about the client's address:
+    # both connect from inside the VPC (apps/api/src/config.ts, review L-06).
+    { name = "TRUST_PROXY", value = local.vpc_cidr },
     { name = "LOG_LEVEL", value = "info" },
     { name = "OIDC_ISSUER", value = "https://cognito-idp.${var.region}.amazonaws.com/${aws_cognito_user_pool.dashboard.id}" },
     { name = "OIDC_CLIENT_ID", value = aws_cognito_user_pool_client.dashboard.id },
@@ -156,12 +170,17 @@ resource "aws_ecs_task_definition" "web" {
     operating_system_family = "LINUX"
   }
   container_definitions = jsonencode([{
-    name             = "web"
-    image            = local.image
-    essential        = true
-    command          = ["node", "node_modules/next/dist/bin/next", "start", "apps/web", "--port", "3000", "--hostname", "0.0.0.0"]
-    portMappings     = [{ containerPort = 3000, protocol = "tcp" }]
-    environment      = [{ name = "NODE_ENV", value = "production" }]
+    name         = "web"
+    image        = local.image
+    essential    = true
+    command      = ["node", "node_modules/next/dist/bin/next", "start", "apps/web", "--port", "3000", "--hostname", "0.0.0.0"]
+    portMappings = [{ containerPort = 3000, protocol = "tcp" }]
+    environment = [
+      { name = "NODE_ENV", value = "production" },
+      # The dashboard's Content-Security-Policy lets incident photos load from here (apps/web/lib/csp.ts):
+      # the host apps/api/src/storage/s3.ts signs its view links for.
+      { name = "PHOTO_ORIGIN", value = "https://${aws_s3_bucket.attachments.bucket}.s3.${var.region}.amazonaws.com" },
+    ]
     logConfiguration = local.logs["web"]
   }])
 }

@@ -12,6 +12,7 @@ import { resolveContext, type RequestContext } from '../context.ts';
 import { checkCsrf } from '../csrf.ts';
 import type { AppDeps } from '../deps.ts';
 import { notFound, validationError } from '../errors.ts';
+import { checkResponse } from './response-check.ts';
 
 declare module 'fastify' {
   interface FastifyContextConfig {
@@ -108,7 +109,12 @@ export function mountRoutes(app: FastifyInstance, routes: readonly RouteDefiniti
           if (!parsed.success) throw validationError(parsed.error);
           body = parsed.data;
         }
-        return route.handler({ request, reply, deps, ctx, body, params, query });
+        const result = await route.handler({ request, reply, deps, ctx, body, params, query });
+        // Review L-07: outside production, what is sent must be what the route declares.
+        if (deps.config.NODE_ENV !== 'production' && result !== reply && !reply.sent) {
+          checkResponse(`${route.method} ${route.url}`, reply.statusCode, route.responses, result);
+        }
+        return result;
       },
     });
   }
