@@ -69,7 +69,7 @@ Each line is: item ID, type, result, detail. Replay is safe to repeat: the pipel
 
 A phone that was REPLACED by a new one is replayed, but only for data captured before the replacement.
 
-The command exits with code 1 if any item is `STILL_FAILING`, but `operator.sh` does not pass that on and prints the lines tab-separated. Read the result words. [GAP: exit code and line breaks (G19).]
+The command exits with code 1 if any item is `STILL_FAILING`, and `operator.sh` passes that code on (checked on `test` 2026-11-08: 0 for "No open quarantined items.", 1 for an unknown item or organization, 2 for a missing reason). It still prints the lines tab-separated, and a pipe to `tr` hides the code unless you read `${PIPESTATUS[0]}`. Read the result words. [GAP: line breaks (G19).]
 
 3. Run the list again (without `--all`). Items still open are `WAITING` or the new rows of `STILL_FAILING`. Repeat step 2 until only `STILL_FAILING` remains.
 4. **`STILL_FAILING` is a bug.** Collect only: the item **type**, the count, the code `INTERNAL_ERROR`, the app version (Guards page › the guard's devices), the time. Never the content. Open a repository issue with those and no organization or guard names (the repository is public). Do not delete anything. The new rows stay available for the engineer to replay after the fix, within the 30 days.
@@ -95,6 +95,6 @@ Write down: organization ID, item count by type, results, the issue number. Afte
 
 ## Status
 
-Tried on the test environment: not yet. The commands are covered by automated tests on a local database only (`apps/api/test/operator.test.ts`: replay as the item's own phone, repeat safety, ordering, revoked and replaced phones, tenant isolation, audit rows).
+Tried on the test environment, 2026-11-08, on release bb6a9ad: `quarantine-list` ("No quarantined items."), `quarantine-replay` with nothing open ("No open quarantined items."), `--id` of an item that does not exist ("no open quarantined item ... in this organization", exit 1), an organization that does not exist ("no organization ... in this cell", exit 1) and a missing `--reason` (usage text, exit 2). Each run takes about two minutes. **Not tried on AWS:** replaying a real quarantined item (the test database has none, and nothing here can make one), and reading the `PLATFORM_ACCESS` row in the company's Audit Log (needs a signed-in owner). Those are covered by automated tests on a local database only (`apps/api/test/operator.test.ts`: replay as the item's own phone, repeat safety, ordering, revoked and replaced phones, tenant isolation, audit rows).
 
 Known gaps: G02, G17, G18, G19.

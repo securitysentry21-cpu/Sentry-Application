@@ -33,7 +33,7 @@ The sizes in `variables.tf` are for Pilot 0 (about 50 guards): `db.t4g.micro`, o
 infra/scripts/operator.sh <env> create-organization --name "<company>" --owner-email <owner's email> --timezone Asia/Karachi | tr '\t' '\n'
 ```
 
-It prints `Organization <id> created` and an invitation link (valid 7 days, single use). **Write the ID in your private register** (G02) and give the link to the owner in person or by phone. The owner signs in with an e-mail code, then sets up an authenticator app (MFA is required).
+It prints `Organization <id> created in <region>.`, then "Send this invitation link to the owner (valid 7 days, single use):" and the link. (For a rehearsal add `--demo`: a demo organization has no real people and every SOS in it is a drill. Tried on `test` 2026-11-08 with `--demo`; the command takes about two minutes. There is no command to delete an organization, so a rehearsal organization stays: name it so it is recognisable. [GAP: no way to delete an organization (G26).]) **Write the ID in your private register** (G02) and give the link to the owner in person or by phone. The owner signs in with an e-mail code, then sets up an authenticator app (MFA is required).
 
 2. **Owner sets up** (Settings): the emergency call number and emergency contacts, the SOS escalation steps, the alert phone number of each duty officer (Members page), and notifications on each duty officer's device with the test "Send me a test SOS alert".
 3. **Sites.** Create sites with geofences, then checkpoints. Print each site's QR sheet (Sites › print) and stick the labels before any patrol.
@@ -85,6 +85,6 @@ Record the organization ID (private), date, counts imported and enrolled, and an
 
 ## Status
 
-Tried on the test environment: not yet. (`create-organization` was used to set up `test`; the bulk steps have automated tests only, and nothing has run at 1,000-guard scale.)
+Tried on the test environment: step 1 (`create-organization`) was used to set up `test` and was run again on 2026-11-08 with `--demo` (it worked, exit 0). The steps after it need a signed-in owner and a dashboard, so they were not tried; the bulk steps have automated tests only, and nothing has run at 1,000-guard scale.
 
 Known gaps: G02, G20 (no bulk invitations, code issue or shift import), G21, G22 (sizes unproven). `docs/PRODUCT_SPEC.md §4.2` describes sending guard invitations in batches within the daily limit; the code imports guard records only and issues codes one guard at a time.

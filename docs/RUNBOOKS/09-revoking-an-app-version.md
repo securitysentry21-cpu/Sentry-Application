@@ -61,7 +61,7 @@ infra/scripts/tf.sh <env> plan
 infra/scripts/tf.sh <env> apply -auto-approve
 ```
 
-4. Wait until the services have restarted (usually minutes). The apply can return before they finish.
+4. Wait until the services have restarted. The apply returns before they finish; on `test` the apply plus the wait took about 5 to 6 minutes. The API keeps answering during the swap (the new task starts before the old one stops).
 
 ```bash
 aws ecs wait services-stable --region <region> --cluster sentryops-<env> --services api worker
@@ -100,6 +100,6 @@ Record: version, reason, time revoked, time the last guard updated. Keep the ver
 
 ## Status
 
-Tried on the test environment: not yet. (The server side is covered by automated tests: `apps/api/test/app-version.test.ts`, including an SOS signed with the device key. The app side by `apps/mobile` tests, not on a real phone.) The Terraform apply has not been run for this variable.
+Tried on the test environment, 2026-11-08, steps 1 to 4: `mobile_revoked_versions = ["0.0.1-drill"]` in `test.tfvars`; the plan changed only the `api` and `worker` task definitions and services, as written; the apply and the wait took about 5.5 minutes; the new `api` task definition held `MOBILE_REVOKED_VERSIONS=0.0.1-drill`. Then the line was removed and applied again (also about 5.5 minutes): the variable was empty. **Not tried:** seeing the 426 itself. The version is judged after sign-in, so a request with the drill version and no session gets 401, not 426 (checked with `curl`), and a real answer needs a signed-in guard device. The server side is covered by automated tests: `apps/api/test/app-version.test.ts`, including an SOS signed with the device key. The app side by `apps/mobile` tests, not on a real phone.
 
 Known gaps: G21 (no version census), no iOS build exists, and revocation depends on a Terraform apply from an operator's computer.

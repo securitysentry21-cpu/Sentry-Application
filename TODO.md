@@ -6,6 +6,15 @@ Everything that is left, in the order that matters, with what to do step by step
 
 Facts about outside companies change (store policy changes every year, EXT-45). Each one below says where it came from and when it was checked. **Verify** means I could not confirm it from the company's own page: check it on the screen where you act.
 
+## Waiting on you right now (noted 2026-11-09)
+
+1. **Run Fable pass 1** (item F below). Give Fable `docs/FABLE_LAUNCH_AUDIT.md` with the repository **at commit `8854af8`** (Phases 0–9), not at `main`: the brief says so, and pass 2 covers what came after. A clean copy without touching your checkout: `git archive --format=zip -o ../sentry-8854af8.zip 8854af8`. Bring Fable's findings back to me and I fix them.
+2. **Confirm the AWS alarm email** (item 1): until you click "Confirm subscription", the alarms email nobody.
+3. **Answer the lawyer's questions** (items B and C, and item 3 for finding the lawyer): `docs/legal/README.md`, `docs/legal/GUARD_DISCLOSURE_V2_DRAFT.md`, `docs/store/`.
+4. **Create the Firebase test project** (item 5) and **the Expo account** (item 6): guard push cannot be tried on a phone without them.
+
+Not waiting on you, but not yet in `main`: the runbook trial results (the runbooks, this file, `docs/DECISIONS.md` and `infra/terraform/env/test.release.tfvars`) sit **uncommitted** on the local branch `runbooks-tried`. Say "commit" and I commit them and open a small pull request.
+
 ## The shortest path to the first real guard
 
 Almost all of the time is waiting for other people, so **start the long waits first**. Your own work adds up to about two days.
@@ -23,11 +32,11 @@ SOS is off for the pilot guards, so the SMS provider does not block the pilot. I
 
 ## 0. Finished by me, waiting for a decision from you (2026-11-08)
 
-- [ ] **A. Merge the pull request** (<https://github.com/securitysentry21-cpu/Sentry-Application/pull/17>) once its checks are green. It is a draft; say "merge" and I mark it ready and merge it. Everything of Phase 10's second part is in it. Its new `android-manifest` job passed on 2026-11-08 with the real merged manifest; its decisions are in `docs/DECISIONS.md` (Phase 10) for your veto.
+- [x] **A. Merge the pull request** — done 2026-11-08 at your word: PR #17 is merged into `main` as bb6a9ad, and CI on `main` passed.
 - [ ] **B. Read the lawyer's questions** in `docs/legal/README.md` and the owner's questions in the same place and in `docs/store/`. Answer what only you know (company name, address, contact addresses, which provider). Nothing in the drafts is invented: a blank says so.
 - [ ] **C. The guard disclosure** says less than the product does. `docs/legal/GUARD_DISCLOSURE_CHECK.md` lists where, and `docs/legal/GUARD_DISCLOSURE_V2_DRAFT.md` is a corrected text for the lawyer (English, with Urdu suggestions marked for your native speaker). The app still shows the old text until the lawyer approves. When it does, the new build must reach every phone **before** the server announces the new version, or guards cannot accept it. The draft is about 550 words against 150 today; section 2.3 says what to cut first.
-- [ ] **D. Firebase brings two permissions I need your veto on.** Allowed: `com.google.android.c2dm.permission.RECEIVE` and `WAKE_LOCK`, so the phone can receive pushes. SEC pitfall 32 forbids _holding_ a wake lock through a shift, which we do not, but you may read it as forbidding the permission itself; `docs/DECISIONS.md` (Phase 10) says what that would cost. Play's wake-lock figure is a check on the device tests.
-- [ ] **E. Let me try the runbooks on the test environment** the next time you do `aws login`. They are written from the code but untried (except the restore drill); `docs/RUNBOOKS/README.md` lists 25 gaps found while writing them.
+- [x] **D. Firebase's two permissions** (`com.google.android.c2dm.permission.RECEIVE` and `WAKE_LOCK`) — you kept my decision on 2026-11-08. Still open as a check, not a decision: Play's wake-lock figure on the device tests.
+- [x] **E. Try the runbooks on the test environment** — done 2026-11-08: the look-in commands, worker and API restarts, the operator commands (with their error cases), a revoke-and-undo, an evidence copy and snapshot, and the key-rotation plans. Each runbook's Status section says exactly what was and was not tried; none was tried against a real failure, a signed-in dashboard or a phone. `docs/RUNBOOKS/README.md` now lists 26 gaps. The environment is paused again and runs bb6a9ad.
 - [ ] **F. Run Fable pass 1** (item 8 below) when you can. The brief is in `docs/FABLE_LAUNCH_AUDIT.md`. Fable's pass is on commit 8854af8; what I built since is not in it, which is why pass 2 comes at the end.
 
 Done and no longer waiting: the new alarms and the app-version variables are **applied to the test environment** (2026-11-08, 14 added, 2 replaced, about $0.20 a month; the environment is still paused). Until you confirm the alarm email (item 1 below) they email nobody.
@@ -149,7 +158,7 @@ Every box must be ticked. SOS stays off for pilot guards until its own three box
 
 ## 6. Dates
 
-- **About 2026-11-09:** AWS restarts the stopped test database by itself (every 7 days), at about $0.80 a day until I stop it again. Tell me "re-pause AWS": I start the sign-in (it opens a browser page for you to approve) and pause it.
+- **About 2026-11-15** (it was started and paused again on 2026-11-08): AWS restarts the stopped test database by itself (every 7 days), at about $0.80 a day until I stop it again. Tell me "re-pause AWS": I start the sign-in (it opens a browser page for you to approve) and pause it.
 - **2027-04-08:** the AWS Free plan ends. Upgrade (item 11) or lose the test environment.
 - **2027:** Google's developer verification reaches all certified Android phones (item 13).
 - **Every 31 August:** Google raises its minimum target API level; `MIN_TARGET_SDK` in the manifest check changes with it.

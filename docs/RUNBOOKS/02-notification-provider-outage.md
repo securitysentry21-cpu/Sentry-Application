@@ -28,7 +28,7 @@ Source: `notifications.tf`, `secrets.tf`, `apps/api/src/notify/providers.ts`, `c
 1. Which channel and which code? Delivery counts by channel, status and error code:
 
 ```bash
-infra/scripts/operator.sh <env> delivery-health --org <org> --reason "provider outage check" --hours 2
+infra/scripts/operator.sh <env> delivery-health --org <org> --reason "provider outage check" --hours 2 | tr '\t' '\n'
 ```
 
 2. The worker's failure lines (one per failed attempt, with `channel` and `code`):
@@ -101,6 +101,6 @@ Record channel, codes, start and end times, and whether any real SOS fell in the
 
 ## Status
 
-Tried on the test environment: not yet. (Provider failure is covered by automated tests only, `apps/api/test/sos.test.ts` ADV-S08.)
+Tried on the test environment, 2026-11-08: the two look-in commands (`delivery-health` and the worker log tail) run and print what the runbook says on a healthy system. **Not tried:** an actual provider failure, which cannot be made on AWS today. Provider failure is covered by automated tests only, `apps/api/test/sos.test.ts` ADV-S08.
 
 Known gaps: G04, G06, G07. Firebase and SMS cannot be exercised until the Firebase project (TODO item 5) and an SMS provider exist.
