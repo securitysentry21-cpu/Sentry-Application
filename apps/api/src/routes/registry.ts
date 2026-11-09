@@ -12,7 +12,7 @@ import { resolveContext, type RequestContext } from '../context.ts';
 import { checkCsrf } from '../csrf.ts';
 import type { AppDeps } from '../deps.ts';
 import { notFound, validationError } from '../errors.ts';
-import { checkResponse } from './response-check.ts';
+import { checkResponse, stripResponse } from './response-check.ts';
 
 declare module 'fastify' {
   interface FastifyContextConfig {
@@ -118,11 +118,15 @@ export function mountRoutes(
           body = parsed.data;
         }
         const result = await route.handler({ request, reply, deps, ctx, body, params, query });
-        // Review L-07: outside production, what is sent must be what the route declares.
-        if (deps.config.NODE_ENV !== 'production' && result !== reply && !reply.sent) {
-          checkResponse(`${route.method} ${route.url}`, reply.statusCode, route.responses, result);
+        if (result === reply || reply.sent) return result;
+        // Review L-07: outside production, what is sent must be what the route declares; in
+        // production (owner decision Q6) undeclared keys are dropped and nothing ever fails.
+        const name = `${route.method} ${route.url}`;
+        if (deps.config.NODE_ENV !== 'production') {
+          checkResponse(name, reply.statusCode, route.responses, result);
+          return result;
         }
-        return result;
+        return stripResponse(name, reply.statusCode, route.responses, result, request.log);
       },
     });
   }

@@ -130,8 +130,19 @@ const controls: Control[] = [
     expect: /× .*ADV-X05 a handler that sends a coordinate its schema does not declare/,
     run: mutated(
       'apps/api/src/routes/registry.ts',
-      "if (deps.config.NODE_ENV !== 'production' && result !== reply && !reply.sent) {",
-      'if (false) {',
+      'checkResponse(name, reply.statusCode, route.responses, result);',
+      '',
+      'api',
+      'test/route-registry.test.ts',
+    ),
+  },
+  {
+    name: 'production sends handler results unstripped again → the ADV-X05 production test must fail (owner Q6)',
+    expect: /× .*ADV-X05 in production a response keeps only what its schema declares/,
+    run: mutated(
+      'apps/api/src/routes/registry.ts',
+      'return stripResponse(name, reply.statusCode, route.responses, result, request.log);',
+      'return result;',
       'api',
       'test/route-registry.test.ts',
     ),

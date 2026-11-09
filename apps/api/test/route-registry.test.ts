@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs';
+import { Writable } from 'node:stream';
 
 import { createPool } from '@sentryops/db';
 import { FakeClock } from '@sentryops/domain';
@@ -6,6 +7,7 @@ import { afterAll, describe, expect, it } from 'vitest';
 import { z } from 'zod';
 
 import { buildApp } from '../src/app.ts';
+import { loggerOptions } from '../src/logger.ts';
 import { ROUTES } from '../src/routes/index.ts';
 import { defineRoute, type RouteDefinition } from '../src/routes/registry.ts';
 import { createDeps } from '../src/server.ts';
@@ -183,8 +185,80 @@ describe('route registry (ARCH §4.6)', () => {
     const checked = await answer('test');
     expect(checked.statusCode).toBe(500);
     expect(checked.body).not.toContain('24.8607');
-    // Production sends what the handler returns: the check is for CI and development (response-check.ts).
-    expect((await answer('production')).statusCode).toBe(200);
+    // Production never fails a response (an SOS must not turn into a 500), but since the owner's
+    // decision Q6 it drops what the schema does not declare.
+    const production = await answer('production');
+    expect(production.statusCode).toBe(200);
+    expect(production.json()).toEqual({ id: 'guard-1', name: 'A guard' });
+  });
+
+  it('ADV-X05 in production a response keeps only what its schema declares, strict or not, at any depth; a mismatch is sent as it is and logged, never a 500 (owner decision Q6)', async () => {
+    const coordinates = { latitude: 24.8607, longitude: 67.0011 };
+    const routes = [
+      defineRoute({
+        method: 'GET',
+        url: '/api/v1/test-only/strict',
+        summary: 'test only',
+        policy: { access: { kind: 'public' }, ownership: 'none', rateLimit: 'none', audit: null },
+        responses: {
+          200: z.strictObject({
+            id: z.string(),
+            guards: z.array(z.strictObject({ id: z.string(), shift: z.object({ status: z.string() }) })),
+          }),
+        },
+        handler: () =>
+          Promise.resolve({
+            id: 'site-1',
+            ...coordinates,
+            guards: [{ id: 'guard-1', phone: '+923001234567', shift: { status: 'ACTIVE', ...coordinates } }],
+          }),
+      }),
+      defineRoute({
+        method: 'GET',
+        url: '/api/v1/test-only/wrong-type',
+        summary: 'test only',
+        policy: { access: { kind: 'public' }, ownership: 'none', rateLimit: 'none', audit: null },
+        responses: { 200: z.object({ id: z.string(), count: z.int() }) },
+        handler: () => Promise.resolve({ id: 'x', count: 'many' }),
+      }),
+    ];
+    const lines: string[] = [];
+    const sink = new Writable({
+      write(chunk: Buffer, _encoding, done) {
+        lines.push(...chunk.toString().split('\n').filter(Boolean));
+        done();
+      },
+    });
+    const config = { ...testConfig(UNREACHABLE_DATABASE), NODE_ENV: 'production' as const };
+    const app = buildApp(createDeps(config, pool, { clock: new FakeClock(NOW), oidc: null }), {
+      logger: { ...loggerOptions('info'), stream: sink },
+      extraRoutes: routes,
+    });
+    try {
+      const strict = await app.inject({ method: 'GET', url: '/api/v1/test-only/strict' });
+      expect(strict.statusCode).toBe(200);
+      expect(strict.json()).toEqual({
+        id: 'site-1',
+        guards: [{ id: 'guard-1', shift: { status: 'ACTIVE' } }],
+      });
+
+      const wrong = await app.inject({ method: 'GET', url: '/api/v1/test-only/wrong-type' });
+      expect(wrong.statusCode).toBe(200);
+      expect(wrong.json()).toEqual({ id: 'x', count: 'many' });
+    } finally {
+      await app.close();
+    }
+    const mismatches = lines.filter((line) => line.includes('response-mismatch'));
+    expect(
+      mismatches.some((l) => l.includes('/api/v1/test-only/strict') && l.includes('undeclared keys dropped')),
+    ).toBe(true);
+    expect(mismatches.some((l) => l.includes('/api/v1/test-only/wrong-type') && l.includes('$.count'))).toBe(
+      true,
+    );
+    // The log names paths, never a value.
+    for (const line of mismatches) {
+      for (const value of ['24.8607', '67.0011', '923001234567', 'many']) expect(line).not.toContain(value);
+    }
   });
 
   it('INV-15 the WAF skips exactly the guard’s SOS routes: every policy.sos route, and nothing else (review L-28)', async () => {

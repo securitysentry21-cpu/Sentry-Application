@@ -12,7 +12,7 @@ Nothing here has been applied to AWS or committed.
 
 | Finding | Severity | Status |
 | --- | --- | --- |
-| L-27 SOS shares one pool with sync; no capacity kept for it | Medium | Fixed without spending: its own pool, and 503 instead of 500. The parts that cost, or would rate-limit an SOS, are **Q7** |
+| L-27 SOS shares one pool with sync; no capacity kept for it | Medium | Fixed without spending: its own pool, and 503 instead of 500. Owner (Q7): one API task for now; the WAF rule still open |
 | L-28 the WAF exemption covers the dashboard's SOS screens too | Low | Fixed: the four guard routes only |
 | L-29 Terraform tests pass with the mechanism broken | Medium | Fixed: structural assertions, and 10 mutations CI runs |
 | L-30 two skipped paths served without a CSP | Low | Fixed |
@@ -22,7 +22,7 @@ Nothing here has been applied to AWS or committed.
 | L-34 the canary's private key in the operator's log | Low | Partly: the warning names it; the clean fix is listed below |
 | L-35 the release build fetches fonts from Google | Low | Fixed: fonts in the repository |
 | L-36 the CSP checked only under `next dev` | Low | Fixed: `pnpm verify` checks the production build |
-| Pass-1 residuals Fable named | – | L-15, L-18 and §5 #4 fixed; L-07 production half is **Q6**; others below |
+| Pass-1 residuals Fable named | – | L-15, L-18 and §5 #4 fixed; L-07's production half built after the owner's answer (Q6); others below |
 
 ## Findings
 
@@ -154,7 +154,7 @@ The browser test (`e2e/csp.spec.ts`) now also checks the nonce on every script t
   
   The production CSP check and the Terraform tests are proven by their own mutations (above), not by `pnpm negative-controls`, because each needs a build or Terraform.
 - **§5 #4:** the retention-policy check now requires the organization check to be the whole policy expression, or a top-level `AND` term, as PostgreSQL prints it. The control now plants `organization_id = app.current_org_id() or true`, which the old substring check passed.
-- **L-07 (production half):** owner question **Q6**.
+- **L-07 (production half):** the owner chose Q6 (a), and it is built. In production a response keeps only the keys its schema declares, at any depth, with the handler's own values; a strict schema's undeclared keys are dropped too. A response that still does not match is sent as it is, with one `response-mismatch` log line naming the route, status and path, never a value. Nothing in production fails for it. Proof: `route-registry.test.ts`, the spread-row test (production now drops the coordinates) and "in production a response keeps only what its schema declares…" (a strict schema, nested arrays, a wrong type, and the log line without values); a negative control puts the unstripped result back and the test fails.
 - **L-08:** left as Fable accepted it. A fixture's ID only has to appear in the named file; the generated `:id` probe is the real control.
 - **§5 #9 (pre-release versions):** not changed. `X-App-Version` is the app's own claim, so the gate protects against honest old builds, not a forged client (DECISIONS, Phase 10).
 - **Operator replay and a disabled guard:** not changed. Disabling a guard revokes their sessions, not their phone. A replay re-runs only items that phone captured earlier, while the guard was working, and the pipeline's shift rules still apply.
@@ -166,10 +166,10 @@ All on 2026-11-09, on this Windows machine:
 
 - `pnpm verify` passed every step:
   - format, lint, typecheck;
-  - 827 tests in 90 files;
+  - 828 tests in 90 files (after the owner's Q6 change);
   - the generated docs and database types;
   - the ID gate;
-  - all 17 negative controls red;
+  - all 18 negative controls red (the 18th puts back the unstripped production response, Q6);
   - the audit and the licences;
   - both builds;
   - the new production CSP check: eight pages with every script and stylesheet nonced, both skipped paths with the nothing-policy.
