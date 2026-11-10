@@ -73,4 +73,27 @@ Why the wordmark style isn't used for body text:
 2. **Name clearance.** "SENTRY" is final for now. Check it for trademark and App Store availability. Note the collision with Sentry (sentry.io), the error-tracking product named in ARCH §2.
 3. **Light and one-colour versions.** Printed QR label sheets and CSV/PDF reports sit on white. Printing white-on-navy wastes toner and fades.
 4. **App icon.** A six-letter extended wordmark is unreadable at launcher size (48 dp). The app needs a symbol or an "S" monogram.
-5. **Status palette.** Alert severities and freshness states must reach WCAG AA contrast on `#12161B`. Colour must never be the only signal (PROD §14.7).
+5. **Status palette.** Alert severities and freshness states must reach WCAG AA contrast on `#12161B`. Colour must never be the only signal (PROD §14.7). For the dashboard, checked on 2026-11-10 against its own surfaces: see "Dashboard look" below.
+
+## Dashboard look (2026-11-10, after the owner's reference)
+
+The owner asked for the dashboard to look like a reference design: a dark graphite interface, a slim rail of icons, the map as the main thing on screen with frosted panels floating over it, large numbers, and meters made of ticks. The values below are in `apps/web/app/globals.css` and `apps/web/lib/map-style.ts`. They were measured, not eyeballed.
+
+| Role | Value | Contrast on a panel (`#212226`) |
+|---|---|---|
+| Canvas | `#17181B` (neutral graphite) | n/a |
+| Rail | `#121315` | n/a |
+| Panels | `rgb(35 36 40 / 72%)`, about `#212226` over the canvas | n/a |
+| Text, secondary, faint | `#EDECE7`, `#A6A7AD`, `#8F9097` | 13.4 : 1, 6.6 : 1, 5.0 : 1 |
+| Primary button | `#EDECE7` ("bone") with `#17181B` text | 15 : 1 |
+| Live | `#80E2AC` | 10.1 : 1 |
+| Delayed | `#E8A346` | 7.4 : 1 |
+| Offline, SOS | `#E3455A` for marks; `#F07A88` for text | 4.0 : 1 for marks (at least 3 : 1 needed); 5.9 : 1 for text |
+| Input borders | `#6B6C74` | 3.0 : 1 (WCAG 1.4.11 needs 3 : 1) |
+| Sites on the map | `#B9C97E` | not a status colour |
+
+- **Colour means a state.** The interface itself is graphite and bone, so live, delayed, offline and SOS are the only strong colours on screen. Each always comes with its word.
+- **Colour-blind separation.** The three tracking colours were run through the dataviz palette validator, all pairs: the worst pair, delayed against live for deuteranopia, is ΔE 11.3 (OKLab × 100; at least 8 is the target), and for normal vision ΔE 19.1. Under deuteranopia red and green differ mostly in lightness, so the offline red is darker and the live green lighter. The validator's lightness-band check fails by design here: it is meant for chart series, and these colours are lighter so that they read as text.
+- **Type.** Inter everywhere, labels in sentence case. Orbitron appears only in the SOS alarm's title, a status word (the type system above allows that).
+- **Map.** OpenFreeMap's "dark" style, recoloured before the first frame to an olive-tinted graphite. Only paint changes; every address stays on the tile host the Content-Security-Policy allows (tested).
+- **Wordmark.** Shown at 120 px, the minimum, in the top bar and on the sign-in card. The artwork carries its own `#12161B` box. The dashboard draws it with `mix-blend-mode: lighten` on an opaque surface lighter than that box, so the box vanishes and the letters stay exactly as drawn. **This departs from usage rule 3 above:** the letters now sit on `#17181B`, not `#12161B`. If you want the rule kept as written, the top bar and the sign-in card can use `#12161B`, which gives a darker frame around the content.

@@ -5,16 +5,25 @@
 // many share the view, with accuracy circles when zoomed in; and a location-history track. In
 // editing mode it lets the user place a circle's centre or draw a polygon's corners by clicking.
 // Labels come only from MapLibre's text rendering; there are no HTML popups (SEC §8, ADV-W01):
-// details open in the page's own plain-text panel.
+// details open in the page's own plain-text panel. The base map is recoloured to stay quiet under
+// what SENTRY draws (lib/map-style.ts); a page can float its own panels over it (children).
 import 'maplibre-gl/dist/maplibre-gl.css';
 
 import type { SiteBoundary } from '@sentryops/contracts';
 import { circlePolygon } from '@sentryops/domain';
 import type { Feature, FeatureCollection } from 'geojson';
-import type { GeoJSONSource, Map as MapLibreMap, MapLayerMouseEvent, MapMouseEvent } from 'maplibre-gl';
-import { useEffect, useRef, useState } from 'react';
+import type {
+  ExpressionSpecification,
+  GeoJSONSource,
+  Map as MapLibreMap,
+  MapLayerMouseEvent,
+  MapMouseEvent,
+  StyleSpecification,
+} from 'maplibre-gl';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 
 import { MAP_STYLE_URL, MAP_WORKER_URL } from '../lib/map-sources';
+import { MAP_PALETTE as P, tintMapStyle } from '../lib/map-style';
 
 export { MAP_STYLE_URL, MAP_WORKER_URL };
 /** Without a loaded map by then, say so rather than show an empty box. */
@@ -50,7 +59,11 @@ export type MapTrack = {
   cursor: LatLng | null;
 };
 
-const HEALTH_COLOUR = ['match', ['get', 'health'], 'LIVE', '#2fbf71', 'DELAYED', '#f0a33a', '#ef5350'];
+const HEALTH_COLOUR = ['match', ['get', 'health'], 'LIVE', P.live, 'DELAYED', P.delayed, P.offline];
+const IS_CURRENT: ExpressionSpecification = ['==', ['get', 'current'], 1];
+const IS_SELECTED: ExpressionSpecification = ['==', ['get', 'selected'], 1];
+const IS_HIGHLIGHT: ExpressionSpecification = ['==', ['get', 'highlight'], 1];
+const NOT_CLUSTER: ExpressionSpecification = ['!', ['has', 'point_count']];
 
 const collection = (features: Feature[]): FeatureCollection => ({ type: 'FeatureCollection', features });
 
@@ -157,7 +170,7 @@ function trackGeoJson(track: MapTrack | null | undefined): FeatureCollection {
 /** A font the tile service serves; without one MapLibre asks for a default it doesn't have. */
 const LABEL_FONT = ['Noto Sans Regular'];
 
-const LABEL_PAINT = { 'text-color': '#12161b', 'text-halo-color': '#ffffff', 'text-halo-width': 1.5 };
+const LABEL_PAINT = { 'text-color': P.bone, 'text-halo-color': P.ink, 'text-halo-width': 1.5 };
 
 export function BoundaryMap(props: {
   shapes: MapShape[];
@@ -172,8 +185,24 @@ export function BoundaryMap(props: {
   /** Fit the view to these points once they change (e.g. a history track). */
   fit?: LatLng[];
   height?: number | string;
+  /** Extra classes on the frame, e.g. to let the map fill its page. */
+  className?: string;
+  /** Panels floating over the map (plain text and controls; never inside the map's own canvas). */
+  children?: ReactNode;
 }) {
-  const { shapes, onPick, draft, points, onSelect, track, center, fit, height = 420 } = props;
+  const {
+    shapes,
+    onPick,
+    draft,
+    points,
+    onSelect,
+    track,
+    center,
+    fit,
+    height = 420,
+    className,
+    children,
+  } = props;
   const container = useRef<HTMLDivElement | null>(null);
   const map = useRef<MapLibreMap | null>(null);
   const [ready, setReady] = useState(false);
@@ -189,12 +218,16 @@ export function BoundaryMap(props: {
     void (async () => {
       try {
         const maplibre = await import('maplibre-gl');
+        // The style is fetched here, not by MapLibre, so it can be recoloured before the first frame.
+        const response = await fetch(MAP_STYLE_URL);
+        if (!response.ok) throw new Error(`map style: HTTP ${response.status}`);
+        const style = tintMapStyle((await response.json()) as StyleSpecification);
         if (disposed || !container.current) return;
         maplibre.setWorkerUrl(new URL(MAP_WORKER_URL, window.location.origin).href);
         const start = center ?? DEFAULT_CENTER;
         const instance = new maplibre.Map({
           container: container.current,
-          style: MAP_STYLE_URL,
+          style,
           center: [start.lng, start.lat],
           zoom: 13,
           attributionControl: { compact: true },
@@ -207,8 +240,8 @@ export function BoundaryMap(props: {
             type: 'fill',
             source: 'shapes',
             paint: {
-              'fill-color': ['case', ['==', ['get', 'highlight'], 1], '#3d74ff', '#2fbf71'],
-              'fill-opacity': 0.18,
+              'fill-color': ['case', IS_HIGHLIGHT, P.bone, P.site],
+              'fill-opacity': ['case', IS_HIGHLIGHT, 0.1, 0.07],
             },
           });
           instance.addLayer({
@@ -216,8 +249,9 @@ export function BoundaryMap(props: {
             type: 'line',
             source: 'shapes',
             paint: {
-              'line-color': ['case', ['==', ['get', 'highlight'], 1], '#3d74ff', '#2fbf71'],
-              'line-width': 2,
+              'line-color': ['case', IS_HIGHLIGHT, P.bone, P.site],
+              'line-width': ['case', IS_HIGHLIGHT, 2, 1.4],
+              'line-opacity': 0.9,
             },
           });
           instance.addLayer({
@@ -225,14 +259,14 @@ export function BoundaryMap(props: {
             type: 'symbol',
             source: 'shapes',
             layout: { 'text-field': ['get', 'name'], 'text-font': LABEL_FONT, 'text-size': 12 },
-            paint: LABEL_PAINT,
+            paint: { ...LABEL_PAINT, 'text-color': ['case', IS_HIGHLIGHT, P.bone, '#d7dfb3'] },
           });
           instance.addSource('draft', { type: 'geojson', data: draftGeoJson([]) });
           instance.addLayer({
             id: 'draft-line',
             type: 'line',
             source: 'draft',
-            paint: { 'line-color': '#f0a33a', 'line-width': 2, 'line-dasharray': [2, 1] },
+            paint: { 'line-color': P.bone, 'line-width': 1.6, 'line-dasharray': [2, 1.5] },
           });
           instance.addLayer({
             id: 'draft-points',
@@ -241,9 +275,9 @@ export function BoundaryMap(props: {
             filter: ['==', ['geometry-type'], 'Point'],
             paint: {
               'circle-radius': 5,
-              'circle-color': '#f0a33a',
-              'circle-stroke-color': '#12161b',
-              'circle-stroke-width': 1,
+              'circle-color': P.bone,
+              'circle-stroke-color': P.ink,
+              'circle-stroke-width': 2,
             },
           });
 
@@ -254,7 +288,7 @@ export function BoundaryMap(props: {
             type: 'line',
             source: 'track',
             filter: ['==', ['get', 'kind'], 'line'],
-            paint: { 'line-color': '#3d74ff', 'line-width': 3 },
+            paint: { 'line-color': P.bone, 'line-width': 2.5, 'line-opacity': 0.9 },
           });
           instance.addLayer({
             id: 'track-points',
@@ -262,10 +296,10 @@ export function BoundaryMap(props: {
             source: 'track',
             filter: ['in', ['get', 'kind'], ['literal', ['point', 'flag', 'cursor']]],
             paint: {
-              'circle-radius': ['match', ['get', 'kind'], 'cursor', 8, 5],
-              'circle-color': ['match', ['get', 'kind'], 'flag', '#ef5350', 'cursor', '#ffffff', '#3d74ff'],
-              'circle-stroke-color': ['match', ['get', 'kind'], 'cursor', '#3d74ff', '#12161b'],
-              'circle-stroke-width': ['match', ['get', 'kind'], 'cursor', 3, 1],
+              'circle-radius': ['match', ['get', 'kind'], 'cursor', 7, 'flag', 5, 4],
+              'circle-color': ['match', ['get', 'kind'], 'flag', P.offline, P.bone],
+              'circle-stroke-color': P.ink,
+              'circle-stroke-width': ['match', ['get', 'kind'], 'cursor', 3, 1.5],
             },
           });
 
@@ -276,7 +310,7 @@ export function BoundaryMap(props: {
             type: 'fill',
             source: 'accuracy',
             minzoom: 14,
-            paint: { 'fill-color': HEALTH_COLOUR as never, 'fill-opacity': 0.12 },
+            paint: { 'fill-color': HEALTH_COLOUR as never, 'fill-opacity': 0.1 },
           });
 
           // Guards: clustered when many share the view (about 1,000 across a large area).
@@ -301,14 +335,22 @@ export function BoundaryMap(props: {
               'circle-color': [
                 'case',
                 ['>', ['get', 'offline'], 0],
-                '#ef5350',
+                P.offline,
                 ['>', ['get', 'delayed'], 0],
-                '#f0a33a',
-                '#2fbf71',
+                P.delayed,
+                P.live,
               ],
-              'circle-radius': ['step', ['get', 'point_count'], 14, 25, 18, 100, 24],
-              'circle-stroke-color': '#12161b',
-              'circle-stroke-width': 2,
+              'circle-opacity': 0.3,
+              'circle-radius': ['step', ['get', 'point_count'], 16, 25, 20, 100, 26],
+              'circle-stroke-color': [
+                'case',
+                ['>', ['get', 'offline'], 0],
+                P.offline,
+                ['>', ['get', 'delayed'], 0],
+                P.delayed,
+                P.live,
+              ],
+              'circle-stroke-width': 1.5,
             },
           });
           instance.addLayer({
@@ -319,37 +361,71 @@ export function BoundaryMap(props: {
             layout: {
               'text-field': ['get', 'point_count_abbreviated'],
               'text-font': LABEL_FONT,
-              'text-size': 12,
+              'text-size': 12.5,
             },
-            paint: { 'text-color': '#12161b' },
+            paint: { 'text-color': P.bone },
+          });
+          // A soft glow behind a current position only: a last-known one gets none (INV-09).
+          instance.addLayer({
+            id: 'points-halo',
+            type: 'circle',
+            source: 'points',
+            filter: ['all', NOT_CLUSTER, IS_CURRENT],
+            paint: {
+              'circle-radius': ['case', IS_SELECTED, 19, 14],
+              'circle-color': HEALTH_COLOUR as never,
+              'circle-opacity': 0.2,
+              'circle-blur': 0.35,
+            },
           });
           instance.addLayer({
             id: 'points',
             type: 'circle',
             source: 'points',
-            filter: ['!', ['has', 'point_count']],
+            filter: NOT_CLUSTER,
             paint: {
-              'circle-radius': ['case', ['==', ['get', 'selected'], 1], 10, 7],
+              'circle-radius': ['case', IS_SELECTED, 8, 6.5],
               'circle-color': HEALTH_COLOUR as never,
               // Hollow when the position is only last-known: never styled as live (INV-09).
-              'circle-opacity': ['case', ['==', ['get', 'current'], 1], 1, 0],
-              'circle-stroke-color': HEALTH_COLOUR as never,
-              'circle-stroke-width': ['case', ['==', ['get', 'selected'], 1], 4, 2.5],
+              'circle-opacity': ['case', IS_CURRENT, 1, 0],
+              'circle-stroke-color': ['case', IS_CURRENT, P.ink, HEALTH_COLOUR] as never,
+              'circle-stroke-width': ['case', IS_CURRENT, 2, 2.5],
+            },
+          });
+          // The guard whose details are open: a ring, not a colour change.
+          instance.addLayer({
+            id: 'points-selected',
+            type: 'circle',
+            source: 'points',
+            filter: ['all', NOT_CLUSTER, IS_SELECTED],
+            paint: {
+              'circle-radius': 13,
+              'circle-opacity': 0,
+              'circle-stroke-color': P.bone,
+              'circle-stroke-width': 2,
             },
           });
           instance.addLayer({
             id: 'points-label',
             type: 'symbol',
             source: 'points',
-            filter: ['!', ['has', 'point_count']],
+            filter: NOT_CLUSTER,
             layout: {
               'text-field': ['get', 'label'],
               'text-font': LABEL_FONT,
-              'text-size': 11,
-              'text-offset': [0, 1.3],
+              'text-size': 11.5,
+              'text-offset': [0, 1.4],
               'text-anchor': 'top',
             },
             paint: LABEL_PAINT,
+          });
+          // An invisible target larger than the dot, so a guard is easy to pick, also by touch.
+          instance.addLayer({
+            id: 'points-hit',
+            type: 'circle',
+            source: 'points',
+            filter: NOT_CLUSTER,
+            paint: { 'circle-radius': 16, 'circle-opacity': 0 },
           });
 
           instance.on('click', 'clusters', (event: MapLayerMouseEvent) => {
@@ -362,11 +438,11 @@ export function BoundaryMap(props: {
               ?.getClusterExpansionZoom(clusterId)
               .then((zoom) => instance.easeTo({ center: [lng, lat], zoom }));
           });
-          instance.on('click', 'points', (event: MapLayerMouseEvent) => {
+          instance.on('click', 'points-hit', (event: MapLayerMouseEvent) => {
             const id = event.features?.[0]?.properties?.id as string | undefined;
             if (id) select.current?.(id);
           });
-          for (const layer of ['clusters', 'points']) {
+          for (const layer of ['clusters', 'points-hit']) {
             instance.on('mouseenter', layer, () => (instance.getCanvas().style.cursor = 'pointer'));
             instance.on('mouseleave', layer, () => (instance.getCanvas().style.cursor = ''));
           }
@@ -432,21 +508,11 @@ export function BoundaryMap(props: {
   }, [ready, fit]);
 
   return (
-    <div style={{ position: 'relative' }}>
-      <div
-        ref={container}
-        className="map"
-        style={{
-          height,
-          borderRadius: 10,
-          overflow: 'hidden',
-          border: '1px solid var(--border)',
-          cursor: onPick ? 'crosshair' : undefined,
-        }}
-        aria-label="Map"
-      />
+    <div className={className ? `map-frame ${className}` : 'map-frame'}>
+      <div ref={container} className={onPick ? 'map picking' : 'map'} style={{ height }} aria-label="Map" />
+      {children}
       {failed ? (
-        <div className="banner error" role="status">
+        <div className="banner error map-failed" role="status">
           The map could not be loaded. Check the internet connection, then reload the page.
         </div>
       ) : null}

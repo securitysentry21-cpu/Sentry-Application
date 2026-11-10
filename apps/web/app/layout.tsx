@@ -5,7 +5,7 @@ import type { ReactNode } from 'react';
 
 import './globals.css';
 
-// design/README.md: Orbitron for short display labels, Inter for everything else. Both are files in
+// design/README.md: Orbitron for a status word (the SOS alarm), Inter for everything else. Both are files in
 // app/fonts (SIL OFL 1.1, licences beside them), so building the dashboard fetches nothing from a
 // third party (Fable pass 2, review L-35). Inter is Google Fonts' Latin subset, as next/font/google
 // served it; Orbitron is the unmodified upstream file, since its licence reserves the name.
@@ -29,7 +29,7 @@ export const metadata: Metadata = {
   appleWebApp: { capable: true, title: 'SENTRY', statusBarStyle: 'black' },
 };
 
-export const viewport: Viewport = { themeColor: '#12161b', colorScheme: 'dark' };
+export const viewport: Viewport = { themeColor: '#17181b', colorScheme: 'dark' };
 
 export default async function RootLayout({ children }: { children: ReactNode }) {
   // Every page renders per request, so its scripts carry that response's CSP nonce (proxy.ts). A

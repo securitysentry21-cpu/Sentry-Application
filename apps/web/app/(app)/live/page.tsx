@@ -12,6 +12,7 @@ import { Suspense, useEffect, useMemo, useState } from 'react';
 
 import { GuardPanel, locationLine, trackingLine } from '../../../components/guard-panel';
 import { BoundaryMap, type MapPoint, type MapShape } from '../../../components/map';
+import { TickMeter, type MeterTone } from '../../../components/meter';
 import { PageHead } from '../../../components/shell';
 import { api } from '../../../lib/api';
 import { ALERT_TYPE_LABEL, shortAge } from '../../../lib/format';
@@ -109,72 +110,84 @@ function LiveMap() {
     return [...byId].sort((a, b) => a[1].localeCompare(b[1]));
   }, [sites, views]);
   const first = points[0];
+  // The four numbers float over the map and filter it; each meter is its share of everyone on duty.
+  const tracking: readonly [FilterKey, string, number, MeterTone][] = [
+    ['live', 'live', views.filter((v) => v.health === 'LIVE').length, 'live'],
+    ['delayed', 'delayed', views.filter((v) => v.health === 'DELAYED').length, 'delayed'],
+    ['offline', 'offline', views.filter((v) => v.health === 'OFFLINE').length, 'offline'],
+    ['problems', 'tracking problems', counts.trackingProblems, 'delayed'],
+  ];
 
   return (
     <>
       <PageHead
         title="Live map"
         description="Guards on duty now. Tracking health and location age are separate signals."
+        actions={
+          <div className="row filters">
+            <label className="field inline">
+              <span>Show</span>
+              <select value={show} onChange={(e) => setShow(e.target.value as FilterKey)}>
+                {Object.entries(LIVE_FILTERS).map(([key, f]) => (
+                  <option key={key} value={key}>
+                    {f.label}
+                  </option>
+                ))}
+                <option value="alerts">With active alerts</option>
+              </select>
+            </label>
+            <label className="field inline">
+              <span>Site</span>
+              <select value={siteFilter} onChange={(e) => setSiteFilter(e.target.value)}>
+                <option value="all">All sites</option>
+                {siteOptions.map(([id, name]) => (
+                  <option key={id} value={id}>
+                    {name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <span className="faint">{model ? `${rows.length} of ${views.length} on duty` : 'Loading…'}</span>
+          </div>
+        }
       />
       {live.error ? <div className="banner error">{live.error}</div> : null}
-      <div className="grid cols-4">
-        {(
-          [
-            ['live', 'live', views.filter((v) => v.health === 'LIVE').length],
-            ['delayed', 'delayed', views.filter((v) => v.health === 'DELAYED').length],
-            ['offline', 'offline', views.filter((v) => v.health === 'OFFLINE').length],
-            ['problems', 'tracking problems', counts.trackingProblems],
-          ] as const
-        ).map(([key, label, value]) => (
-          <button
-            className="card stat"
-            key={key}
-            onClick={() => setShow(show === key ? 'all' : key)}
-            aria-pressed={show === key}
-          >
-            <span className="label">{label}</span>
-            <span className="value">{model ? value : '–'}</span>
-          </button>
-        ))}
-      </div>
-      <div className="row filters">
-        <label className="field">
-          <span>Show</span>
-          <select value={show} onChange={(e) => setShow(e.target.value as FilterKey)}>
-            {Object.entries(LIVE_FILTERS).map(([key, f]) => (
-              <option key={key} value={key}>
-                {f.label}
-              </option>
-            ))}
-            <option value="alerts">With active alerts</option>
-          </select>
-        </label>
-        <label className="field">
-          <span>Site</span>
-          <select value={siteFilter} onChange={(e) => setSiteFilter(e.target.value)}>
-            <option value="all">All sites</option>
-            {siteOptions.map(([id, name]) => (
-              <option key={id} value={id}>
-                {name}
-              </option>
-            ))}
-          </select>
-        </label>
-        <span className="faint">{model ? `${rows.length} of ${views.length} on duty` : 'Loading…'}</span>
-      </div>
-      <div className="live-layout">
-        <div className="card">
+      <div className="live-stage">
+        <div className="live-map">
           <BoundaryMap
             shapes={shapes}
             points={points}
             onSelect={setSelected}
-            height="min(560px, 60vh)"
+            height="var(--live-map-h)"
             {...(first ? { center: { lat: first.lat, lng: first.lng } } : {})}
-          />
-          <p className="faint">
-            Filled dot: current position. Hollow dot: last known position only. Colour and word: live,
-            delayed, offline. Each label shows how old the position is.
-          </p>
+          >
+            <div className="map-overlay map-stats" role="group" aria-label="Tracking health">
+              {tracking.map(([key, label, value, tone]) => (
+                <button
+                  type="button"
+                  className="map-stat"
+                  key={key}
+                  onClick={() => setShow(show === key ? 'all' : key)}
+                  aria-pressed={show === key}
+                >
+                  <span className="label">{label}</span>
+                  <span className="value">{model ? value : '–'}</span>
+                  <TickMeter parts={[{ count: value, tone }]} total={views.length} tone={tone} ticks={16} />
+                </button>
+              ))}
+            </div>
+            <div className="map-overlay map-legend">
+              <span className="legend">
+                <span>
+                  <i className="dot filled" /> Current position
+                </span>
+                <span>
+                  <i className="dot" /> Last known position only
+                </span>
+              </span>
+              <span>Colour and word: live, delayed, offline. Each label shows how old the position is.</span>
+            </div>
+          </BoundaryMap>
         </div>
         <div className="live-side">
           {current ? <GuardPanel guard={current} now={now} onClose={() => setSelected(null)} /> : null}

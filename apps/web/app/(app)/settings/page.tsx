@@ -20,6 +20,7 @@ const GROUPS: Record<string, string> = {
   tracking: 'Tracking',
   sync: 'Sync',
   freshness: 'Tracking health',
+  battery: 'Battery',
   geofence: 'Geofence',
   checkpoint: 'Checkpoints',
   patrol: 'Patrols',
