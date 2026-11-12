@@ -1,11 +1,23 @@
 // Pieces several screens share: the status banners (clock, version, dropped data, tracking problem,
-// sync) and the SOS hold button, shown only when the organization has SOS switched on.
+// sync), a shift status's colour, and the SOS hold button, shown only when the organization has SOS
+// switched on.
+import type { GuardShift } from '@sentryops/contracts';
+
 import { canResume } from '../../core/shift/local-shift.ts';
 import { discardedReasonLine, syncLine, trackingLine } from '../../core/presenter.ts';
 import { openAppSettings, openLocationSettings } from '../../platform/permissions.ts';
 import type { Navigate } from '../App.tsx';
-import { Banner, HoldButton, Txt } from '../components.tsx';
+import { Banner, HoldButton, StatusLine, type Tone } from '../components.tsx';
 import { useGuardApp, useI18n, useSnapshot } from '../context.tsx';
+
+/** A shift's status pill: active is good news, missed an exception, the rest plain facts. */
+export const SHIFT_STATUS_TONE = {
+  SCHEDULED: 'muted',
+  ACTIVE: 'ok',
+  COMPLETED: 'muted',
+  MISSED: 'danger',
+  CANCELLED: 'muted',
+} as const satisfies Record<GuardShift['status'], Tone>;
 
 export function StatusBanners({ showSync = true }: { showSync?: boolean }) {
   const app = useGuardApp();
@@ -44,7 +56,9 @@ export function StatusBanners({ showSync = true }: { showSync?: boolean }) {
           action={{ label: t('sync.discardedAcknowledge'), onPress: () => void app.acknowledgeDiscarded() }}
         />
       ) : null}
-      {showSync && snap.syncDisplay.kind !== 'DISCARDED' ? <Txt tone={sync.tone}>{sync.text}</Txt> : null}
+      {showSync && snap.syncDisplay.kind !== 'DISCARDED' ? (
+        <StatusLine tone={sync.tone} text={sync.text} />
+      ) : null}
     </>
   );
 }

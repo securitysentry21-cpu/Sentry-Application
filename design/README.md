@@ -64,7 +64,7 @@ Why the wordmark style isn't used for body text:
 
 - Clear space around the wordmark: at least the cap height (the height of the S) on every side.
 - Minimum on-screen width: 120 px, which puts the cap height at about 11 px.
-- Use it only on `#12161B` or the gradient above until light-background and one-colour versions exist.
+- Use it only on `#12161B`, the gradient above, or the dashboard's graphite `#17181B` (the owner approved this on 2026-11-10; see "Dashboard look"), until light-background and one-colour versions exist.
 - Do not stretch, outline, recolour, add effects to, or retype the wordmark.
 
 ## Open items
@@ -96,4 +96,17 @@ The owner asked for the dashboard to look like a reference design: a dark graphi
 - **Colour-blind separation.** The three tracking colours were run through the dataviz palette validator, all pairs: the worst pair, delayed against live for deuteranopia, is ΔE 11.3 (OKLab × 100; at least 8 is the target), and for normal vision ΔE 19.1. Under deuteranopia red and green differ mostly in lightness, so the offline red is darker and the live green lighter. The validator's lightness-band check fails by design here: it is meant for chart series, and these colours are lighter so that they read as text.
 - **Type.** Inter everywhere, labels in sentence case. Orbitron appears only in the SOS alarm's title, a status word (the type system above allows that).
 - **Map.** OpenFreeMap's "dark" style, recoloured before the first frame to an olive-tinted graphite. Only paint changes; every address stays on the tile host the Content-Security-Policy allows (tested).
-- **Wordmark.** Shown at 120 px, the minimum, in the top bar and on the sign-in card. The artwork carries its own `#12161B` box. The dashboard draws it with `mix-blend-mode: lighten` on an opaque surface lighter than that box, so the box vanishes and the letters stay exactly as drawn. **This departs from usage rule 3 above:** the letters now sit on `#17181B`, not `#12161B`. If you want the rule kept as written, the top bar and the sign-in card can use `#12161B`, which gives a darker frame around the content.
+- **Wordmark.** Shown at 120 px, the minimum, in the top bar and on the sign-in card. The artwork carries its own `#12161B` box. The dashboard draws it with `mix-blend-mode: lighten` on an opaque surface lighter than that box, so the box vanishes and the letters stay exactly as drawn. The letters therefore sit on `#17181B`, not `#12161B`. The owner saw it and kept it (2026-11-10); usage rule 3 above now says so.
+
+## Guard app look (2026-11-10)
+
+The guard app (`apps/mobile/src/ui/theme.ts`, `components.tsx`) takes the same palette: the graphite background, cards with hairline edges, bone for the main action, and the same four state colours. Its layouts and flows did not change. On a guard's screen:
+
+- **Filled red is SOS only.** Other dangerous actions (End shift, the call fallback) are a red outline. The old filled End shift button had white on `#FF6B6B`, about 2.8 : 1; the outline's text is 5.8 : 1.
+- **The SOS button glows.** A red shadow is cast downwards (`boxShadow`, New Architecture). It is the one bold thing on the screen.
+- **States are pills and dotted lines.** A shift's status is a pill (Active in green, Missed in red, the rest neutral). The tracking and sync sentences start with a dot of their colour, and the words stay.
+- **Home's secondary actions are one list card.** Refresh, My reports, Phone status and Language are rows, each 64 dp tall with an icon and a chevron that turns for Urdu.
+- **Urdu.** No letter spacing on Urdu text (it would break Nastaliq's joins); pills, rows and dots mirror.
+- **Contrast.** Every text-on-surface pair is at least 4.5 : 1, measured with the blended backgrounds. The lowest are the red pill on a card (5.2 : 1) and white on the SOS red (5.0 : 1, as before). Field outlines are 3.0 : 1 or more.
+
+Checked on screenshots of the real screens, rendered in a browser with react-native-web from states the real engine produced (the test harness). That is close to a phone but not the same: fonts and shadows differ. People still need to look at it on Android and iPhone, as for any change to the guard app.

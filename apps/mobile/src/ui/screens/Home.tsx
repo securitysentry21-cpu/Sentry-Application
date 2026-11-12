@@ -1,20 +1,28 @@
 // Home (PROD §7.5): who is signed in, the guard's shifts in each site's timezone, and the honest
 // status lines. Times are 24-hour in the site's zone (PROD §6.1).
-import { View } from 'react-native';
-
 import { formatAgo, formatDay, formatTime } from '../../core/i18n/format.ts';
 import { shiftLine, sosLine } from '../../core/presenter.ts';
 import { sosDisplay, sosOpen } from '../../core/sos/machine.ts';
 import type { Navigate } from '../App.tsx';
-import { Banner, Button, Card, Screen, Txt } from '../components.tsx';
+import {
+  Banner,
+  Button,
+  Card,
+  CardHead,
+  ListCard,
+  ListRow,
+  Pill,
+  Screen,
+  StatusLine,
+  Txt,
+} from '../components.tsx';
 import { useGuardApp, useI18n, useSnapshot } from '../context.tsx';
-import { space } from '../theme.ts';
-import { SosHold, StatusBanners } from './Common.tsx';
+import { SHIFT_STATUS_TONE, SosHold, StatusBanners } from './Common.tsx';
 
 export function HomeScreen({ navigate }: { navigate: Navigate }) {
   const app = useGuardApp();
   const snap = useSnapshot();
-  const { t, locale } = useI18n();
+  const { t, locale, rtl } = useI18n();
   const now = Date.now();
   const shifts = [...snap.shifts].sort((a, b) => Date.parse(a.startsAt) - Date.parse(b.startsAt));
   const sos = snap.sos && sosOpen(snap.sos) && sosDisplay(snap.sos) !== 'RESOLVED' ? snap.sos : null;
@@ -42,16 +50,18 @@ export function HomeScreen({ navigate }: { navigate: Navigate }) {
         const local = shiftLine(snap.localShifts[shift.id], t);
         return (
           <Card key={shift.id}>
-            <Txt kind="heading">{shift.site.name}</Txt>
+            <CardHead
+              title={shift.site.name}
+              aside={<Pill tone={SHIFT_STATUS_TONE[shift.status]} text={t(`shiftStatus.${shift.status}`)} />}
+            />
             <Txt>{`${formatDay(start, zone, locale)} · ${t('shift.time', {
               start: formatTime(start, zone, locale),
               end: formatTime(end, zone, locale),
             })}`}</Txt>
-            <Txt tone="muted">{t(`shiftStatus.${shift.status}`)}</Txt>
-            {local ? <Txt tone={local.tone}>{local.text}</Txt> : null}
+            {local ? <StatusLine tone={local.tone} text={local.text} /> : null}
             <Button
               kind="secondary"
-              icon="›"
+              icon={rtl ? '‹' : '›'}
               label={t('home.open')}
               onPress={() => navigate({ name: 'shift', shiftId: shift.id })}
             />
@@ -63,29 +73,14 @@ export function HomeScreen({ navigate }: { navigate: Navigate }) {
           {t('home.updated', { ago: formatAgo(now - snap.shiftsFetchedAtMs, t) })}
         </Txt>
       ) : null}
-      <View style={{ gap: space.sm }}>
-        <Button kind="secondary" icon="↻" label={t('home.refresh')} onPress={() => void app.onForeground()} />
+      <ListCard>
+        <ListRow icon="↻" label={t('home.refresh')} chevron={false} onPress={() => void app.onForeground()} />
         {snap.settings.features.incidents ? (
-          <Button
-            kind="secondary"
-            icon="☰"
-            label={t('incident.mine')}
-            onPress={() => navigate({ name: 'myIncidents' })}
-          />
+          <ListRow icon="☰" label={t('incident.mine')} onPress={() => navigate({ name: 'myIncidents' })} />
         ) : null}
-        <Button
-          kind="secondary"
-          icon="ⓘ"
-          label={t('home.diagnostics')}
-          onPress={() => navigate({ name: 'diagnostics' })}
-        />
-        <Button
-          kind="secondary"
-          icon="A/ا"
-          label={t('home.language')}
-          onPress={() => navigate({ name: 'language' })}
-        />
-      </View>
+        <ListRow icon="ⓘ" label={t('home.diagnostics')} onPress={() => navigate({ name: 'diagnostics' })} />
+        <ListRow icon="A/ا" label={t('home.language')} onPress={() => navigate({ name: 'language' })} />
+      </ListCard>
       <SosHold navigate={navigate} />
     </Screen>
   );

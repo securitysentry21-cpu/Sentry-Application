@@ -1,23 +1,43 @@
-// Visual foundation (design/README.md; PROD §7.1): dark by default for night work, high contrast,
-// large touch targets. Colour is never the only signal: every state also has words.
+// Visual foundation (design/README.md, "Dashboard look"; PROD §7.1): the dashboard's graphite and
+// bone, dark by default for night work, high contrast, large touch targets. Colour is never the only
+// signal: every state also has words. Contrast ratios below were measured (WCAG 2), on the
+// background and on a card.
 export const colors = {
-  background: '#12161B',
-  surface: '#1B2128',
-  surfaceRaised: '#232B34',
-  border: '#323B46',
-  text: '#FAF9F9',
-  muted: '#B4BAC2',
-  // Status colours, all ≥ 4.5:1 on the background (WCAG AA for normal text).
-  ok: '#5FD38D',
-  warning: '#F5C451',
-  danger: '#FF6B6B',
-  info: '#7DB7FF',
-  // Filled buttons.
-  primary: '#FAF9F9',
-  onPrimary: '#12161B',
+  background: '#17181B',
+  surface: '#212226',
+  surfaceRaised: '#2A2B30',
+  /** Text fields. */
+  well: '#121316',
+  /** Hairlines around and between surfaces. */
+  hairline: 'rgba(255, 255, 255, 0.08)',
+  border: 'rgba(255, 255, 255, 0.14)',
+  /** A text field's outline: 3:1 against a card and against the field itself (WCAG 1.4.11). */
+  fieldLine: '#6B6C74',
+  text: '#EDECE7',
+  muted: '#A6A7AD',
+  // States as text: 5.9:1 or more on a card, 6.6:1 or more on the background (WCAG AA).
+  ok: '#80E2AC',
+  warning: '#E8A346',
+  danger: '#F07A88',
+  info: '#8DB0E8',
+  // Filled buttons. Filled red is the SOS button's alone.
+  primary: '#EDECE7',
+  onPrimary: '#17181B',
   sos: '#D7263D',
   onSos: '#FFFFFF',
+  /** The SOS button filling while it is held. */
+  sosHold: '#8E1626',
 } as const;
+
+/** A state's tinted surface and outline, behind text in that state's colour. */
+export const tints = {
+  ok: { background: 'rgba(128, 226, 172, 0.10)', border: 'rgba(128, 226, 172, 0.42)' },
+  warning: { background: 'rgba(232, 163, 70, 0.11)', border: 'rgba(232, 163, 70, 0.48)' },
+  danger: { background: 'rgba(227, 69, 90, 0.14)', border: 'rgba(227, 69, 90, 0.58)' },
+  info: { background: 'rgba(141, 176, 232, 0.11)', border: 'rgba(141, 176, 232, 0.45)' },
+} as const;
+
+export const radius = { control: 16, card: 22, banner: 16, field: 14 } as const;
 
 export const space = { xs: 4, sm: 8, md: 12, lg: 16, xl: 24, xxl: 32 } as const;
 
@@ -25,7 +45,7 @@ export const space = { xs: 4, sm: 8, md: 12, lg: 16, xl: 24, xxl: 32 } as const;
 export const TOUCH_MIN = 64;
 
 export const type = {
-  title: 26,
+  title: 28,
   heading: 20,
   body: 17,
   small: 14,
