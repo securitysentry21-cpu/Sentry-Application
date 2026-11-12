@@ -53,6 +53,11 @@ export type GuardActor = {
   readonly replacedAt: Date | null;
   /** How this request proved the phone: its session, or its device key (SOS only, INV-15). */
   readonly auth: 'SESSION' | 'DEVICE_SIGNATURE';
+  /**
+   * False when the guard is no longer ACTIVE (disabled, suspended or terminated). Only an SOS route
+   * gets that far (owner decision Q1, review L-11): the SOS is accepted and the alert says so.
+   */
+  readonly guardActive: boolean;
 };
 
 /** ARCH §5.4: a replaced phone's pre-replacement uploads are accepted for 72 hours. */
@@ -120,7 +125,9 @@ async function resolveGuard(
     throw new AppError('DEVICE_REVOKED', 'This phone was signed out by your organization.');
   }
   if (session.revoked_at || session.access_expires_at <= now) return fallback();
-  if (session.guard_status !== 'ACTIVE') throw unauthenticated();
+  // Owner decision Q1 (review L-11): a disabled guard's SOS is accepted while the phone is ACTIVE
+  // (INV-15), and marked; every other route refuses them.
+  if (session.guard_status !== 'ACTIVE' && !policy.sos) throw unauthenticated();
   // INV-15: an SOS is accepted from a suspended organization.
   if (session.organization_status === 'SUSPENDED' && !policy.sos) {
     throw new AppError('ORG_SUSPENDED', 'This organization is suspended.');
@@ -143,6 +150,7 @@ async function resolveGuard(
       preferredLocale: session.preferred_locale === 'ur' ? 'ur' : 'en',
       replacedAt: draining ? session.device_revoked_at : null,
       auth: 'SESSION',
+      guardActive: session.guard_status === 'ACTIVE',
     },
     org: {
       id: found.organization_id,
@@ -157,7 +165,7 @@ async function resolveGuard(
 /**
  * An SOS route with no usable session (INV-15, ADV-S11): the request is signed with the phone's
  * device key. Accepted from an ACTIVE phone, or one REPLACED within its 72 hours, whatever the
- * organization's status; anything else is refused.
+ * organization's or the guard's status (owner decision Q1); anything else is refused.
  */
 async function resolveSignedDevice(
   request: FastifyRequest,
@@ -193,7 +201,9 @@ async function resolveSignedDevice(
   const guard = await withTenantTransaction(deps.db, device.organization_id, (trx) =>
     guardOnDevice(trx, device.organization_id, deviceId),
   );
-  if (!guard || guard.guard_status !== 'ACTIVE') throw unauthenticated();
+  // Owner decision Q1 (review L-11): the device key proves the phone, and an ACTIVE phone's SOS is
+  // accepted whatever the guard's own status (INV-15); a disabled guard's is marked.
+  if (!guard) throw unauthenticated();
   if (guard.organization_status !== 'ACTIVE' && guard.organization_status !== 'SUSPENDED') throw forbidden();
   const permissions = ROLE_PERMISSIONS.GUARD;
   if (policy.access.kind === 'permission' && !permissions.has(policy.access.permission)) throw forbidden();
@@ -210,6 +220,7 @@ async function resolveSignedDevice(
       preferredLocale: guard.preferred_locale === 'ur' ? 'ur' : 'en',
       replacedAt: replacedInGrace ? device.revoked_at : null,
       auth: 'DEVICE_SIGNATURE',
+      guardActive: guard.guard_status === 'ACTIVE',
     },
     org: {
       id: device.organization_id,

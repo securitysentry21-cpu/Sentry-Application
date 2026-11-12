@@ -159,6 +159,29 @@ const controls: Control[] = [
       'test/app-version.test.ts',
     ),
   },
+  // The owner's answers to the Fable questions (2026-11-12).
+  {
+    name: "a disabled guard's SOS refused again → the SOS test (INV-15, owner Q1) must fail",
+    expect: /× .*INV-15 a disabled guard’s SOS from their ACTIVE phone is received/,
+    run: mutated(
+      'apps/api/src/context.ts',
+      '  if (!guard) throw unauthenticated();',
+      "  if (!guard || guard.guard_status !== 'ACTIVE') throw unauthenticated();",
+      'api',
+      'test/sos.test.ts',
+    ),
+  },
+  {
+    name: "CI's image role may pass a role → the Terraform IAM test (owner Q5) must fail",
+    expect: /× .*no role the cell creates may run, change or enter a task/,
+    run: mutated(
+      'infra/terraform/cell/github.tf',
+      '"ecr:PutImage",',
+      '"ecr:PutImage", "iam:PassRole",',
+      'scripts',
+      'test/terraform-iam.test.ts',
+    ),
+  },
   {
     name: 'SOS routes back on the shared pool → the SOS capacity test (INV-15, L-27) must fail',
     expect: /× .*INV-15 an SOS is received while every other connection is taken/,

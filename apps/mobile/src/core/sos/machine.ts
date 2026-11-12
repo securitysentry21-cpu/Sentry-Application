@@ -2,6 +2,8 @@
 // state than the server has confirmed:
 //
 //   QUEUED   saved on the phone, not on the server yet    "SOS ACTIVE — waiting for network…"
+//            or, when the server answered but refused it   "SOS not accepted by the server yet —
+//            (401, review L-11), still trying               call your supervisor. Still trying."
 //   SENDING  a request is in flight                       "Sending SOS…"
 //   RECEIVED the server stored it and said so             "SOS received — alerting supervisors…"
 //   FAILED   the server refused it permanently            "SOS not accepted — call your supervisor"
@@ -30,6 +32,12 @@ export type SosState = {
   readonly cancelRequested: boolean;
   /** A drill (PROD §11.10), as the server answered. */
   readonly isDrill: boolean;
+  /**
+   * Review L-11: the last attempt reached the server and was refused as unauthenticated (401). The
+   * phone keeps trying (a clock the server cannot yet correct also gets 401), but must not say
+   * "waiting for network" on a working network, and offers the call and SMS fallbacks at once.
+   */
+  readonly refusedByServer: boolean;
 };
 
 export type SosEvent =
@@ -41,8 +49,8 @@ export type SosEvent =
       readonly serverTime: string;
       readonly isDrill?: boolean;
     }
-  /** No response, 5xx or 429: still only on the phone. */
-  | { readonly type: 'SEND_FAILED' }
+  /** No response, 5xx, 429, or a 401 (`refused`): still only on the phone, and tried again. */
+  | { readonly type: 'SEND_FAILED'; readonly refused?: boolean }
   /** A permanent refusal (4xx), with the error code. */
   | { readonly type: 'SEND_REFUSED'; readonly errorCode: string }
   /** GET /sos/:id/status (or the cancel request's reply) for this SOS. */
@@ -68,6 +76,7 @@ export function newSos(clientEventId: string, createdAtMs: number): SosState {
     server: null,
     cancelRequested: false,
     isDrill: false,
+    refusedByServer: false,
   };
 }
 
@@ -95,9 +104,12 @@ export function sosReducer(state: SosState, event: SosEvent): SosState {
         receivedAt: event.serverTime,
         errorCode: null,
         isDrill: event.isDrill ?? false,
+        refusedByServer: false,
       };
     case 'SEND_FAILED':
-      return state.phase === 'FAILED' ? state : { ...state, phase: 'QUEUED' };
+      return state.phase === 'FAILED'
+        ? state
+        : { ...state, phase: 'QUEUED', refusedByServer: event.refused === true };
     case 'SEND_REFUSED':
       return { ...state, phase: 'FAILED', errorCode: event.errorCode };
   }
@@ -107,18 +119,22 @@ export function sosReducer(state: SosState, event: SosEvent): SosState {
  * What the phone may show, in PROD §11.3's order: the transport phase until the server has the SOS,
  * then exactly the server's latest answer.
  */
-export type SosDisplay = 'QUEUED' | 'SENDING' | 'FAILED' | SosStatusResponse['phase'];
+export type SosDisplay = 'QUEUED' | 'NOT_ACCEPTED' | 'SENDING' | 'FAILED' | SosStatusResponse['phase'];
 
 export function sosDisplay(state: SosState): SosDisplay {
+  if (state.phase === 'QUEUED' && state.refusedByServer) return 'NOT_ACCEPTED';
   if (state.phase !== 'RECEIVED') return state.phase;
   return state.server?.phase ?? 'RECEIVED';
 }
 
-/** True when the phone should offer "Call supervisor" because the SOS has not reached the server. */
+/**
+ * True when the phone should offer "Call supervisor" because the SOS has not reached the server:
+ * after 15 seconds, or at once when the server refused it (review L-11).
+ */
 export function showCallFallback(state: SosState, nowMs: number): boolean {
   return (
     (state.phase === 'QUEUED' || state.phase === 'SENDING') &&
-    nowMs - state.createdAtMs >= SOS_CALL_FALLBACK_AFTER_MS
+    (state.refusedByServer || nowMs - state.createdAtMs >= SOS_CALL_FALLBACK_AFTER_MS)
   );
 }
 

@@ -164,12 +164,15 @@ export function sosNotificationText(input: {
   readonly siteName: string | null;
   readonly drill: boolean;
   readonly again?: boolean;
+  /** Owner decision Q1: the guard's account is disabled; the control room confirms who is calling. */
+  readonly guardDisabled?: boolean;
 }): SosText {
   const prefix = input.drill ? '[DRILL] ' : '';
   const who = plainLine(shortName(input.guardName), 60);
   const where = input.siteName ? plainLine(input.siteName, 80) : 'off shift';
   const title = `${prefix}SOS — ${who} — ${where}`;
-  const body = input.again ? 'Pressed again. Not acknowledged yet.' : 'Open the dashboard to acknowledge.';
+  const action = input.again ? 'Pressed again. Not acknowledged yet.' : 'Open the dashboard to acknowledge.';
+  const body = input.guardDisabled ? `Guard account disabled: confirm who is calling. ${action}` : action;
   return { title: title.slice(0, 200), body };
 }
 

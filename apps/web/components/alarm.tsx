@@ -31,6 +31,7 @@ import {
   alarmTitles,
   createSeenReporter,
   drillsToCheck,
+  guardDisabled,
   type DrillParticipants,
   type SeenReporter,
 } from '../lib/alarm';
@@ -273,6 +274,11 @@ export function AlarmView(
                 <div className="muted">
                   {a.site?.name ?? (a.type === 'SOS_ACTIVATED' ? 'Off shift: no site' : '')}
                 </div>
+                {guardDisabled(a) ? (
+                  <div>
+                    <strong>Guard account disabled:</strong> confirm who is calling before you act.
+                  </div>
+                ) : null}
                 {a.type !== 'SOS_ACTIVATED' ? <div>{a.summary}</div> : null}
                 {again ? (
                   <div>
@@ -318,7 +324,9 @@ export function AlarmBar(props: AlarmActions & { readonly alarms: readonly Alert
               {a.isDrill ? 'DRILL · ' : ''}
               {alarmLabel(a)} alarm
             </strong>{' '}
-            — {a.guard?.displayName ?? a.summary} · not acknowledged · {formatRelative(a.openedAt, now)}
+            — {a.guard?.displayName ?? a.summary}
+            {guardDisabled(a) ? ' (guard account disabled)' : ''} · not acknowledged ·{' '}
+            {formatRelative(a.openedAt, now)}
           </span>
           {canAcknowledge ? (
             <button

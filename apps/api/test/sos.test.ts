@@ -102,9 +102,12 @@ async function alertOf(sosEventId: string) {
       escalation_level: number;
       trigger_count: number;
       is_drill: boolean;
-    }>('select id, status, escalation_level, trigger_count, is_drill from alerts where sos_event_id = $1', [
-      sosEventId,
-    ]),
+      summary: string;
+      details: Record<string, unknown>;
+    }>(
+      'select id, status, escalation_level, trigger_count, is_drill, summary, details from alerts where sos_event_id = $1',
+      [sosEventId],
+    ),
   );
   const alert = rows[0];
   if (!alert) throw new Error('no alert for the SOS');
@@ -831,6 +834,76 @@ describe('the device key (D-30, INV-15)', () => {
       },
     });
     expect(read.statusCode, read.body).toBe(200);
+  });
+
+  it('INV-15 a disabled guard’s SOS from their ACTIVE phone is received, and the alert, the dashboard and the texts say the guard is disabled (owner decision Q1, review L-11)', async () => {
+    const { phone } = await guardWithPhone(false);
+    const guard = await call(t.app, {
+      method: 'GET',
+      url: `/api/v1/guards/${phone.guardId}`,
+      cookie: admin,
+      org: org.id,
+    });
+    const disabled = await call(t.app, {
+      method: 'PATCH',
+      url: `/api/v1/guards/${phone.guardId}`,
+      cookie: admin,
+      org: org.id,
+      body: { status: 'SUSPENDED', version: guard.json<{ version: number }>().version },
+    });
+    expect(disabled.statusCode, disabled.body).toBe(200);
+    // Disabling revoked the session: every other guard route refuses the phone.
+    expect((await asPhone(t.app, phone, { method: 'GET', url: '/api/v1/mobile/config' })).statusCode).toBe(
+      401,
+    );
+    expect((await press(phone)).statusCode).toBe(401);
+
+    // The phone falls back to its device key, as it does after a sign-out (lane.ts), and is heard.
+    const res = await signed(phone, JSON.stringify(sosBody()));
+    expect(res.statusCode, res.body).toBe(200);
+    expect(res.json<{ status: string }>().status).toBe('RECEIVED');
+    const id = res.json<{ sosEventId: string }>().sosEventId;
+    const read = await t.app.inject({
+      method: 'GET',
+      url: `/api/v1/sos/${id}/status`,
+      headers: {
+        'x-device-id': phone.deviceId,
+        'x-device-signature': signRequest(
+          phone.key,
+          'GET',
+          `/api/v1/sos/${id}/status`,
+          '',
+          t.clock.now().getTime(),
+        ),
+      },
+    });
+    expect(read.statusCode, read.body).toBe(200);
+
+    const alert = await alertOf(id);
+    expect(alert.summary).toMatch(/guard disabled$/);
+    expect(alert.details).toMatchObject({ guardDisabled: true });
+    const alerts = await call(t.app, {
+      method: 'GET',
+      url: '/api/v1/alerts',
+      cookie: supervisor,
+      org: org.id,
+    });
+    const listed = alerts
+      .json<{ alerts: { sosEventId: string | null; details: Record<string, unknown> }[] }>()
+      .alerts.find((a) => a.sosEventId === id);
+    expect(listed?.details).toMatchObject({ guardDisabled: true });
+    const { rows } = await asOwner(t.db, (c) =>
+      c.query<{ body: string }>('select body from notification_deliveries where sos_event_id = $1', [id]),
+    );
+    expect(rows.length).toBeGreaterThan(0);
+    expect(rows.every((r) => r.body.startsWith('Guard account disabled: confirm who is calling.'))).toBe(
+      true,
+    );
+
+    // An ACTIVE guard's SOS carries no such mark.
+    const active = await guardWithPhone(false);
+    const normal = await pressOk(active.phone);
+    expect((await alertOf(normal)).details).not.toHaveProperty('guardDisabled');
   });
 
   it('ADV-S11 a phone REPLACED by a new one may still send a signed SOS for 72 hours, then not', async () => {

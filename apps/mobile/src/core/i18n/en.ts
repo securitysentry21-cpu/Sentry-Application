@@ -258,6 +258,7 @@ export const en = {
   'sos.hold': 'SOS — hold 3 s',
   'sos.holding': 'Keep holding…',
   'sos.QUEUED': 'SOS ACTIVE — waiting for network…',
+  'sos.NOT_ACCEPTED': 'SOS not accepted by the server yet — call your supervisor. Still trying.',
   'sos.SENDING': 'Sending SOS…',
   'sos.RECEIVED': 'SOS received — alerting supervisors…',
   'sos.FAILED': 'SOS not accepted by the server — call your supervisor',

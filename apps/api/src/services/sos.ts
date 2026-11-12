@@ -53,6 +53,8 @@ export type SosGuard = {
   readonly name: string;
   readonly auth: 'SESSION' | 'DEVICE_SIGNATURE';
   readonly appVersion: string | null;
+  /** False for a disabled guard, whose SOS is accepted and marked (owner decision Q1, review L-11). */
+  readonly guardActive: boolean;
 };
 
 type Fix = NonNullable<SosRequest['fix']>;
@@ -248,13 +250,15 @@ export async function acceptSos(
     {
       type: 'SOS_ACTIVATED',
       dedupeKey: sosAlertKey(id),
-      summary: `${drill.isDrill ? '[DRILL] ' : ''}SOS: ${guard.name}${shift ? ` (${shift.siteName})` : ' (off shift)'}`,
+      summary: `${drill.isDrill ? '[DRILL] ' : ''}SOS: ${guard.name}${shift ? ` (${shift.siteName})` : ' (off shift)'}${guard.guardActive ? '' : ' — guard disabled'}`,
       guardId: guard.guardId,
       siteId: shift?.siteId ?? null,
       shiftId: shift?.id ?? null,
       sosEventId: id,
       isDrill: drill.isDrill,
-      details: { offShift: shift === null },
+      // Owner decision Q1: a disabled guard's SOS is accepted and says so, so the control room
+      // confirms who is calling (the phone may be in other hands).
+      details: { offShift: shift === null, ...(guard.guardActive ? {} : { guardDisabled: true }) },
     },
     reopenSuppressionMs(settings),
   );

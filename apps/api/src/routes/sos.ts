@@ -64,6 +64,7 @@ function sosGuard(ctx: RequestContext, appVersion: unknown): SosGuard {
     name: guard.name,
     auth: guard.auth,
     appVersion: typeof appVersion === 'string' ? appVersion.slice(0, 40) : null,
+    guardActive: guard.guardActive,
   };
 }
 

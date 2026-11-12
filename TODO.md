@@ -6,15 +6,15 @@ Everything that is left, in the order that matters, with what to do step by step
 
 Facts about outside companies change (store policy changes every year, EXT-45). Each one below says where it came from and when it was checked. **Verify** means I could not confirm it from the company's own page: check it on the screen where you act.
 
-## Waiting on you right now (noted 2026-11-09)
+## Waiting on you right now (noted 2026-11-12)
 
-0. **One part of Fable's pass 2 still open** (2026-11-09): you chose to strip undeclared fields in production (Q6) and one API task for now (Q7). Still to answer, before production exists: a WAF rule that only counts SOS floods (Q7, `docs/DECISIONS.md`, "Fable launch audit, pass 2"). Pass 2 found no Critical or High finding; its ten findings (L-27 to L-36) are fixed and tested as far as they can be without your answers (`docs/phases/phase-10/FABLE-PASS-2.md`), uncommitted on branch `fable-pass-1` until you say commit. Fable agrees with every recommended option in Q1–Q5, if the CloudTrail data events spend comes with Q2 (a).
-1. **Answer the five questions from Fable's pass 1** (2026-11-09): `docs/DECISIONS.md`, "Fable launch audit, pass 1": a disabled guard's SOS (Q1), Object Lock for photos (Q2), the WAF and SOS (Q3, built per INV-15, for your veto), the device key (Q4), who may run operator commands in production (Q5), and two small spending items. Every other finding is fixed and tested (`docs/phases/phase-10/FABLE-PASS-1.md`), committed on branch `fable-pass-1` in a draft pull request, not merged and not applied: the next Terraform apply needs you to read its plan first.
+0. **Two small spending items from Fable's audit** (2026-11-12): you answered every Fable question with my recommendation (Q1–Q7, `docs/DECISIONS.md`, "Fable launch audit, pass 1" and "pass 2"), and those answers are built and tested. Still yours, because they cost money: a KMS key for the Terraform state buckets (about $1 a month per environment) and CloudTrail data events on the photo bucket (cents a month at pilot volume). Fable and I recommend both, and Q2 (versioning only) relies on the second: without it nothing tells anyone to recover a deleted photo. Say yes or no to each.
+1. **Read and merge the audit work:** pull request #19 (runbook trials, Fable passes 1 and 2, Q6) and the owner answers built on 2026-11-12. Nothing is applied to AWS: the next Terraform apply needs you to read its plan first.
 2. **Confirm the AWS alarm email** (item 1): until you click "Confirm subscription", the alarms email nobody.
 3. **Answer the lawyer's questions** (items B and C, and item 3 for finding the lawyer): `docs/legal/README.md`, `docs/legal/GUARD_DISCLOSURE_V2_DRAFT.md`, `docs/store/`.
 4. **Create the Firebase test project** (item 5) and **the Expo account** (item 6): guard push cannot be tried on a phone without them.
 
-Not waiting on you, but not yet in `main`: the runbook trial results and the Fable pass-1 fixes, two commits on branch `fable-pass-1`, in a draft pull request (#19); the pass-2 fixes are on the same branch, not yet committed. Say "commit" to add them to the pull request, and "merge" once you have read it.
+Not waiting on you, but not yet in `main`: the audit work in draft pull request #19 (branch `fable-pass-1`) and the dashboard restyle in #20 (`ui-refresh`, stacked on #19). The owner answers built on 2026-11-12 and the guard-app restyle are uncommitted on `ui-refresh`. Say "commit" to commit them, and "merge" once you have read the pull requests.
 
 ## The shortest path to the first real guard
 

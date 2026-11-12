@@ -179,6 +179,8 @@ run "no_managed_waf_rule_sees_an_sos" {
         ))
       ]
       }) == jsonencode({
+      # Owner decision Q7: counts SOS floods, is no managed group and skips nothing.
+      "sos-flood-count" = []
       "aws-ip-reputation" = [[
         "regex ^/api/v1/sos(/[0-9a-fA-F-]{36}/(status|locations|cancel-request))?$ uri_path 0:URL_DECODE,1:NORMALIZE_PATH",
       ]]
@@ -192,6 +194,61 @@ run "no_managed_waf_rule_sees_an_sos" {
       ]]
     })
     error_message = "Each managed WAF rule group must skip exactly the guard's SOS routes (and the body rules /api/v1/sync/), by URI path, decoded and normalized (INV-15, review L-02, L-28)."
+  }
+}
+
+run "sos_floods_are_counted_never_blocked" {
+  command = plan
+
+  # Owner decision Q7, INV-15: a flood on the guard's SOS routes is counted per address and alarms;
+  # no rule ever blocks one.
+  assert {
+    condition = alltrue([
+      for rule in aws_wafv2_web_acl.main[0].rule : rule.name != "sos-flood-count" || (
+        length(rule.action) == 1 &&
+        length(rule.action[0].count) == 1 &&
+        length(rule.action[0].block) == 0 &&
+        length(rule.action[0].captcha) == 0 &&
+        length(rule.action[0].challenge) == 0 &&
+        rule.statement[0].rate_based_statement[0].aggregate_key_type == "IP" &&
+        rule.statement[0].rate_based_statement[0].limit == 2000 &&
+        rule.statement[0].rate_based_statement[0].scope_down_statement[0].regex_match_statement[0].regex_string == "^/api/v1/sos(/[0-9a-fA-F-]{36}/(status|locations|cancel-request))?$" &&
+        join("+", [
+          for f, v in rule.statement[0].rate_based_statement[0].scope_down_statement[0].regex_match_statement[0].field_to_match[0] : f if length(v) > 0
+        ]) == "uri_path" &&
+        join(",", sort([
+          for t in rule.statement[0].rate_based_statement[0].scope_down_statement[0].regex_match_statement[0].text_transformation : "${t.priority}:${t.type}"
+        ])) == "0:URL_DECODE,1:NORMALIZE_PATH"
+      )
+    ])
+    error_message = "The SOS flood rule only counts, per address, on the guard's SOS routes (owner decision Q7, INV-15)."
+  }
+  assert {
+    condition     = length([for rule in aws_wafv2_web_acl.main[0].rule : rule.name if rule.name == "sos-flood-count"]) == 1
+    error_message = "The SOS flood rule exists (owner decision Q7)."
+  }
+  assert {
+    condition = (
+      length(aws_cloudwatch_metric_alarm.sos_flood) == 1 &&
+      aws_cloudwatch_metric_alarm.sos_flood[0].metric_name == "CountedRequests" &&
+      aws_cloudwatch_metric_alarm.sos_flood[0].dimensions.Rule == "sos-flood-count" &&
+      aws_cloudwatch_metric_alarm.sos_flood[0].threshold == 0
+    )
+    error_message = "A counted SOS flood raises the sos-flood alarm (owner decision Q7)."
+  }
+}
+
+run "sos_stays_off_until_the_device_key_is_hardware_bound" {
+  command = plan
+
+  # Owner decision Q4 (review L-16): the pilot runs with the device key in Keystore-encrypted
+  # storage, so SOS stays off until the native, hardware-bound key exists. Change this run only then.
+  assert {
+    condition = strcontains(
+      aws_ecs_task_definition.api.container_definitions,
+      jsonencode({ name = "FEATURE_SOS", value = "false" })
+    )
+    error_message = "SOS stays off until the device key is hardware-bound (owner decision Q4)."
   }
 }
 

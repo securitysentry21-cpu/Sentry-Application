@@ -4,6 +4,7 @@ import {
   newSos,
   type SosEvent,
   type SosPhase,
+  sosDisplay,
   sosReducer,
   showCallFallback,
 } from '../src/core/sos/machine.ts';
@@ -49,6 +50,23 @@ describe('SOS client state machine (PROD §11.3)', () => {
     expect(showCallFallback(queued, 16_000)).toBe(true);
     const received = sosReducer(queued, EVENTS[3] ?? { type: 'SEND_STARTED' });
     expect(showCallFallback(received, 60_000)).toBe(false);
+  });
+
+  it('review L-11 a refusal by the server is not shown as waiting for network, and offers the call at once', () => {
+    const queued = newSos('c', 1_000);
+    const refused = sosReducer(sosReducer(queued, { type: 'SEND_STARTED' }), {
+      type: 'SEND_FAILED',
+      refused: true,
+    });
+    expect(refused.phase).toBe('QUEUED'); // still tried again
+    expect(sosDisplay(refused)).toBe('NOT_ACCEPTED');
+    expect(showCallFallback(refused, 1_001)).toBe(true);
+    // A network failure afterwards is a network failure again.
+    const offline = sosReducer(refused, { type: 'SEND_FAILED' });
+    expect(sosDisplay(offline)).toBe('QUEUED');
+    expect(showCallFallback(offline, 1_001)).toBe(false);
+    const received = sosReducer(refused, EVENTS[3] ?? { type: 'SEND_STARTED' });
+    expect(received.refusedByServer).toBe(false);
   });
 });
 
@@ -120,6 +138,26 @@ describe('SOS lane (ARCH §13.1, INV-15)', () => {
     expect(result.kind).toBe('BLOCKED');
     if (result.kind === 'BLOCKED')
       expect(result.items).toContainEqual({ key: 'APP_VERSION', level: 'BLOCKING' });
+  });
+
+  it('review L-11 an SOS refused as unauthenticated (session and device key) is shown as not accepted, and tried again until heard', async () => {
+    const h = await makeApp();
+    await readyGuard(h);
+    h.server.mode = { kind: 'status', status: 401, code: 'UNAUTHENTICATED' };
+    const id = await h.app.triggerSos();
+    await settle();
+    const refused = h.app.snapshot().sos;
+    expect(refused).toMatchObject({ clientEventId: id, phase: 'QUEUED', refusedByServer: true });
+    if (!refused) throw new Error('no SOS');
+    expect(sosDisplay(refused)).toBe('NOT_ACCEPTED');
+    expect(showCallFallback(refused, h.clocks.wall.nowMs())).toBe(true);
+    expect(h.app.snapshot().queue.pendingSos).toBe(1);
+    expect(h.scheduler.tasks.length).toBeGreaterThan(0); // a retry is scheduled
+    // The server accepts it on a later attempt.
+    h.server.mode = { kind: 'online' };
+    await h.app.onNetworkRegained();
+    expect(h.app.snapshot().sos).toMatchObject({ phase: 'RECEIVED', refusedByServer: false });
+    expect(h.server.sos.size).toBe(1);
   });
 
   it('a permanent refusal is shown as such (FAILED, call your supervisor), never as received', async () => {
