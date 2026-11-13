@@ -1,9 +1,13 @@
 import type { NextConfig } from 'next';
 
-// SEC §10 baseline headers. A strict Content-Security-Policy with nonces arrives with the first
-// real screens (Phase 1); until then this blocks framing, sniffing and referrer leaks.
+import { NOTHING_POLICY, NOTHING_POLICY_PATHS } from './lib/csp';
+
+// SEC §10 baseline headers on every response. The Content-Security-Policy needs a nonce per
+// response, so proxy.ts sets it (lib/csp.ts, review L-01); X-Frame-Options covers the files the
+// proxy skips, and the skipped paths that can answer with a page get a policy that allows nothing
+// (review L-30).
 const securityHeaders = [
-  { key: 'Content-Security-Policy', value: "frame-ancestors 'none'" },
+  { key: 'X-Frame-Options', value: 'DENY' },
   { key: 'X-Content-Type-Options', value: 'nosniff' },
   { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
   { key: 'Strict-Transport-Security', value: 'max-age=63072000; includeSubDomains' },
@@ -22,7 +26,13 @@ const config: NextConfig = {
   agentRules: false,
   transpilePackages: ['@sentryops/contracts', '@sentryops/domain'],
   headers() {
-    return Promise.resolve([{ source: '/:path*', headers: securityHeaders }]);
+    return Promise.resolve([
+      { source: '/:path*', headers: securityHeaders },
+      ...NOTHING_POLICY_PATHS.map((source) => ({
+        source,
+        headers: [{ key: 'Content-Security-Policy', value: NOTHING_POLICY }],
+      })),
+    ]);
   },
   rewrites() {
     return Promise.resolve(

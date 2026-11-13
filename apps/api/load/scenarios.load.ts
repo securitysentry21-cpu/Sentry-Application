@@ -18,6 +18,7 @@ import { join } from 'node:path';
 import { createKysely, createPool, type Pool } from '@sentryops/db';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
+import { SOS_POOL_SIZE } from '../src/server.ts';
 import { runDispatcher } from '../src/workers/outbox.ts';
 import { runSender } from '../src/workers/notifications.ts';
 import { browserSubscription, fakeProviders } from '../test/fake-providers.ts';
@@ -136,6 +137,8 @@ beforeAll(async () => {
     logger: { level: 'error' },
     // The API's own pool size (packages/db createPool): saturating it is part of what is measured.
     poolMax: Number(process.env.LOAD_POOL ?? 10),
+    // And its SOS pool (server.ts, review L-27), so the SOS figures are the API's.
+    sosPoolMax: SOS_POOL_SIZE,
   });
   // The harness is one process behind one address: the limits that protect the real service from a
   // single phone are not what is being measured here.

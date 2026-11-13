@@ -29,10 +29,12 @@ aws logs tail /sentryops-<env>/worker --region <region> --since 30m --format sho
 4. Ask for the organization's delivery health. `<org>` is its ID (G02). The reason is shown to the customer in their Audit Log.
 
 ```bash
-infra/scripts/operator.sh <env> delivery-health --org <org> --reason "SOS alarm check" --hours 2
+infra/scripts/operator.sh <env> delivery-health --org <org> --reason "SOS alarm check" --hours 2 | tr '\t' '\n'
 ```
 
-It prints deliveries by channel, status and error code, the oldest queued delivery, open real SOS with "alert sent / shown to a person", and `CONCERN:` lines.
+It takes about two minutes (it starts a one-off task). It prints deliveries by channel, status and error code, the oldest queued delivery, open real SOS with "alert sent / shown to a person", and `CONCERN:` lines. Without `| tr '\t' '\n'` all lines arrive as one (G19). Tried on `test` (2026-11-08): it printed "No deliveries in this period", "Nothing is waiting in the queue", "Open SOS (not drills): 0" and "No concerns found."
+
+**Finding `<org>` today (G02):** every nightly `retention run` line in the worker log carries an `organizationId`, one line per organization: `aws logs tail /sentryops-<env>/worker --region <region> --since 24h --format short | grep "retention run"`. IDs are safe to write down.
 
 Source: `infra/scripts/operator.sh`, `apps/api/src/services/operator.ts`.
 
@@ -109,6 +111,6 @@ Source: `PROD §11.5, §11.7`, `apps/api/src/routes/mobile.ts`, `routes/notifica
 
 ## Status
 
-Tried on the test environment: not yet. (Alert and sender behaviour is covered by automated tests, `apps/api/test/sos.test.ts` ADV-S08 and `operator.test.ts`, on a local database, not on AWS.)
+Tried on the test environment, 2026-11-08, on release bb6a9ad: steps 2 to 4 of "First five minutes" (service counts, the worker log with its `worker heartbeat` lines, `delivery-health`) and Fix 1. Restarting the worker (`update-service --force-new-deployment`, then `wait services-stable`) took about 4 minutes 20 seconds, and the heartbeat lines resumed with `maxJobLagSeconds` 0. **Not tried:** a failing worker, a stuck loop, a real or test SOS going through the pipeline on AWS, Fix 2 and Fix 3 (they need a signed-in dashboard), and any alarm e-mail (the SNS subscription is unconfirmed, so the alarms e-mail nobody yet). Alert and sender behaviour is covered by automated tests, `apps/api/test/sos.test.ts` ADV-S08 and `operator.test.ts`, on a local database.
 
 Known gaps: G01 (no restart script), G02 (no list of organization IDs), G03 (alarm names a count, not organizations), G04 (no contact register), G06 (one-at-a-time sender). The canary runs only where `canary_enabled` is set; production does not exist yet, so the canary has never run for real. `docs/RUNBOOKS/README.md` lists all gaps.

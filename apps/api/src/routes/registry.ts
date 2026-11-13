@@ -12,6 +12,7 @@ import { resolveContext, type RequestContext } from '../context.ts';
 import { checkCsrf } from '../csrf.ts';
 import type { AppDeps } from '../deps.ts';
 import { notFound, validationError } from '../errors.ts';
+import { checkResponse, stripResponse } from './response-check.ts';
 
 declare module 'fastify' {
   interface FastifyContextConfig {
@@ -75,8 +76,16 @@ export function enforceRoutePolicies(app: FastifyInstance, catalog: MountedRoute
   });
 }
 
-export function mountRoutes(app: FastifyInstance, routes: readonly RouteDefinition[], deps: AppDeps): void {
+export function mountRoutes(
+  app: FastifyInstance,
+  routes: readonly RouteDefinition[],
+  appDeps: AppDeps,
+): void {
   for (const route of routes) {
+    // Review L-27: an SOS route works on the SOS pool from its first query (session, device,
+    // signature) to its commit, so a sync storm holding every other connection cannot delay it.
+    const deps =
+      route.policy.sos && appDeps.sos ? { ...appDeps, pool: appDeps.sos.pool, db: appDeps.sos.db } : appDeps;
     app.route({
       method: route.method,
       url: route.url,
@@ -108,7 +117,16 @@ export function mountRoutes(app: FastifyInstance, routes: readonly RouteDefiniti
           if (!parsed.success) throw validationError(parsed.error);
           body = parsed.data;
         }
-        return route.handler({ request, reply, deps, ctx, body, params, query });
+        const result = await route.handler({ request, reply, deps, ctx, body, params, query });
+        if (result === reply || reply.sent) return result;
+        // Review L-07: outside production, what is sent must be what the route declares; in
+        // production (owner decision Q6) undeclared keys are dropped and nothing ever fails.
+        const name = `${route.method} ${route.url}`;
+        if (deps.config.NODE_ENV !== 'production') {
+          checkResponse(name, reply.statusCode, route.responses, result);
+          return result;
+        }
+        return stripResponse(name, reply.statusCode, route.responses, result, request.log);
       },
     });
   }

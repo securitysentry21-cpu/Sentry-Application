@@ -90,7 +90,7 @@ aws ecs wait services-stable --region <region> --cluster sentryops-<env> --servi
 infra/scripts/release.sh <env> <last good commit>
 ```
 
-3. **More capacity.** One API task runs by default (`api_desired_count = 1`, `variables.tf`). More tasks cost money: ask the owner, then set `api_desired_count` in the tfvars and run `infra/scripts/tf.sh <env> apply -auto-approve`.
+3. **More capacity.** One API task runs by default (`api_desired_count = 1`, `variables.tf`). More tasks cost money: ask the owner, then set `api_desired_count` in the tfvars, run `infra/scripts/tf.sh <env> plan -out=capacity.tfplan`, read it (only the `api` service should change), and `infra/scripts/tf.sh <env> apply-plan capacity.tfplan`.
 4. After recovery, watch the API log for `429` and `5xx` for 15 minutes. A reconnection storm drains by itself because of the jittered delays.
 
 ## Confirm it is fixed
@@ -115,6 +115,6 @@ Write down: start, end, alarm times, cause, number of guards affected, any data 
 
 ## Status
 
-Tried on the test environment: not yet. The reconnection storm at scale has never been measured: the load harness (Phase 10, item 5) is not built (`docs/phases/phase-10/PLAN.md`).
+Tried on the test environment, 2026-11-08: the health and ready checks (200), the service counts, the database status, the API log tail, and Fix 1 (`update-service --force-new-deployment` on `api`, then `wait services-stable`). The restart took about 3 minutes, and `/api/v1/health` answered 200 at every check (every 10 to 20 seconds) throughout, because the new task starts before the old one stops (minimum healthy 100%, maximum 200%). **Not tried:** a real outage, a bad release and rollback (Fix 2), and the alarms firing. The reconnection storm has been simulated only on one computer by the load harness (`pnpm load`, `docs/testing/load-baseline.md`), never against AWS, so the real behaviour of the cell under a storm is unmeasured.
 
 Known gaps: G01; G05 (nothing can message customers or guards; "tell" is a phone call); G13 (no platform alarm for "many guards offline at once"; per-guard alerts only, which also floods the control room). `docs/ARCHITECTURE.md §9.5` and `SEC §9` say "60 per minute sustained, burst 120"; the code uses a fixed 120 per minute per device.

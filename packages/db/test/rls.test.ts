@@ -19,6 +19,7 @@ const orgColumn = (table: string) =>
 
 let db: TestDatabase;
 let runtime: pg.Pool;
+let retention: pg.Pool;
 
 async function asMigrator<T>(work: (client: pg.Client) => Promise<T>): Promise<T> {
   const client = new pg.Client({ connectionString: db.urls.migrator });
@@ -286,10 +287,12 @@ beforeAll(async () => {
     }
   });
   runtime = new pg.Pool({ connectionString: db.urls.app_runtime, max: 2 });
+  retention = new pg.Pool({ connectionString: db.urls.retention_worker, max: 2 });
 });
 
 afterAll(async () => {
   await runtime?.end();
+  await retention?.end();
   await db?.drop();
 });
 
@@ -313,6 +316,92 @@ describe('row-level security (ARCH §4.3)', () => {
       expect(rows.filter((r) => r.org !== ORG_A)).toEqual([]);
     });
   }
+
+  // Review L-09, ARCH §4.3 "every role against every tenant table": retention_worker deletes, one
+  // organization at a time, so with A's context it must see A's rows or none (no grant).
+  for (const table of TENANT_TABLES) {
+    it(`ADV-T06 as retention_worker with organization A's context, ${table} shows only A's rows or none`, async () => {
+      const column = orgColumn(table);
+      const rows = await withTenant(retention, ORG_A, async (c) => {
+        await c.query('savepoint probe');
+        try {
+          return (await c.query<{ org: string }>(`select ${column} as org from ${table}`)).rows;
+        } catch (error) {
+          if (!/permission denied/.test(String(error))) throw error;
+          await c.query('rollback to savepoint probe');
+          return [];
+        }
+      });
+      expect(rows.filter((r) => r.org !== ORG_A)).toEqual([]);
+    });
+  }
+
+  it('ADV-T06 every policy retention_worker is under on a tenant table reads the organization in context', async () => {
+    const policies = await asMigrator(async (m) => {
+      const result = await m.query<{
+        name: string;
+        table: string;
+        qual: string | null;
+        check: string | null;
+      }>(
+        `select policyname as name, tablename as "table", qual, with_check as check from pg_policies
+          where schemaname = 'public' and roles::text[] && array['retention_worker', 'public']`,
+      );
+      return result.rows.filter((p) => TENANT_TABLES.includes(p.table));
+    });
+    expect(policies.length).toBeGreaterThan(10);
+    // Fable pass 2 (§5 #4): the organization check must be the whole expression or a top-level AND
+    // term, as PostgreSQL prints it; mentioning it is not enough (`… or true` mentions it too).
+    const ORG = 'organization_id = app.current_org_id()';
+    const scoped = (expression: string | null) =>
+      expression === null || expression === `(${ORG})` || expression.startsWith(`((${ORG}) AND `);
+    const unscoped = policies.filter(
+      (p) => !scoped(p.qual) || !scoped(p.check) || (p.qual ?? p.check) === null,
+    );
+    expect(unscoped.map((p) => `${p.table}.${p.name}`)).toEqual([]);
+  });
+
+  it('ADV-T06 system_worker only reads, and only the sweep columns its migrations granted', async () => {
+    // Each sweep and why it exists is in its migration; a new grant fails here until it is listed.
+    const SWEEPS: Record<string, string[]> = {
+      alerts: ['next_escalation_at', 'organization_id', 'status'],
+      export_jobs: ['created_at', 'expires_at', 'organization_id', 'started_at', 'status'],
+      incident_attachments: ['organization_id', 'status'],
+      notification_deliveries: ['next_attempt_at', 'organization_id', 'status'],
+      organizations: ['id', 'timezone'],
+      outbox: ['organization_id', 'processed_at'],
+      patrol_runs: ['organization_id', 'status', 'window_ends_at'],
+      shifts: ['ends_at', 'id', 'organization_id', 'start_deadline_at', 'starts_at', 'status'],
+      sos_events: ['is_drill', 'organization_id', 'received_at', 'status'],
+      stream_connections: ['last_seen_at', 'organization_id'],
+    };
+    const { readable, writable, policies } = await asMigrator(async (m) => {
+      const columns = await m.query<{ table: string; column: string }>(
+        `select table_name as "table", column_name as "column" from information_schema.columns
+          where table_schema = 'public' and table_name = any($1)
+            and has_column_privilege('system_worker', format('public.%I', table_name), column_name, 'SELECT')
+          order by 1, 2`,
+        [TENANT_TABLES],
+      );
+      const writes = await m.query<{ table: string }>(
+        `select t as "table" from unnest($1::text[]) t
+          where has_table_privilege('system_worker', format('public.%I', t), 'INSERT, UPDATE, DELETE, TRUNCATE')
+             or has_any_column_privilege('system_worker', format('public.%I', t), 'INSERT, UPDATE')`,
+        [TENANT_TABLES],
+      );
+      const swept = await m.query<{ name: string; table: string; cmd: string }>(
+        `select policyname as name, tablename as "table", cmd from pg_policies
+          where schemaname = 'public' and roles::text[] && array['system_worker']`,
+      );
+      return { readable: columns.rows, writable: writes.rows, policies: swept.rows };
+    });
+    const granted: Record<string, string[]> = {};
+    for (const { table, column } of readable) (granted[table] ??= []).push(column);
+    expect(granted).toEqual(SWEEPS);
+    expect(writable).toEqual([]);
+    expect(policies.length).toBeGreaterThan(0);
+    expect(policies.filter((p) => p.cmd !== 'SELECT').map((p) => `${p.table}.${p.name}`)).toEqual([]);
+  });
 
   it('INV-04 every table holding a position is a tenant table, so the read test above covers it', async () => {
     const located = await asMigrator(async (m) => {

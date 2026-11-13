@@ -4,7 +4,9 @@
 # `pnpm verify` passes on main (.github/workflows/ci.yml › image), or by CodeBuild in the account
 # (infra/terraform/cell/codebuild.tf). Build context: the repository root. The base image comes from
 # AWS's mirror of the Docker official images, so build machines never hit Docker Hub's pull limits.
-FROM public.ecr.aws/docker/library/node:24.16.0-bookworm-slim
+# Pinned by digest as well as tag (review L-19): a re-pushed tag cannot change what is built.
+# Dependabot (docker) proposes the next one.
+FROM public.ecr.aws/docker/library/node:24.16.0-bookworm-slim@sha256:2c87ef9bd3c6a3bd4b472b4bec2ce9d16354b0c574f736c476489d09f560a203
 
 ENV CI=true \
     NEXT_TELEMETRY_DISABLED=1

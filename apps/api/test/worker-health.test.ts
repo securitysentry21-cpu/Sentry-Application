@@ -1,5 +1,7 @@
 // The worker's heartbeat for the operator's alarms (ARCH §18.4): lag is how far past schedule the
 // most overdue loop is, a stalled loop shows as lag, and the lines hold only names, counts and seconds.
+import { readFileSync } from 'node:fs';
+
 import { describe, expect, it } from 'vitest';
 
 import { heartbeatLine, JobClock, notificationRunLine } from '../src/workers/health.ts';
@@ -59,5 +61,27 @@ describe('the lines the alarms read', () => {
   it('a round that sent nothing and failed nothing logs nothing', () => {
     expect(notificationRunLine(0, 0)).toBeNull();
     expect(notificationRunLine(3, 1)).toEqual({ msg: 'notification run', sent: 3, failed: 1 });
+  });
+});
+
+describe('worker failure lines and the alarms (review L-12)', () => {
+  const read = (path: string) => readFileSync(new URL(path, import.meta.url), 'utf8');
+
+  it('every loop failure the worker logs is counted by an alarm filter in Terraform', () => {
+    const worker = read('../src/worker.ts');
+    const messages = [...worker.matchAll(/failed\('([^']+)'/g)].map((m) => m[1] ?? '');
+    expect(messages.length).toBeGreaterThanOrEqual(8);
+
+    const terraform = read('../../../infra/terraform/cell/notifications.tf');
+    // Filter patterns ($.msg = "…", a trailing * matches a prefix) and the loop-failure list.
+    const patterns = [
+      ...[...terraform.matchAll(/\$\.msg = \\"([^\\]+)\\"/g)].map((m) => m[1] ?? ''),
+      ...[...(terraform.match(/worker_loop_failures = \[([^\]]+)\]/)?.[1] ?? '').matchAll(/"([^"]+)"/g)].map(
+        (m) => m[1] ?? '',
+      ),
+    ];
+    const counted = (msg: string) =>
+      patterns.some((p) => (p.endsWith('*') ? msg.startsWith(p.slice(0, -1)) : msg === p));
+    expect(messages.filter((msg) => !counted(msg))).toEqual([]);
   });
 });

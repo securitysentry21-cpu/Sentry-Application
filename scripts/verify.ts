@@ -92,6 +92,12 @@ if (existsSync(join(ROOT, 'apps/web/package.json'))) {
     name: 'build: web dashboard (next build)',
     run: () => runBin('next', ['build'], { cwd: join(ROOT, 'apps/web') }),
   });
+  // Fable pass 2, review L-36: the policy and its nonces on the build just made, served by next start.
+  steps.push({
+    key: 'web-csp',
+    name: 'web dashboard: production build under its Content-Security-Policy (SEC §10)',
+    run: () => runNode(['scripts/check-production-csp.ts']),
+  });
 }
 if (existsSync(join(ROOT, 'apps/mobile/package.json'))) {
   steps.push({

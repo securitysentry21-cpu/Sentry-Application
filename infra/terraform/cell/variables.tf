@@ -23,6 +23,11 @@ variable "domain" {
   description = "The company domain, with its DNS in Route 53 in this account. Empty: the test address from CloudFront (edge.tf). Required before real guards: the guard app has the address built in."
   type        = string
   default     = ""
+  # Review L-15: without a domain, production would build in test mode (no WAF, internal load balancer).
+  validation {
+    condition     = var.environment != "production" || var.domain != ""
+    error_message = "Production needs its domain (env/production.tfvars) before any apply."
+  }
 }
 
 variable "app_host" {
@@ -41,6 +46,11 @@ variable "alerts_email" {
   description = "Where GuardDuty findings and budget warnings are sent. Personal data: set it in the git-ignored local.auto.tfvars, never in a committed file."
   type        = string
   default     = ""
+  # Review L-15: an apply from a machine without local.auto.tfvars would remove the alarm subscription.
+  validation {
+    condition     = var.environment != "production" || var.alerts_email != ""
+    error_message = "Production needs alerts_email (local.auto.tfvars): without it the alarms reach nobody."
+  }
 }
 
 variable "monthly_budget_usd" {
@@ -55,12 +65,21 @@ variable "waf_enabled" {
   description = "AWS WAF managed rules in front of the load balancer (only with a domain)."
   type        = bool
   default     = true
+  # Fable pass 2 on review L-15: the production baseline cannot be switched off in its tfvars.
+  validation {
+    condition     = var.environment != "production" || var.waf_enabled
+    error_message = "Production runs the WAF (ARCH §19.8)."
+  }
 }
 
 variable "backup_copy_enabled" {
-  description = "Copy automated database backups to the backup region."
+  description = "Copy automated database backups and incident photos to the backup region."
   type        = bool
   default     = true
+  validation {
+    condition     = var.environment != "production" || var.backup_copy_enabled
+    error_message = "Production copies its backups and photos to the backup region (ARCH §19.8)."
+  }
 }
 
 variable "guardduty_enabled" {
@@ -152,6 +171,11 @@ variable "fcm_service_account" {
   type        = string
   default     = ""
   sensitive   = true
+  # Review L-15: the same machine would remove the push credentials from the worker's secret.
+  validation {
+    condition     = var.environment != "production" || var.fcm_service_account != ""
+    error_message = "Production needs fcm_service_account (local.auto.tfvars), or guard pushes stop."
+  }
 }
 
 variable "canary_enabled" {

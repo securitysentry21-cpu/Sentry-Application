@@ -98,4 +98,9 @@ export const exportListResponseSchema = z.object({ exports: z.array(exportJobSch
 /** A download is a new read: an export holding location asks for the reason again (SEC §16.4). */
 export const exportDownloadRequestSchema = z.strictObject({ reason: historyReasonSchema.optional() });
 /** An http(s) link only, served as an attachment (Content-Disposition), valid 15 minutes. */
-export const exportDownloadResponseSchema = z.object({ url: z.httpUrl(), expiresAt: instant });
+// http(s) only. Not z.httpUrl(): it refuses IP-address hosts, and the local store's links in
+// development and tests point at http://127.0.0.1 (found by the response check, review L-07).
+export const exportDownloadResponseSchema = z.object({
+  url: z.url({ protocol: /^https?$/ }),
+  expiresAt: instant,
+});

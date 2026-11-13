@@ -104,6 +104,78 @@ Made as a co-founder would make them, while the owner was away. Each is reversib
 - **No SMS aggregator yet.** Guard enrollment codes are shown in the dashboard, as a code and a QR code, for the supervisor to hand to the guard in person. SMS goes behind an `SmsProvider` interface and switches on when EXT-10 is done. Member invitations work the same way: the dashboard shows the invitation link to send by hand until an email provider is chosen.
 - **Device key (ARCH §5.3).** The P-256 key pair is generated on the phone and the private key is kept in the secure store (Keychain or Android Keystore-encrypted storage). It is not yet generated inside the Secure Enclave or Keystore hardware, which needs a native module; revisit with Phase 0B.
 
+## Fable launch audit, pass 2 · fixes and open questions · 2026-11-09
+
+Fable audited commit 666e688 (the pass-1 fixes and Phase 10) and re-checked L-01 to L-26. It reported ten new findings, L-27 to L-36, two Medium and eight Low. Its verdict: real guards at the 50-guard stage once SOS has capacity of its own (L-27) and the Terraform tests hold (L-29). Both are done, as far as they can be without spending or changing INV-15. The fixes, finding by finding: `docs/phases/phase-10/FABLE-PASS-2.md`.
+
+**Fable on the pass-1 questions.** It agrees with every recommended option (Q1 (a), Q3 as built and now narrowed, Q4 (a) with the native key before SOS is switched on, Q5 as recommended), with one condition. Q2 (a), versioning only, is enough **only if the CloudTrail data events spend (L-22) is approved with it**: otherwise a deleted or overwritten photo is recoverable for 35 days, but nothing tells anyone to recover it. It would approve both small L-22 spends before real guards.
+
+**The owner's answers (2026-11-09): Q6 (a), strip; Q7 one API task for now.** Q7's WAF rule is not answered yet; it matters only once production, and so its WAF, exists.
+
+- **Q6 · L-07 · responses in production. Decided: (a), built 2026-11-09** (`stripResponse` in `routes/response-check.ts`). It drops undeclared keys and sends the handler's own values, so a schema's defaults or transforms change nothing; a strict schema's undeclared keys are dropped the same way. The question as asked: Outside production, every response is parsed against its schema and an undeclared key fails the request. In production nothing is checked (decided in pass 1, so that a strict check can never turn an accepted SOS into a 500). Fable's point: a handler branch no test reaches can still send a whole row, coordinates included.
+  - (a) **Strip in production** (Fable's recommendation, and mine): parse each response; if it parses, send the parsed object, so undeclared keys are dropped. If it does not, send the handler's result unchanged and log one `response-mismatch` line. It never causes a 500. Costs: a parse of every response, the sync batch's answer being the largest. Before building it, a test must show no response schema transforms a value, so stripping removes keys and changes nothing else.
+  - (b) Keep "no check in production", recorded as a knowing choice.
+- **Q7 · L-27 · the parts of SOS capacity that cost money or touch INV-15. Decided: one API task for now; the WAF rule open.** Built without either: the SOS routes' own 3 connections, and `503 NOT_READY` instead of 500.
+  - **Two API tasks in production** (`api_desired_count = 2`). One task is also a single point of failure while it restarts or crashes. Costs a second API task's running price in production; nothing changes on `test`. Recommended. **Owner: one task for now** (`api_desired_count` stays 1); revisit before production carries real guards.
+  - **A WAF rule on the SOS path.** Fable suggests limits per device and per IP address. Any limit that blocks is a rate limit on SOS acceptance, which INV-15 forbids, and a per-IP limit can trip in a real mass emergency: many guards behind one carrier address, each SOS also sending its positions. Options:
+    - (i) none, as INV-15 stands;
+    - (ii) a rule that only **counts**, by IP address, plus an alarm, so a flood is seen and a blocking rule can be added in minutes if one comes. It refuses nothing. It adds one rule to the WAF's monthly charge (AWS lists $1 per rule per month; check before applying). Recommended;
+    - (iii) a blocking per-IP flood rule (Fable starts at 5,000 per 5 minutes). This changes INV-15, so SEC first.
+
+**Agent-decided, 2026-11-09, for veto.**
+
+- **The WAF skips only the guard's four SOS routes (L-28)**, matched by a pattern after decoding and normalizing. Before, it skipped everything starting `/api/v1/sos`. INV-15 protects SOS acceptance; the dashboard's SOS screens, acknowledge, resolve and drills are not that, and now keep every managed rule. This narrows Q3's exemption and never widens it.
+- **SOS capacity without spending (L-27):**
+  - the API keeps 3 connections for the SOS routes beside its 10 (13 per task);
+  - a request that finds no connection, or a database that refuses connections, answers `503 NOT_READY`. Ordinary requests carry `Retry-After: 5`; an SOS carries none, so the phone's own 2-second SOS backoff decides when it retries.
+- **Only class-22 PostgreSQL messages are replaced in logs (L-31).** Class-23 messages name constraints, tables and columns, never values, and operators need them.
+- **Fonts are files in the repository (L-35):**
+  - Inter's Latin subset, as Google served it;
+  - Orbitron's unmodified upstream file, since its licence reserves the name and Google's subset is a modified version.
+  
+  Both are SIL OFL 1.1, with the licence beside them. Latin Extended characters now fall back to the system font.
+- **The production build's CSP is checked by `pnpm verify` (L-36).** Next's built-in global error page is always prerendered without a nonce; it is accepted by name: its text shows, its retry button does not work.
+- **The canary key (L-34): the warning only, for now.** Before production's canary is made, `create-canary` should take a public key made on the operator's computer, so the private key never enters AWS. Giving the API's role write access to the worker's secrets, Fable's other option, was not taken.
+- **Production cannot turn off its WAF or its backup-region copy** (pass 2 on L-15).
+- **Runbooks apply the plan that was read** (`tf.sh <env> apply-plan <file>`, L-32), and runbook 05 warns that the database-password window refuses SOS connections for a few minutes.
+- **A replay of a disabled guard's quarantined items stays allowed.** The items were captured while the guard was working, and disabling a guard revokes their sessions, not their past data.
+
+## Fable launch audit, pass 1 · fixes and open questions · 2026-11-09
+
+Fable audited commit 8854af8 (Phases 0–9) and reported 26 findings, L-01 to L-26, four of them High. The owner brought the report back on 2026-11-09; the fixes are listed finding by finding in `docs/phases/phase-10/FABLE-PASS-1.md`, each with the test that proves it. What follows is what was decided along the way.
+
+**Waiting on the owner (STOP: SOS, evidence, authorization).** Nothing below is built until answered.
+
+- **Q1 · L-11 · a disabled guard presses SOS.** Today the API answers 401 (on the session and on the device-key path), the phone takes 401 for a network problem and shows "waiting for network" on a working network, and nobody is alerted. INV-15 is silent on disabled guards.
+  - (a) **Accept and alert, as for a suspended organization** (recommended): the SOS is stored and the ladder runs, the alert marked "guard disabled". A false alarm costs a phone call; a refused one may cost a life, and the guard may be disabled by mistake.
+  - (b) Refuse with a distinct code (`GUARD_DISABLED`, 403), and the phone shows the refusal and the call/SMS fallback (PROD §11.7) at once.
+  - Either way the phone must stop showing "waiting for network" for a refusal; that part is a bug, fixed with whichever you choose.
+- **Q2 · L-03 · can an original photo ever be changed or deleted, except by retention?** Built now: the bucket is versioned, so an overwrite or delete (a bug, a stolen API role) leaves the original recoverable for the backup window (35 days in production), and no task role may remove a version. Someone with the AWS account's administrator rights still can.
+  - (a) Versioning only (as built). Recommended for the pilot.
+  - (b) S3 Object Lock, compliance mode, on originals, for the organization's incident retention: not even an administrator can delete them before it ends. Retention then cannot delete early either, an organization that shortens retention keeps old photos until their lock ends, and test data cannot be cleaned up. Ask the lawyer whether evidence handling needs it before real incidents are relied on in court.
+- **Q3 · L-02 · the WAF and the SOS path.** Built: no managed WAF rule sees `/api/v1/sos*` (IP reputation included: one flagged carrier address would block every guard behind it), and the rules that read bodies skip sync batches. SEC decides the SOS half (INV-15: only a revoked version may refuse an SOS), so this is built rather than asked; veto it if you want the WAF in front of SOS anyway, knowing it can refuse one. The API still validates every field and checks the device signature.
+- **Q4 · L-16 · the device key.** The phone's private key and tokens are in `expo-secure-store` (Keystore-encrypted storage), not a hardware-bound, non-exportable Keystore key as D-30 and ARCH §5.3 describe (recorded above under "Device key"). On a rooted phone the key can be copied, and a copied key signs SOS requests from anywhere for as long as the device is ACTIVE.
+  - (a) Accept it for the pilot, knowingly (recommended): SOS is off for pilot guards, so the signature path is not in use; sessions are still device-bound and revocable.
+  - (b) Build the native Keystore key before the pilot release.
+  - Either way, the native key comes before SOS is switched on for anyone.
+- **Q5 · L-13 · who may run operator commands in production.** `operator.sh` runs only the operator CLI, and every look into a company writes `PLATFORM_ACCESS` (Phase 10); the log stream that can hold an invitation link is now deleted however the script ends. But anyone with `ecs:RunTask` and `iam:PassRole` in the production account can run any command in the API's image with its secrets. Recommended: in production only you hold those rights (no other IAM user or role), and the break-glass procedure SEC §4.6 asks for is "the owner runs `operator.sh`, with a reason"; confirm, or name who else.
+- **Spending (L-22), each yours to approve:** a customer-managed KMS key for the Terraform state buckets (about $1 a month per environment; today they use S3's own keys, and the state holds every generated secret), and CloudTrail data events on the photo bucket, so an overwrite or a presigned read leaves a storage-side trail (cents a month at pilot volume). Neither is built.
+
+**Agent-decided, 2026-11-09, for veto.**
+
+- **The dashboard's Content-Security-Policy (L-01):** scripts only with a per-response nonce, `'strict-dynamic'`, no eval outside `next dev`; the network only to the dashboard's own origin and OpenFreeMap's one tile host; images also from the photo bucket (the web task's new `PHOTO_ORIGIN`); no plugins, `<base>`, frames or framing. Inline styles stay allowed (React renders style attributes; styles cannot run code; SEC §10 asks for no inline scripts). Cost: every page now renders per request (no prerendered pages), a little more CPU on the web task.
+- **Responses checked against their schemas outside production only (L-07).** In tests, `next dev` and the browser tests, a response with a key its schema does not declare fails the request. Production sends what the handler returns, because a strict check there could turn an accepted SOS into a 500 that the phone retries for ever. (Changed by the owner's answer to pass 2's Q6: production now drops undeclared keys, still without ever failing.) The check found one real disagreement: the export download link's schema refused the local store's `http://127.0.0.1` links (`z.httpUrl()`); it now matches the photo links' `z.url()`, http(s) only.
+- **Older photo versions live as long as database backups (L-03):** `db_backup_retention_days`, 35 days in production, 1 in test; export files' older versions one day. So retention's deletions are complete within the window SEC §16 already discloses for backups.
+- **The client's address (L-06):** `TRUST_PROXY` is now a list of proxy addresses or ranges (the VPC's, `10.20.0.0/16`), never `true`. Verify on the test environment after the next release: a session's IP should be the real client's, not a CloudFront address.
+- **Released images are kept (L-14):** `release.sh` adds a `release-<sha>` tag, and the newest 50 released images are never expired.
+- **`release.sh` applies only the release (L-23):** it saves the plan and stops when it changes anything beyond task definitions, the services and the database's running state; other drift is applied on its own, after reading it.
+- **Production refuses to plan without its domain, `alerts_email` and `fcm_service_account` (L-15).** The last means production cannot be applied before the Firebase project exists, which TODO already puts first.
+- **The ID gate checks through the built phase (L-17):** `status.json` gains `builtThrough` (10) and `runByPeople` (`ADV-O05`, a device test). `current` stays at 3 until the device tests run.
+- **Dependencies (L-20):** fastify 5.12.6 (the fixed release, a month old) rather than 5.12.8 (a week old); fast-uri 3.1.9 and 4.2.3 through scoped overrides inside fastify's own ranges, to be removed when a fresh install resolves them alone.
+- **No over-the-air updates (L-26):** `expo-updates` is not installed, and a test now fails if it is added. A fingerprint runtime version would stop only native changes, and tracking is JavaScript, so adding OTA updates is an owner decision first.
+
+**Not done, and why.** The production image still installs development dependencies (L-22): trimming them needs an image build to prove the services still start, and this machine has no Docker. No pre-commit secret scan (L-22): it needs gitleaks installed on this machine; CI scans the whole history on every push, but in a public repository a pushed secret is already out.
+
 ## Phase 10 · hardening and launch · owner decisions 2026-11-02
 
 The owner approved Phase 10 ("After all this, we proceed to phase 10"). Three questions, about privacy, process and cost, answered the same day, each as recommended:
@@ -118,7 +190,7 @@ The owner approved Phase 10 ("After all this, we proceed to phase 10"). Three qu
   - A version on the revoked list gets 426 on every guard route except `GET /mobile/config`, SOS and uploads included. That is INV-15's one exception, and it means **a revoked build cannot send an SOS**: revoke only to stop a flaw worse than that, and say so in the runbook.
   - The version comes from `X-App-Version`. An app that sends none, or something that is not a version, is not gated, so this protects against honest old builds, not a forged client.
   - Revoking is a Terraform variable (`mobile_revoked_versions` in the environment's tfvars) and an apply; it takes effect when the services have restarted (minutes).
-- **Agent-decided, 2026-11-08, for veto: what Firebase pushes add to the Android manifest** (found by the ADV-X08 CI job's first real run, which merged the manifest with Gradle and found 19 permissions the libraries add).
+- **Agent-decided, 2026-11-08; owner kept it the same day ("I go with your decision on wake lock"): what Firebase pushes add to the Android manifest** (found by the ADV-X08 CI job's first real run, which merged the manifest with Gradle and found 19 permissions the libraries add).
   - **Allowed:** `com.google.android.c2dm.permission.RECEIVE` (Firebase Cloud Messaging, D-26) and `android.permission.WAKE_LOCK`. FCM holds a wake lock for the moments it handles a push, and removing the permission would make its message handling throw. SEC pitfall 32 forbids *holding* a wake lock through a shift, as a heartbeat source or a library default; declaring the permission does not hold one, and the heartbeat still rides on location callbacks. **Open check, on the device tests:** the wake-lock figure in Play's vitals (EXT-46). If the owner reads pitfall 32 as forbidding the permission itself, the alternative is to block it and give up reliable push delivery while the phone sleeps.
   - **Blocked** (removed from the merged manifest): 16 launcher app-icon-badge permissions from `badgin` (a dependency of `expo-notifications`; the app never sets a badge) and Play's install-referrer permission from `expo-application`.
 - **Agent-decided, 2026-11-08, for veto: the platform operator's commands into one organization** (`delivery-health`, `quarantine-list`, `quarantine-replay`).

@@ -10,6 +10,7 @@ import { createKysely, createPool, verifyRuntimeRole } from '@sentryops/db';
 import { z } from 'zod';
 
 import { loadConfig } from './config.ts';
+import { failureLine } from './logger.ts';
 import { createDeps } from './server.ts';
 import { runCanary } from './workers/canary.ts';
 import { runAlertDetectors, runPatrolCloser, runShiftDetectors } from './workers/detectors.ts';
@@ -66,8 +67,8 @@ const jobs = new JobClock();
 const nowMs = () => deps.clock.now().getTime();
 const HEARTBEAT_MS = 30_000;
 
-const failed = (msg: string, error: unknown) =>
-  console.error(JSON.stringify({ msg, error: error instanceof Error ? error.message : 'unknown' }));
+// Review L-31: the same allow-list as the API's logger, never the raw message.
+const failed = (msg: string, error: unknown) => console.error(failureLine(msg, error));
 
 let stopping = false;
 async function tick(): Promise<void> {

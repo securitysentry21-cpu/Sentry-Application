@@ -14,9 +14,9 @@ import type { Feature, FeatureCollection } from 'geojson';
 import type { GeoJSONSource, Map as MapLibreMap, MapLayerMouseEvent, MapMouseEvent } from 'maplibre-gl';
 import { useEffect, useRef, useState } from 'react';
 
-export const MAP_STYLE_URL = 'https://tiles.openfreemap.org/styles/liberty';
-/** MapLibre's tile worker, served by the dashboard (scripts/copy-map-worker.mjs). */
-export const MAP_WORKER_URL = '/maplibre/maplibre-gl-worker.mjs';
+import { MAP_STYLE_URL, MAP_WORKER_URL } from '../lib/map-sources';
+
+export { MAP_STYLE_URL, MAP_WORKER_URL };
 /** Without a loaded map by then, say so rather than show an empty box. */
 const LOAD_TIMEOUT_MS = 15_000;
 /** The pilot colony's area, Lahore (Q-19, about 400 km²): the default view until sites exist. */

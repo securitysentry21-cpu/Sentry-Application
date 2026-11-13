@@ -93,8 +93,18 @@ Phase 8 adds to the Terraform. **Apply it before releasing a Phase 8 commit:** t
 
 - **The photo bucket** (`attachments.tf`):
   - private, encrypted with the environment's KMS key, TLS only;
-  - only the `api` and `worker` task roles can read and write, and only under `org/`;
-  - an upload link can't overwrite an original.
+  - only the `api` and `worker` task roles can read and write, and only under `org/` (photos) and `exports/` (export files);
+  - an upload link can't overwrite an original;
+  - versioned (review L-03): an object overwritten or deleted, by a bug or a stolen API role, stays recoverable as an older version for as long as database backups are kept (`db_backup_retention_days`, 35 days in production), then goes; no task role may remove a version;
+  - in production (`backup_copy_enabled`), photos are copied to the backup region, deletions included, so the copy never outlives retention.
+
+The Fable review's fixes (2026-11-09) also change the edge and the logs; before the next apply, read its plan, and:
+
+- the WAF (production) no longer shows `/api/v1/sos*` to any managed rule, nor sync batches to the rules that read bodies (INV-15, review L-02);
+- PostgreSQL logs no bind parameters and no error DETAIL (review L-05); its log group is now Terraform's, kept 30 days. An environment where RDS already created it imports it once: `infra/scripts/tf.sh test import aws_cloudwatch_log_group.postgresql /aws/rds/instance/sentryops-test/postgresql`;
+- the API believes `X-Forwarded-For` only from inside the VPC (review L-06);
+- production refuses to plan without its domain, `alerts_email` and `fcm_service_account` (review L-15);
+- `infra/scripts/tf-test.sh` checks all of this against mocked providers, with no AWS account (CI's `terraform` job).
 - **The Web Push key pair** (`notifications.tf`), generated here:
   - only the worker's secret holds the private key;
   - the API gets the public half.

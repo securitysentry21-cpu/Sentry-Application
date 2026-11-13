@@ -1,7 +1,7 @@
 # Runbook 08: Tenant data incident response
 
 > For any case where one company's data may have been seen, changed, copied or lost by someone who should not have had it. Guards' locations are sensitive, and exposure can put a person at physical risk: move fast, and **call the company before you write to it**.
-> Setup: `docs/RUNBOOKS/README.md` › Before you start. Nothing here has been tried on the test environment.
+> Setup: `docs/RUNBOOKS/README.md` › Before you start. Only the two commands under "Preserve evidence" (the log tail and the snapshot) have been tried on the test environment (Status, below).
 
 ## When to use
 
@@ -51,23 +51,25 @@ Source: `apps/api/src/context.ts`, `routes/members.ts`, `routes/enrollment.ts`, 
 
 ## Preserve evidence
 
-| Evidence                                 | Where                                                    | Kept                             | How to keep it longer                                            |
-| ---------------------------------------- | -------------------------------------------------------- | -------------------------------- | ---------------------------------------------------------------- |
-| Service logs (api, worker, web, dbadmin) | CloudWatch `/sentryops-<env>/<service>`                  | 30 days                          | Save to a file now; store it access-controlled, outside the repo |
-| Database                                 | RDS backups                                              | 35 days production, 1 day `test` | A manual snapshot (standard AWS command, no repo script)         |
-| AWS actions                              | CloudTrail bucket `sentryops-<env>-cloudtrail-<account>` | 365 days                         | Already there; do not delete versions                            |
-| Audit trail                              | `audit_logs` table                                       | 24 months                        | The company's Owner can export or screenshot                     |
-| Photos and exports                       | Private bucket                                           | By retention; **no versioning**  | Cannot be recovered once deleted (G10)                           |
+| Evidence                                 | Where                                                    | Kept                                                          | How to keep it longer                                                                                                                                                                                                            |
+| ---------------------------------------- | -------------------------------------------------------- | ------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Service logs (api, worker, web, dbadmin) | CloudWatch `/sentryops-<env>/<service>`                  | 30 days                                                       | Save to a file now; store it access-controlled, outside the repo                                                                                                                                                                 |
+| Database                                 | RDS backups                                              | 35 days production, 1 day `test`                              | A manual snapshot (standard AWS command, no repo script)                                                                                                                                                                         |
+| AWS actions                              | CloudTrail bucket `sentryops-<env>-cloudtrail-<account>` | 365 days                                                      | Already there; do not delete versions                                                                                                                                                                                            |
+| Audit trail                              | `audit_logs` table                                       | 24 months                                                     | The company's Owner can export or screenshot                                                                                                                                                                                     |
+| Photos and exports                       | Private bucket, versioned                                | By retention; older versions 35 days production, 1 day `test` | A deleted or overwritten photo can be restored while its older version lasts: `aws s3api list-object-versions --bucket <bucket> --prefix org/<organization id>/`, then copy the version back. Nothing alarms on a deletion (G10) |
 
 ```bash
-aws logs tail /sentryops-<env>/api --region <region> --since 168h --format short > incident-api-log.txt
+aws logs tail /sentryops-<env>/api --region <region> --since 168h --format short > <a private folder outside the repository>/incident-api-log.txt
 ```
+
+The file holds organization IDs, device IDs, request paths and the connecting address of every request: never save it inside the repository (it is public). Tried on `test` 2026-11-08: 7 days (about 1,500 lines) took 12 seconds.
 
 ```bash
 aws rds create-db-snapshot --region <region> --db-instance-identifier sentryops-<env> --db-snapshot-identifier incident-<date>
 ```
 
-A snapshot costs storage money and holds all companies' data: ask the owner, restrict who can see it, delete it when the case closes. [GAP: no evidence-freeze script and no legal hold; the nightly retention run keeps deleting aged data during an investigation (G25). By hand: copy or snapshot before data ages out.]
+Tried on `test` 2026-11-08: the Free plan accepted it, it was `available` in under 15 minutes (the database was small), and `aws rds delete-db-snapshot --region <region> --db-snapshot-identifier incident-<date>` removed it. A snapshot costs storage money and holds all companies' data: ask the owner, restrict who can see it, delete it when the case closes. [GAP: no evidence-freeze script and no legal hold; the nightly retention run keeps deleting aged data during an investigation (G25). By hand: copy or snapshot before data ages out.]
 
 ## Fix
 
@@ -101,6 +103,6 @@ Write the timeline, the cause, the data affected, the fix and the follow-ups in 
 
 ## Status
 
-Tried on the test environment: not yet.
+Tried on the test environment, 2026-11-08: only the log copy and the manual snapshot (with its deletion), as noted where they appear. **Not tried:** every containment step (suspending an organization, signing people out, disabling a device or member), reading an Audit Log, and the CloudTrail and GuardDuty steps (GuardDuty is production only). Containment by command does not exist yet (G15, G23).
 
 Known gaps: G04, G10, G15, G23 (no way to suspend an organization), G24 (no operator audit-log reader), G25 (no evidence freeze or legal hold). Fact: `SEC §4.6` says break-glass access is "a procedure, not tooling" (D-19); the three Phase 10 commands (`delivery-health`, `quarantine-list`, `quarantine-replay`) are the only tooling.

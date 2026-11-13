@@ -47,6 +47,8 @@ try {
   if (command === 'create-canary') {
     const canary = await provisionCanary(deps, { ownerEmail: values['owner-email'] ?? '' });
     console.log(`Canary organization ${canary.organizationId} created in ${config.CELL_REGION}.`);
+    // Review L-34: the key reaches the task's log stream, which operator.sh deletes on every exit and
+    // names in its warning when it cannot.
     console.log('Put these in the worker secret (shown once, kept nowhere else):');
     console.log(`CANARY_DEVICE_ID=${canary.deviceId}`);
     console.log(`CANARY_DEVICE_KEY=${canary.privateKey}`);

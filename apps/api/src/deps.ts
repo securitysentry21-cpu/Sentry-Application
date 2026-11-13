@@ -13,6 +13,12 @@ export type AppDeps = {
   readonly pool: Pool;
   /** Kysely over the same pool; repositories use it inside tenant transactions (D-10). */
   readonly db: Database;
+  /**
+   * Fable pass 2, review L-27: a few connections only the SOS routes use (`policy.sos`), so a sync
+   * storm that takes every connection of `pool` cannot hold an SOS back (INV-15). Absent in tests
+   * that do not need it; the SOS routes then share `pool`.
+   */
+  readonly sos?: { readonly pool: Pool; readonly db: Database };
   readonly clock: Clock;
   readonly config: Config;
   readonly rateLimiter: RateLimiter;

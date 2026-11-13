@@ -83,6 +83,21 @@ async function applyNegativeControl(migrator: pg.Client): Promise<void> {
     case 'retention-update-widened':
       await migrator.query('grant update (organization_id) on fixture_events to retention_worker');
       break;
+    // Review L-09: a retention policy that forgets the organization, and a stray worker grant. Since
+    // Fable pass 2 the planted policy mentions the organization, so a substring check would pass it.
+    case 'retention-policy-unscoped':
+      await migrator.query(
+        `create policy planted_retention on shifts for delete to retention_worker
+           using (organization_id = app.current_org_id() or true)`,
+      );
+      break;
+    case 'system-worker-grant-added':
+      await migrator.query('grant select (organization_id) on shift_events to system_worker');
+      break;
+    // Fable pass 2, review L-33: a table-wide grant where only `replayed_at` may change.
+    case 'runtime-update-widened':
+      await migrator.query('grant update on quarantined_items to app_runtime');
+      break;
     default:
       break;
   }
