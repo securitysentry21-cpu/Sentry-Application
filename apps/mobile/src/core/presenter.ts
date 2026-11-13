@@ -167,6 +167,8 @@ export function sosLine(
   switch (display) {
     case 'QUEUED':
       return { text: t('sos.QUEUED'), tone: 'danger' };
+    case 'NOT_ACCEPTED':
+      return { text: t('sos.NOT_ACCEPTED'), tone: 'danger' };
     case 'SENDING':
       return { text: t('sos.SENDING'), tone: 'warning' };
     case 'FAILED':

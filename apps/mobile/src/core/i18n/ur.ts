@@ -265,6 +265,7 @@ export const ur: Record<MessageKey, string> = {
   'sos.hold': 'SOS — 3 سیکنڈ دبائے رکھیں',
   'sos.holding': 'دبائے رکھیں…',
   'sos.QUEUED': 'SOS فعال — نیٹ ورک کا انتظار ہے…',
+  'sos.NOT_ACCEPTED': 'سرور نے ابھی SOS قبول نہیں کیا — اپنے سپروائزر کو کال کریں۔ کوشش جاری ہے۔',
   'sos.SENDING': 'SOS بھیجا جا رہا ہے…',
   'sos.RECEIVED': 'SOS سرور کو مل گیا — سپروائزرز کو اطلاع دی جا رہی ہے…',
   'sos.FAILED': 'سرور نے SOS قبول نہیں کیا — اپنے سپروائزر کو کال کریں',

@@ -47,8 +47,9 @@ mutate() {
 }
 
 # Fable's four (pass 2, appendix B), then one per remaining part of each assertion.
+# A and F break a managed group's exemption (the IP reputation group's), not the flood counter's.
 mutate "A: an SOS exemption reads the query string, not the path" edge.tf no_managed_waf_rule_sees_an_sos \
-  's/(regex_string = local\.sos_guard_paths\s*field_to_match \{\s*)uri_path \{\}/${1}query_string {}/'
+  's/(name     = "aws-ip-reputation".*?regex_string = local\.sos_guard_paths\s*field_to_match \{\s*)uri_path \{\}/${1}query_string {}/s'
 mutate "B: the sync exemption matches the exact path only" edge.tf no_managed_waf_rule_sees_an_sos \
   's/positional_constraint = "STARTS_WITH"/positional_constraint = "EXACTLY"/'
 mutate "C: older photo versions never expire" attachments.tf photo_bucket_keeps_versions_and_copies_them \
@@ -58,7 +59,7 @@ mutate "D: the copy bucket has no lifecycle" attachments.tf photo_bucket_keeps_v
 mutate "E: the SOS exemption covers every /api/v1/sos* path again" edge.tf no_managed_waf_rule_sees_an_sos \
   's/sos_guard_paths = "[^"]*"/sos_guard_paths = "^\/api\/v1\/sos"/'
 mutate "F: an exemption skips path normalization" edge.tf no_managed_waf_rule_sees_an_sos \
-  's/type     = "NORMALIZE_PATH"/type     = "LOWERCASE"/'
+  's/(name     = "aws-ip-reputation".*?type     = )"NORMALIZE_PATH"/${1}"LOWERCASE"/s'
 mutate "G: a fourth managed rule group without the exemption" edge.tf no_managed_waf_rule_sees_an_sos \
   's/(  rule \{\n    name     = "aws-ip-reputation")/  rule {\n    name     = "aws-extra"\n    priority = 9\n    override_action {\n      none {}\n    }\n    statement {\n      managed_rule_group_statement {\n        vendor_name = "AWS"\n        name        = "AWSManagedRulesAdminProtectionRuleSet"\n      }\n    }\n    visibility_config {\n      cloudwatch_metrics_enabled = true\n      metric_name                = "aws-extra"\n      sampled_requests_enabled   = true\n    }\n  }\n\n$1/'
 mutate "H: the copy bucket is not versioned" attachments.tf photo_bucket_keeps_versions_and_copies_them \
@@ -67,6 +68,13 @@ mutate "I: production may turn its WAF off" variables.tf production_keeps_its_wa
   's/var\.environment != "production" \|\| var\.waf_enabled/var.waf_enabled || !var.waf_enabled/'
 mutate "J: production may turn its backup copy off" variables.tf production_keeps_its_backup_copy \
   's/var\.environment != "production" \|\| var\.backup_copy_enabled/var.backup_copy_enabled || !var.backup_copy_enabled/'
+# The owner's decisions on pass 2's Q7 and pass 1's Q4.
+mutate "K: the SOS flood rule blocks instead of counting" edge.tf sos_floods_are_counted_never_blocked \
+  's/(name     = "sos-flood-count"\s*priority = 0\s*action \{\s*)count \{\}/${1}block {}/'
+mutate "L: the SOS flood rule reads the query string" edge.tf sos_floods_are_counted_never_blocked \
+  's/(name     = "sos-flood-count".*?field_to_match \{\s*)uri_path \{\}/${1}query_string {}/s'
+mutate "M: SOS switched on before the hardware-bound device key" services.tf sos_stays_off_until_the_device_key_is_hardware_bound \
+  's/\{ name = "FEATURE_SOS", value = "false" \}/{ name = "FEATURE_SOS", value = "true" }/'
 
 if [ "$failed" -ne 0 ]; then
   echo "A Terraform test does not hold what it claims (review L-29)."

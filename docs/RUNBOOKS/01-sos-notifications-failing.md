@@ -6,6 +6,7 @@
 ## When to use
 
 - Alarm e-mails whose name starts `sentryops-<env>-`: `sos-pipeline-error`, `sos-unacknowledged`, `worker-silent`, `job-lag`, `canary-failed`, `canary-silent`. Also `notification-provider-failure` (then read runbook 02 too).
+- `sos-flood` (production only): one address sent more than 2,000 requests to the guard's SOS routes in 5 minutes. See "SOS flood alarm" below.
 - A customer says an SOS or a test alert did not ring or arrive.
 - The SOS page says "Alert sent" but never "Notified". "Sent" means a provider accepted it. "Notified" needs a screen or a phone to confirm (INV-10).
 
@@ -94,6 +95,14 @@ Source: `PROD §11.5, §11.7`, `apps/api/src/routes/mobile.ts`, `routes/notifica
 - `delivery-health` says "Nothing is waiting in the queue." and "No concerns found."
 - A duty officer's test alert arrives and is shown.
 - The alarm e-mails return to OK. Production only: `canary ok` every 5 minutes.
+
+## SOS flood alarm
+
+Owner decision Q7 (Fable pass 2, L-27): the WAF counts SOS floods and never blocks one (INV-15), so this alarm only tells you. Nothing was refused.
+
+1. AWS console › WAF & Shield › Web ACLs › `sentryops-<env>` › Sampled requests, rule `sos-flood-count`: the address and the paths.
+2. Decide. **A real mass emergency** looks like many devices behind one carrier address, each with an SOS on the dashboard: do nothing to the WAF, staff the SOS page. **An attack** looks like requests with no matching SOS on the dashboard, failing with 401: the SOS routes keep their own 3 connections (`apps/api/src/server.ts`), so real SOS still get through, but watch `HealthyHostCount` and the API's 503s.
+3. Blocking an address on the SOS routes breaks INV-15 and needs the owner's decision first. [GAP: no prepared rule or script to block one address.]
 
 ## Tell
 

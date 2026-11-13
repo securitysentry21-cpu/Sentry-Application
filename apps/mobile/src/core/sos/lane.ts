@@ -322,8 +322,11 @@ export class SosLane {
         clocks.wall.nowMs() + Math.max(delay, retryAfter, 1_000),
         kind,
       );
-      this.#apply(clientEventId, { type: 'SEND_FAILED' });
-      logger.warn('sos.not-sent', { clientEventId, errorKind: kind });
+      // Review L-11: a 401 here came from the device-key attempt (#call tries it after the session),
+      // so the server answered and refused. Still tried again, but never shown as "no network".
+      const refused = error instanceof ApiError && error.status === 401;
+      this.#apply(clientEventId, { type: 'SEND_FAILED', refused });
+      logger.warn(refused ? 'sos.not-accepted' : 'sos.not-sent', { clientEventId, errorKind: kind });
       return;
     }
     await outbox.completeSos(clientEventId, response.sosEventId);

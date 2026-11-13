@@ -96,6 +96,14 @@ export function alarmTitles(alarms: readonly Alert[]): readonly [string, string]
  * the same lock-screen-safe words as the server's own push, with no coordinates and no incident
  * text (PROD §13).
  */
+/**
+ * Owner decision Q1 (review L-11): an SOS from a guard whose account is disabled is accepted and
+ * marked, so the control room confirms who is calling (the phone may be in other hands).
+ */
+export function guardDisabled(alert: Alert): boolean {
+  return alert.type === 'SOS_ACTIVATED' && alert.details.guardDisabled === true;
+}
+
 export function alarmNotificationText(alert: Alert): { title: string; body: string } {
   if (alert.type === 'SOS_ACTIVATED') {
     return sosNotificationText({
@@ -103,6 +111,7 @@ export function alarmNotificationText(alert: Alert): { title: string; body: stri
       siteName: alert.site?.name ?? null,
       drill: alert.isDrill,
       again: alert.triggerCount > 1,
+      guardDisabled: guardDisabled(alert),
     });
   }
   const prefix = alert.isDrill ? '[DRILL] ' : '';

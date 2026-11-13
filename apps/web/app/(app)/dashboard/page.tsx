@@ -5,12 +5,14 @@
 // (PROD §11.5), then the active alerts, most severe first. Every number opens the matching list.
 // Live through the realtime stream; freshness ticks against server time. A drill is marked DRILL and
 // alarms only its participants (ADV-S10). Each section appears only with its permission; the server
-// decides.
+// decides. The meters only draw numbers that are printed beside them.
 import type { Alert } from '@sentryops/contracts';
 import Link from 'next/link';
 import { useState } from 'react';
 
 import { useAlarms } from '../../../components/alarm';
+import { Icon } from '../../../components/icons';
+import { TickMeter, type MeterTone } from '../../../components/meter';
 import { PageHead } from '../../../components/shell';
 import { alarmPath } from '../../../lib/alarm';
 import { errorText } from '../../../lib/api';
@@ -20,6 +22,8 @@ import { alertsBySeverity, guardView, homeCounts } from '../../../lib/live-model
 import { useSession } from '../../../lib/session';
 
 const SEVERITY_BADGE = { CRITICAL: 'danger', HIGH: 'danger', MEDIUM: 'warn', LOW: 'info' } as const;
+/** How many alerts the home page lists; the Alerts page has them all. */
+const ALERTS_SHOWN = 10;
 
 /** PROD §14.2: "SOS — Ahmed Khan — ABC Warehouse — 40 s ago [ACKNOWLEDGE]", until acknowledged. */
 function SosBanners({ now }: { now: Date }) {
@@ -68,6 +72,15 @@ function SosBanners({ now }: { now: Date }) {
   );
 }
 
+/** "Open the full page" in a card's corner. */
+function CornerLink({ href, label }: { href: string; label: string }) {
+  return (
+    <Link className="corner-link" href={href} aria-label={label} title={label}>
+      <Icon name="open" size={16} />
+    </Link>
+  );
+}
+
 export default function DashboardPage() {
   const { me, membership, can } = useSession();
   const { model, now, error } = useLive();
@@ -76,33 +89,56 @@ export default function DashboardPage() {
 
   const views = model ? [...model.guards.values()].map((g) => guardView(g, now, model.freshness)) : [];
   const counts = homeCounts(views);
+  const health = {
+    live: views.filter((v) => v.health === 'LIVE').length,
+    delayed: views.filter((v) => v.health === 'DELAYED').length,
+    offline: views.filter((v) => v.health === 'OFFLINE').length,
+  };
   const alerts = model ? alertsBySeverity(model.alerts.values()) : [];
   // An SOS has its own banner above; this one counts the other critical alerts.
   const critical = alerts.filter((a) => a.severity === 'CRITICAL' && a.type !== 'SOS_ACTIVATED').length;
   const watching = model ? model.coverage.desktop + model.coverage.phone : 0;
   const value = (n: number) => (model ? n : '–');
 
-  const tiles: { label: string; value: number; href: string; tone?: 'warn' | 'danger' }[] = [
-    { label: 'active guards', value: counts.active, href: '/live' },
-    { label: 'on site', value: counts.onSite, href: '/live?show=on-site' },
-    { label: 'off site', value: counts.offSite, href: '/live?show=off-site', tone: 'danger' },
-    { label: 'delayed / offline', value: counts.delayedOrOffline, href: '/live?show=not-live', tone: 'warn' },
-    { label: 'tracking problems', value: counts.trackingProblems, href: '/live?show=problems', tone: 'warn' },
+  // Shares of the guards on duty. An exception (above zero) glows in its colour; its name says what it is.
+  const shares: {
+    label: string;
+    value: number;
+    href: string;
+    tone: MeterTone;
+    exception?: 'warn' | 'danger';
+  }[] = [
+    { label: 'On site', value: counts.onSite, href: '/live?show=on-site', tone: 'live' },
     {
-      label: 'shifts not started',
+      label: 'Off site',
+      value: counts.offSite,
+      href: '/live?show=off-site',
+      tone: 'offline',
+      exception: 'danger',
+    },
+    {
+      label: 'Delayed or offline',
+      value: counts.delayedOrOffline,
+      href: '/live?show=not-live',
+      tone: 'delayed',
+      exception: 'warn',
+    },
+    {
+      label: 'Tracking problems',
+      value: counts.trackingProblems,
+      href: '/live?show=problems',
+      tone: 'delayed',
+      exception: 'warn',
+    },
+  ];
+  const tiles: { label: string; value: number; href: string }[] = [
+    {
+      label: 'Shifts not started',
       value: model?.shiftsNotStarted ?? 0,
       href: can('shifts.read') ? '/shifts' : '/dashboard',
-      tone: 'warn',
     },
     ...(can('incidents.read')
-      ? [
-          {
-            label: 'open incidents',
-            value: model?.openIncidents ?? 0,
-            href: '/incidents',
-            tone: 'warn' as const,
-          },
-        ]
+      ? [{ label: 'Open incidents', value: model?.openIncidents ?? 0, href: '/incidents' }]
       : []),
   ];
 
@@ -130,10 +166,59 @@ export default function DashboardPage() {
       ) : null}
       {canLive ? (
         <>
-          <div className="grid cols-6">
+          <section className="card kpi-panel" aria-labelledby="on-duty">
+            <div className="card-head">
+              <h2 id="on-duty">Guards on duty</h2>
+              <CornerLink href="/live" label="Open the live map" />
+            </div>
+            <div className="kpi-grid">
+              <Link className="kpi hero" href="/live">
+                <span className="kpi-label">Active guards</span>
+                <span className="kpi-value">{value(counts.active)}</span>
+                <TickMeter
+                  parts={[
+                    { count: health.live, tone: 'live' },
+                    { count: health.delayed, tone: 'delayed' },
+                    { count: health.offline, tone: 'offline' },
+                  ]}
+                  total={counts.active}
+                  ticks={36}
+                />
+                <span className="legend">
+                  <span>
+                    <i className="swatch live" />
+                    {value(health.live)} live
+                  </span>
+                  <span>
+                    <i className="swatch delayed" />
+                    {value(health.delayed)} delayed
+                  </span>
+                  <span>
+                    <i className="swatch offline" />
+                    {value(health.offline)} offline
+                  </span>
+                </span>
+              </Link>
+              {shares.map((s) => (
+                <Link
+                  className={`kpi${s.exception && model && s.value > 0 ? ` tone-${s.exception}` : ''}`}
+                  href={s.href}
+                  key={s.label}
+                >
+                  <span className="kpi-label">{s.label}</span>
+                  <span className="kpi-value">
+                    {value(s.value)}
+                    {model && counts.active > 0 ? <small>of {counts.active}</small> : null}
+                  </span>
+                  <TickMeter parts={[{ count: s.value, tone: s.tone }]} total={counts.active} tone={s.tone} />
+                </Link>
+              ))}
+            </div>
+          </section>
+          <div className="grid cols-3">
             {tiles.map((t) => (
               <Link
-                className={`card stat${t.tone && model && t.value > 0 ? ` tone-${t.tone}` : ''}`}
+                className={`card stat${model && t.value > 0 ? ' tone-warn' : ''}`}
                 href={t.href}
                 key={t.label}
               >
@@ -141,25 +226,28 @@ export default function DashboardPage() {
                 <span className="value">{value(t.value)}</span>
               </Link>
             ))}
-          </div>
-          <div className="card monitoring">
-            <span className="label">Monitoring now</span>
-            <span>
-              {model
-                ? `${model.coverage.desktop} dashboard${model.coverage.desktop === 1 ? '' : 's'}, ${model.coverage.phone} phone${model.coverage.phone === 1 ? '' : 's'}`
-                : '–'}{' '}
-              <span className="faint">(this screen included)</span>
-            </span>
+            <div className="card stat">
+              <span className="label">Monitoring now</span>
+              <span className="value">{model ? watching : '–'}</span>
+              <span className="faint">
+                {model
+                  ? `${model.coverage.desktop} dashboard${model.coverage.desktop === 1 ? '' : 's'}, ${model.coverage.phone} phone${model.coverage.phone === 1 ? '' : 's'}, this screen included`
+                  : 'Counting…'}
+              </span>
+            </div>
           </div>
         </>
       ) : null}
       {canAlerts ? (
-        <div className="card">
+        <section className="card" aria-labelledby="active-alerts">
           <div className="card-head">
-            <h2>
+            <h2 id="active-alerts">
               Active alerts <span className="faint">({model ? alerts.length : '…'})</span>
             </h2>
-            <span className="faint">Most severe first, then oldest</span>
+            <div className="row">
+              <span className="faint">Most severe first, then oldest</span>
+              <CornerLink href="/alerts" label="All alerts" />
+            </div>
           </div>
           {!model ? (
             <div className="loading">Loading…</div>
@@ -169,7 +257,7 @@ export default function DashboardPage() {
             <div className="table-wrap">
               <table>
                 <tbody>
-                  {alerts.slice(0, 10).map((a) => (
+                  {alerts.slice(0, ALERTS_SHOWN).map((a) => (
                     <tr key={a.id}>
                       <td>
                         <span className={`badge ${SEVERITY_BADGE[a.severity]}`}>
@@ -198,14 +286,16 @@ export default function DashboardPage() {
               </table>
             </div>
           )}
-          <Link className="btn" href="/alerts">
-            All alerts
-          </Link>
-        </div>
+          {alerts.length > ALERTS_SHOWN ? (
+            <Link className="more-link" href="/alerts">
+              See all {alerts.length} active alerts
+            </Link>
+          ) : null}
+        </section>
       ) : null}
       <div className="grid cols-3">
         <div className="card">
-          <span className="label">Organization</span>
+          <h2>Organization</h2>
           <dl className="kv">
             <dt>Time zone</dt>
             <dd>{membership.organizationTimezone}</dd>
@@ -215,22 +305,22 @@ export default function DashboardPage() {
         </div>
         {can('members.manage') ? (
           <div className="card">
-            <span className="label">Team</span>
+            <div className="card-head">
+              <h2>Team</h2>
+              <CornerLink href="/members" label="Manage members" />
+            </div>
             <p className="muted">
               Invite supervisors, dispatchers and administrators, and manage their roles.
             </p>
-            <Link className="btn" href="/members">
-              Manage members
-            </Link>
           </div>
         ) : null}
         {can('org.settings.read') ? (
           <div className="card">
-            <span className="label">Settings</span>
+            <div className="card-head">
+              <h2>Settings</h2>
+              <CornerLink href="/settings" label="Open settings" />
+            </div>
             <p className="muted">Shift, geofence and alert thresholds for this organization.</p>
-            <Link className="btn" href="/settings">
-              Open settings
-            </Link>
           </div>
         ) : null}
       </div>

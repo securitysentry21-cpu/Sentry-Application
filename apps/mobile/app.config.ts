@@ -112,7 +112,8 @@ export function buildConfig(
     orientation: 'portrait',
     icon: './assets/icon.png',
     userInterfaceStyle: 'dark',
-    backgroundColor: '#12161B',
+    // The screens' background (src/ui/theme.ts), shown before they paint.
+    backgroundColor: '#17181B',
     ios: {
       bundleIdentifier: id,
       buildNumber: '1',

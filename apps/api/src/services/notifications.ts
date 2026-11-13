@@ -116,6 +116,7 @@ function alertText(alert: AlertRow, again: boolean): { title: string; body: stri
       siteName: alert.siteName,
       drill: alert.isDrill,
       again,
+      guardDisabled: alert.details.guardDisabled === true,
     });
   }
   const prefix = alert.isDrill ? '[DRILL] ' : '';

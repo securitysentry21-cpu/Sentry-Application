@@ -160,6 +160,26 @@ The browser test (`e2e/csp.spec.ts`) now also checks the nonce on every script t
 - **Operator replay and a disabled guard:** not changed. Disabling a guard revokes their sessions, not their phone. A replay re-runs only items that phone captured earlier, while the guard was working, and the pipeline's shift rules still apply.
 - **Verify on AWS at the next release to `test`:** L-06 (a session's IP is the client's) and L-14 (the running image carries a `release-*` tag).
 
+## The owner's answers, built (2026-11-12)
+
+The owner chose every recommended option for the pass-1 questions and for Q7's WAF rule. What each one built, with its proof (each test was also run against the old code and failed):
+
+- **Q1, a disabled guard's SOS (L-11): accepted and marked.**
+  - The API accepts an SOS from an ACTIVE phone whatever its guard's status, on the session or the device-key path (`context.ts`). Every other route still refuses a disabled guard. Terminating a guard retires the phone, so a terminated guard cannot send one.
+  - The alert's summary ends "guard disabled" and its details carry `guardDisabled`. The pushes and texts begin "Guard account disabled: confirm who is calling.", and so do the dashboard's alarm, its bar and its browser notification.
+  - On the phone, a 401 on the SOS lane now shows "SOS not accepted by the server yet — call your supervisor. Still trying." and offers the call and SMS at once, instead of "waiting for network". It keeps trying, because a phone whose clock the server cannot yet correct also gets 401.
+  - Proof: `apps/api/test/sos.test.ts` (a suspended guard: other routes 401, a signed SOS RECEIVED and its status readable, the alert, the list and every delivery marked, an active guard's not); `apps/mobile/test/sos.test.ts` (the reducer, and the lane against the fake server); `apps/web/test/alarm.test.tsx`; a negative control.
+  - The new Urdu line waits for the native speaker's review with the rest.
+- **Q2, photos: versioning only**, as built. Fable's condition, the CloudTrail data events, is a spending item still open.
+- **Q3, the WAF and SOS:** as built, narrowed by L-28.
+- **Q4, the device key: accepted for the pilot.** SOS stays off until the hardware-bound key exists. A Terraform run (`sos_stays_off_until_the_device_key_is_hardware_bound`) and mutation M fail if the API's `FEATURE_SOS` is set true.
+- **Q5, operator access: the owner's login only.** `scripts/test/terraform-iam.test.ts` fails if any role the cell creates may run, start, change or enter an ECS task, register a task definition or pass a role, if an AWS-managed policy other than ECS's task-execution policy is attached, or if the cell creates an IAM user. A negative control adds `iam:PassRole` to CI's image role. The account's own IAM users are outside Terraform: keep none but the owner's in production.
+- **Q7, the WAF rule: counting only.** In production, the `sos-flood-count` rule counts an address sending more than 2,000 requests in 5 minutes to the guard's SOS routes, and blocks nothing. The `sos-flood` alarm emails the operator; runbook 01, "SOS flood alarm", tells an attack from a mass emergency.
+  - The Terraform run `sos_floods_are_counted_never_blocked` checks the action, the key, the limit, the pattern, the field and the normalization. Mutations K (block) and L (query string) are caught.
+  - The rule's first version showed the harness at work: mutations A and F, which break the first SOS pattern in `edge.tf`, landed on the new rule and were not caught. The rule's field and normalization are now asserted too, and A and F are anchored on a managed group again.
+
+Still the owner's: the two spending items (a KMS key for the state buckets; CloudTrail data events on the photo bucket).
+
 ## What was run
 
 All on 2026-11-09, on this Windows machine:
@@ -176,5 +196,11 @@ All on 2026-11-09, on this Windows machine:
 - `pnpm e2e`: 5 of 5 browser tests passed, the stricter CSP test included.
 - `bash infra/scripts/tf-test.sh` (Terraform 1.16.5, mocked providers): format and validate passed, 11 runs passed, 10 of 10 mutations caught.
 - Each new test was run against the old code, or with the fix removed, and failed, as listed above.
+
+On 2026-11-12, after the owner's answers were built:
+
+- `pnpm verify` passed every step: 842 tests in 93 files, and all 20 negative controls red.
+- `pnpm e2e`: 5 of 5 browser tests passed.
+- `bash infra/scripts/tf-test.sh`: 13 runs passed, and 13 of 13 mutations were caught.
 
 Not run here: anything against AWS, the `android-manifest` job (it needs the Android SDK, which CI has), and device tests.

@@ -176,6 +176,47 @@ resource "aws_wafv2_web_acl" "main" {
     allow {}
   }
 
+  # Owner decision Q7 (Fable pass 2, L-27): floods on the guard's SOS routes are counted, never
+  # blocked (INV-15: SOS acceptance is never rate-limited). An address that sends more than 2,000
+  # requests to them in 5 minutes is counted, and the `sos-flood` alarm emails the operator, who
+  # tells an attack from a real mass emergency (many guards behind one carrier address, each SOS
+  # also sending positions and status checks). Blocking would need SEC changed first.
+  rule {
+    name     = "sos-flood-count"
+    priority = 0
+    action {
+      count {}
+    }
+    statement {
+      rate_based_statement {
+        limit                 = 2000
+        evaluation_window_sec = 300
+        aggregate_key_type    = "IP"
+        scope_down_statement {
+          regex_match_statement {
+            regex_string = local.sos_guard_paths
+            field_to_match {
+              uri_path {}
+            }
+            text_transformation {
+              priority = 0
+              type     = "URL_DECODE"
+            }
+            text_transformation {
+              priority = 1
+              type     = "NORMALIZE_PATH"
+            }
+          }
+        }
+      }
+    }
+    visibility_config {
+      cloudwatch_metrics_enabled = true
+      metric_name                = "sos-flood-count"
+      sampled_requests_enabled   = true
+    }
+  }
+
   rule {
     name     = "aws-ip-reputation"
     priority = 1
@@ -353,6 +394,28 @@ resource "aws_wafv2_web_acl_association" "alb" {
   count        = local.has_domain && var.waf_enabled ? 1 : 0
   resource_arn = aws_lb.main.arn
   web_acl_arn  = aws_wafv2_web_acl.main[0].arn
+}
+
+# Owner decision Q7: the counted SOS flood reaches a person. Nothing was refused (runbook 01).
+resource "aws_cloudwatch_metric_alarm" "sos_flood" {
+  count             = local.has_domain && var.waf_enabled ? 1 : 0
+  alarm_name        = "${local.name}-sos-flood"
+  alarm_description = "An address sent more than 2,000 requests to the guard's SOS routes in 5 minutes. Nothing was blocked (INV-15). Read the WAF's sampled requests: an attack, or a real mass emergency? (runbook 01)"
+  namespace         = "AWS/WAFV2"
+  metric_name       = "CountedRequests"
+  dimensions = {
+    WebACL = aws_wafv2_web_acl.main[0].name
+    Rule   = "sos-flood-count"
+    Region = var.region
+  }
+  statistic           = "Sum"
+  period              = 300
+  evaluation_periods  = 1
+  threshold           = 0
+  comparison_operator = "GreaterThanThreshold"
+  treat_missing_data  = "notBreaching"
+  alarm_actions       = [aws_sns_topic.operations.arn]
+  ok_actions          = [aws_sns_topic.operations.arn]
 }
 
 # ── Without a domain ────────────────────────────────────────────────────────────────────────

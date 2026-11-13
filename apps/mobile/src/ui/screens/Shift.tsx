@@ -8,9 +8,9 @@ import { formatTime } from '../../core/i18n/format.ts';
 import { shiftLine, trackingLine } from '../../core/presenter.ts';
 import { openDialer } from '../../platform/permissions.ts';
 import type { Navigate } from '../App.tsx';
-import { Banner, Button, Screen, Txt } from '../components.tsx';
+import { Banner, Button, Pill, Screen, StatusLine, Txt } from '../components.tsx';
 import { useGuardApp, useI18n, useSnapshot } from '../context.tsx';
-import { SosHold, StatusBanners, useResumable } from './Common.tsx';
+import { SHIFT_STATUS_TONE, SosHold, StatusBanners, useResumable } from './Common.tsx';
 import { ReadinessCard, useReadiness } from './Readiness.tsx';
 
 export function ShiftScreen({ shiftId, navigate }: { shiftId: string; navigate: Navigate }) {
@@ -66,7 +66,7 @@ export function ShiftScreen({ shiftId, navigate }: { shiftId: string; navigate: 
           })}
         </Txt>
       ) : null}
-      {shift ? <Txt tone="muted">{t(`shiftStatus.${shift.status}`)}</Txt> : null}
+      {shift ? <Pill tone={SHIFT_STATUS_TONE[shift.status]} text={t(`shiftStatus.${shift.status}`)} /> : null}
       {status ? (
         <Banner
           tone={
@@ -85,9 +85,7 @@ export function ShiftScreen({ shiftId, navigate }: { shiftId: string; navigate: 
         <Txt tone="muted">{t('shift.startedAt', { time: formatTime(local.startedAtMs, zone, locale) })}</Txt>
       ) : null}
       {tracking || phase === 'START_PENDING' || phase === 'ACTIVE' ? (
-        <Txt tone={trackingLine(snap.tracking, tracking, Date.now(), t).tone}>
-          {trackingLine(snap.tracking, tracking, Date.now(), t).text}
-        </Txt>
+        <StatusLine {...trackingLine(snap.tracking, tracking, Date.now(), t)} />
       ) : null}
       <StatusBanners />
       {(local?.interruptions ?? []).map((gap) => (

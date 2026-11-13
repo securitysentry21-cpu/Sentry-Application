@@ -123,13 +123,13 @@ aws ecs wait services-stable --region <region> --cluster sentryops-<env> --servi
 
 ## End sessions
 
-| Scope                                               | What exists                                                                                                                  |
-| --------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| One phone                                           | Guards page › revoke device (`POST /devices/:id/revoke`, Owner or Administrator). Its sessions end at once.                  |
-| One guard                                           | Terminate (sessions end, phone retired, shifts ended) or Suspend (refused on the next request).                              |
-| One dashboard member                                | Members page › disable. Refused on the next request; their live stream closes within about a minute.                         |
-| Everyone in an organization, or all dashboard users | [GAP: no tool. The only switch is `organizations.status = 'SUSPENDED'`, which has no command either (runbook 08, G15, G23).] |
-| One dashboard user in every organization            | [GAP: no operator command to disable a user (G15).]                                                                          |
+| Scope                                               | What exists                                                                                                                                                                                                                         |
+| --------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| One phone                                           | Guards page › revoke device (`POST /devices/:id/revoke`, Owner or Administrator). Its sessions end at once.                                                                                                                         |
+| One guard                                           | Terminate (sessions end, phone retired, shifts ended) or Suspend (refused on the next request, except an SOS from their phone: accepted and marked "guard account disabled", owner decision Q1; revoke the phone to stop that too). |
+| One dashboard member                                | Members page › disable. Refused on the next request; their live stream closes within about a minute.                                                                                                                                |
+| Everyone in an organization, or all dashboard users | [GAP: no tool. The only switch is `organizations.status = 'SUSPENDED'`, which has no command either (runbook 08, G15, G23).]                                                                                                        |
+| One dashboard user in every organization            | [GAP: no operator command to disable a user (G15).]                                                                                                                                                                                 |
 
 ## Confirm it is fixed
 

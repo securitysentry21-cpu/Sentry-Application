@@ -181,6 +181,27 @@ describe('the alarm without sound (PROD §11.6, ADV-S09)', () => {
     expect(alarmTitles([sos(), sos({ id: id(21) })])[0]).toContain('(2)');
   });
 
+  it('INV-15 a disabled guard’s SOS still alarms, and the overlay, the bar and the notification say to confirm who is calling (owner decision Q1)', () => {
+    const disabled = sos({ details: { offShift: false, guardDisabled: true } });
+    const props = {
+      now: new Date(T0 + 30_000),
+      canAcknowledge: true,
+      onAcknowledge: () => undefined,
+      busy: null,
+      error: null,
+    };
+    expect(alarmsFor([disabled], ME, [])).toHaveLength(1);
+    expect(view({ alarms: [disabled] })).toContain('Guard account disabled:');
+    expect(renderToStaticMarkup(<AlarmBar {...props} alarms={[disabled]} />)).toContain(
+      '(guard account disabled)',
+    );
+    expect(alarmNotificationText(disabled).body).toMatch(/^Guard account disabled: confirm who is calling\./);
+    // An active guard's SOS carries none of it.
+    const active = sos();
+    expect(renderToStaticMarkup(<AlarmBar {...props} alarms={[active]} />)).not.toContain('disabled');
+    expect(alarmNotificationText(active).body).not.toContain('disabled');
+  });
+
   it('the background notification is lock-screen safe: a short name and the site, never a position', () => {
     expect(alarmNotificationText(sos())).toEqual({
       title: 'SOS — Ahmed K. — ABC Warehouse',
