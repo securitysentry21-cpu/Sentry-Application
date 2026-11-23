@@ -44,6 +44,12 @@ mock_provider "aws" {
   mock_resource "aws_iam_role" {
     defaults = { arn = "arn:aws:iam::111122223333:role/mock" }
   }
+  mock_resource "aws_s3_bucket" {
+    defaults = { id = "mock-bucket", arn = "arn:aws:s3:::mock-bucket" }
+  }
+  mock_resource "aws_sns_topic" {
+    defaults = { arn = "arn:aws:sns:eu-central-1:111122223333:mock" }
+  }
   mock_resource "aws_acm_certificate_validation" {
     defaults = { certificate_arn = "arn:aws:acm:eu-central-1:111122223333:certificate/mock" }
   }
@@ -124,6 +130,68 @@ run "photo_bucket_keeps_versions_and_copies_them" {
   assert {
     condition     = aws_s3_bucket_versioning.attachments_copy[0].versioning_configuration[0].status == "Enabled"
     error_message = "The copy is versioned, so a deletion that reaches it is recoverable too (review L-03)."
+  }
+}
+
+run "photo_deletions_leave_a_trail_and_an_alarm" {
+  command = plan
+
+  # Review L-22 (approved by the owner 2026-11-23) and owner decision Q2: versioning keeps a deleted
+  # original, and this is how anyone learns that one needs recovering.
+  assert {
+    condition = length([
+      for s in aws_cloudtrail.main.advanced_event_selector : s.name if(
+        length(s.field_selector) == 1 &&
+        one(s.field_selector).field == "eventCategory" &&
+        tolist(one(s.field_selector).equals) == tolist(["Management"])
+      )
+    ]) == 1
+    error_message = "The trail must still record every management event: with selectors it records only what they select."
+  }
+  assert {
+    condition = length([
+      for s in aws_cloudtrail.main.advanced_event_selector : s.name if(
+        length(s.field_selector) == 3 &&
+        anytrue([for f in s.field_selector : f.field == "eventCategory" && tolist(f.equals) == tolist(["Data"])]) &&
+        anytrue([for f in s.field_selector : f.field == "resources.type" && tolist(f.equals) == tolist(["AWS::S3::Object"])]) &&
+        anytrue([for f in s.field_selector : f.field == "resources.ARN" && tolist(f.starts_with) == tolist(["${aws_s3_bucket.attachments.arn}/"])])
+      )
+    ]) == 1
+    error_message = "The trail must record every read and write of every object in the photo bucket (review L-22)."
+  }
+  assert {
+    condition = (
+      toset(jsondecode(aws_cloudwatch_event_rule.photo_deleted.event_pattern).detail.eventName) ==
+      toset(["DeleteObject", "DeleteObjects", "DeleteObjectVersion"])
+    )
+    error_message = "Every way of deleting an object must raise the photo-deleted alarm."
+  }
+  assert {
+    condition = (
+      jsondecode(aws_cloudwatch_event_rule.photo_deleted.event_pattern).detail.requestParameters.bucketName ==
+      [aws_s3_bucket.attachments.id]
+    )
+    error_message = "The photo-deleted alarm watches the photo bucket."
+  }
+  assert {
+    condition = (
+      jsondecode(aws_cloudwatch_event_rule.photo_deleted.event_pattern).detail["$or"] == [
+        { userIdentity = { sessionContext = { sessionIssuer = { arn = [{ "anything-but" = [aws_iam_role.task["worker"].arn] }] } } } },
+        { userIdentity = { type = [{ "anything-but" = ["AssumedRole"] }] } },
+      ]
+    )
+    error_message = "Only the worker's own deletes are left out; any other role, and anyone without a role (an IAM user, the root user), raises the alarm."
+  }
+  assert {
+    condition = (
+      aws_cloudwatch_event_target.photo_deleted.rule == aws_cloudwatch_event_rule.photo_deleted.name &&
+      aws_cloudwatch_event_target.photo_deleted.arn == aws_sns_topic.operations.arn
+    )
+    error_message = "The photo-deleted alarm emails the operator through the operations topic."
+  }
+  assert {
+    condition     = aws_sns_topic_policy.operations.arn == aws_sns_topic.operations.arn
+    error_message = "The operations topic needs its policy, or EventBridge cannot publish the alarm."
   }
 }
 

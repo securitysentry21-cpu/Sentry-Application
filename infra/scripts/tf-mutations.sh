@@ -75,6 +75,15 @@ mutate "L: the SOS flood rule reads the query string" edge.tf sos_floods_are_cou
   's/(name     = "sos-flood-count".*?field_to_match \{\s*)uri_path \{\}/${1}query_string {}/s'
 mutate "M: SOS switched on before the hardware-bound device key" services.tf sos_stays_off_until_the_device_key_is_hardware_bound \
   's/\{ name = "FEATURE_SOS", value = "false" \}/{ name = "FEATURE_SOS", value = "true" }/'
+# The owner's approval of L-22's data events (2026-11-23).
+mutate "N: the trail's selectors drop the management events" monitoring.tf photo_deletions_leave_a_trail_and_an_alarm \
+  's/(name = "management events"\s*field_selector \{\s*field\s*= "eventCategory"\s*equals = )\["Management"\]/${1}["Data"]/'
+mutate "O: the trail records only uploads to the photo bucket" monitoring.tf photo_deletions_leave_a_trail_and_an_alarm \
+  's/(name = "photo bucket objects"\s*)/${1}field_selector {\n      field  = "eventName"\n      equals = ["PutObject"]\n    }\n    /'
+mutate "P: a role's deletes no longer raise the alarm" monitoring.tf photo_deletions_leave_a_trail_and_an_alarm \
+  's/\{ "anything-but" = \[aws_iam_role\.task\["worker"\]\.arn\] \}/{ "prefix" = "arn:aws:iam" }/'
+mutate "Q: a delete marker's removal is left out of the alarm" monitoring.tf photo_deletions_leave_a_trail_and_an_alarm \
+  's/, "DeleteObjectVersion"\]/]/'
 
 if [ "$failed" -ne 0 ]; then
   echo "A Terraform test does not hold what it claims (review L-29)."
