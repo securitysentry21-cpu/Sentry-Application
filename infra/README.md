@@ -42,7 +42,7 @@ region = ap-southeast-2
 ```bash
 aws login
 export AWS_PROFILE=sentry-test
-infra/scripts/bootstrap-state.sh test                 # once: the state bucket, and terraform init
+infra/scripts/bootstrap-state.sh test                 # the state bucket and its KMS key, and terraform init; safe to run again
 echo 'alerts_email = "<operator email>"' > infra/terraform/cell/local.auto.tfvars   # git-ignored
 infra/scripts/tf.sh test apply                        # about 15 minutes; services start at zero tasks
 ```

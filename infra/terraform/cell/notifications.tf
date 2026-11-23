@@ -15,6 +15,47 @@ resource "aws_sns_topic" "operations" {
   name = "${local.name}-operations"
 }
 
+# The topic's default policy, which the alarms publish under, plus EventBridge for the photo-deleted
+# rule (monitoring.tf) and nothing else.
+data "aws_iam_policy_document" "operations_topic" {
+  statement {
+    sid = "AccountDefault"
+    actions = [
+      "sns:GetTopicAttributes", "sns:SetTopicAttributes", "sns:AddPermission", "sns:RemovePermission",
+      "sns:DeleteTopic", "sns:Subscribe", "sns:ListSubscriptionsByTopic", "sns:Publish",
+    ]
+    resources = [aws_sns_topic.operations.arn]
+    principals {
+      type        = "AWS"
+      identifiers = ["*"]
+    }
+    condition {
+      test     = "StringEquals"
+      variable = "AWS:SourceOwner"
+      values   = [local.account_id]
+    }
+  }
+  statement {
+    sid       = "PhotoDeletedRule"
+    actions   = ["sns:Publish"]
+    resources = [aws_sns_topic.operations.arn]
+    principals {
+      type        = "Service"
+      identifiers = ["events.amazonaws.com"]
+    }
+    condition {
+      test     = "ArnEquals"
+      variable = "aws:SourceArn"
+      values   = [aws_cloudwatch_event_rule.photo_deleted.arn]
+    }
+  }
+}
+
+resource "aws_sns_topic_policy" "operations" {
+  arn    = aws_sns_topic.operations.arn
+  policy = data.aws_iam_policy_document.operations_topic.json
+}
+
 resource "aws_sns_topic_subscription" "operations_email" {
   count     = var.alerts_email != "" ? 1 : 0
   topic_arn = aws_sns_topic.operations.arn

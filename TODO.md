@@ -6,15 +6,14 @@ Everything that is left, in the order that matters, with what to do step by step
 
 Facts about outside companies change (store policy changes every year, EXT-45). Each one below says where it came from and when it was checked. **Verify** means I could not confirm it from the company's own page: check it on the screen where you act.
 
-## Waiting on you right now (noted 2026-11-12)
+## Waiting on you right now (noted 2026-11-23)
 
-0. **Two small spending items from Fable's audit** (2026-11-12): you answered every Fable question with my recommendation (Q1–Q7, `docs/DECISIONS.md`, "Fable launch audit, pass 1" and "pass 2"), and those answers are built and tested. Still yours, because they cost money: a KMS key for the Terraform state buckets (about $1 a month per environment) and CloudTrail data events on the photo bucket (cents a month at pilot volume). Fable and I recommend both, and Q2 (versioning only) relies on the second: without it nothing tells anyone to recover a deleted photo. Say yes or no to each.
-1. **Read and merge the audit work:** pull request #19 (runbook trials, Fable passes 1 and 2, Q6) and the owner answers built on 2026-11-12. Nothing is applied to AWS: the next Terraform apply needs you to read its plan first.
-2. **Confirm the AWS alarm email** (item 1): until you click "Confirm subscription", the alarms email nobody.
-3. **Answer the lawyer's questions** (items B and C, and item 3 for finding the lawyer): `docs/legal/README.md`, `docs/legal/GUARD_DISCLOSURE_V2_DRAFT.md`, `docs/store/`.
-4. **Create the Firebase test project** (item 5) and **the Expo account** (item 6): guard push cannot be tried on a phone without them.
+0. **Bring the test environment up to date with `main`** (2026-11-23): you approved both spending items (the state's own KMS key, and CloudTrail on the photo bucket with an alarm on deletions), and they are built and tested. Next: approve the `aws login` page, read the Terraform plan, and I apply, release and pause again.
+1. **Confirm the AWS alarm email** (item 1): until you click "Confirm subscription", the alarms email nobody.
+2. **Answer the lawyer's questions** (items B and C, and item 3 for finding the lawyer): `docs/legal/README.md`, `docs/legal/GUARD_DISCLOSURE_V2_DRAFT.md`, `docs/store/`.
+3. **Create the Firebase test project** (item 5) and **the Expo account** (item 6): guard push cannot be tried on a phone without them, and the restyled guard app still needs a look on an Android phone and an iPhone.
 
-Not waiting on you, but not yet in `main`: the audit work in draft pull request #19 (branch `fable-pass-1`) and the dashboard restyle in #20 (`ui-refresh`, stacked on #19). The owner answers built on 2026-11-12 and the guard-app restyle are uncommitted on `ui-refresh`. Say "commit" to commit them, and "merge" once you have read the pull requests.
+In `main` since 2026-11-13, at your word: pull request #19 (runbook trials, Fable passes 1 and 2, Q6) as 0b13e4d, and #20 (dashboard and guard-app restyle, the owner answers to Q1–Q5 and Q7's flood-count rule) as e392aff. Nothing is applied to AWS: the next Terraform apply needs you to read its plan first. The new Urdu SOS line (`sos.NOT_ACCEPTED`) goes to the native speaker with the rest.
 
 ## The shortest path to the first real guard
 

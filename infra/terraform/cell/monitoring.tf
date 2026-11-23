@@ -110,6 +110,63 @@ resource "aws_cloudtrail" "main" {
   include_global_service_events = true
   enable_log_file_validation    = true
   depends_on                    = [aws_s3_bucket_policy.trail]
+
+  # With selectors the trail records only what they select, so management events (every API call
+  # in the account) are named first.
+  advanced_event_selector {
+    name = "management events"
+    field_selector {
+      field  = "eventCategory"
+      equals = ["Management"]
+    }
+  }
+
+  # Review L-22, approved by the owner 2026-11-23: every read, upload, overwrite and delete of an
+  # object in the photo bucket, a signed link's included. Versioning keeps a deleted original (Q2);
+  # this is how anyone learns that one needs recovering. About $0.10 per 100,000 requests.
+  advanced_event_selector {
+    name = "photo bucket objects"
+    field_selector {
+      field  = "eventCategory"
+      equals = ["Data"]
+    }
+    field_selector {
+      field  = "resources.type"
+      equals = ["AWS::S3::Object"]
+    }
+    field_selector {
+      field       = "resources.ARN"
+      starts_with = ["${aws_s3_bucket.attachments.arn}/"]
+    }
+  }
+}
+
+# A photo or export deleted by anyone but the worker (retention, and export files after 7 days)
+# emails the operator: a bug, a stolen role or a person. Runbook 08 says how to recover the version.
+# The worker's own deletes are counted in its RETENTION_RUN rows instead.
+resource "aws_cloudwatch_event_rule" "photo_deleted" {
+  name        = "${local.name}-photo-deleted"
+  description = "An object in the photo bucket deleted by anyone but the worker (runbook 08)"
+  event_pattern = jsonencode({
+    source        = ["aws.s3"]
+    "detail-type" = ["AWS API Call via CloudTrail"]
+    detail = {
+      eventSource       = ["s3.amazonaws.com"]
+      eventName         = ["DeleteObject", "DeleteObjects", "DeleteObjectVersion"]
+      requestParameters = { bucketName = [aws_s3_bucket.attachments.id] }
+      # A role's session other than the worker's, or anyone signed in some other way (an IAM user,
+      # the root user), which has no session issuer at all.
+      "$or" = [
+        { userIdentity = { sessionContext = { sessionIssuer = { arn = [{ "anything-but" = [aws_iam_role.task["worker"].arn] }] } } } },
+        { userIdentity = { type = [{ "anything-but" = ["AssumedRole"] }] } },
+      ]
+    }
+  })
+}
+
+resource "aws_cloudwatch_event_target" "photo_deleted" {
+  rule = aws_cloudwatch_event_rule.photo_deleted.name
+  arn  = aws_sns_topic.operations.arn
 }
 
 resource "aws_guardduty_detector" "main" {
