@@ -143,10 +143,12 @@ resource "aws_cloudtrail" "main" {
 
 # A photo or export deleted by anyone but the worker (retention, and export files after 7 days)
 # emails the operator: a bug, a stolen role or a person. Runbook 08 says how to recover the version.
-# The worker's own deletes are counted in its RETENTION_RUN rows instead.
+# The worker's own deletes are counted in its RETENTION_RUN rows instead. A refused attempt emails too
+# (owner decision 2026-11-24): another role trying is what a stolen one looks like. The smoke test's
+# API delete, refused on purpose, sends one each run.
 resource "aws_cloudwatch_event_rule" "photo_deleted" {
   name        = "${local.name}-photo-deleted"
-  description = "An object in the photo bucket deleted by anyone but the worker (runbook 08)"
+  description = "An object in the photo bucket deleted, or a delete refused, for anyone but the worker (runbook 08)"
   event_pattern = jsonencode({
     source        = ["aws.s3"]
     "detail-type" = ["AWS API Call via CloudTrail"]
